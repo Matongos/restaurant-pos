@@ -84,7 +84,7 @@ function NavRail() {
     { to: '/accounts', label: 'Books', perm: 'accounts', Icon: LuBookOpenText },
     { to: '/staff', label: 'Staff', perm: 'staff', Icon: LuUsers },
     { to: '/menu', label: 'Menu', perm: 'menu_edit', Icon: LuSquarePen },
-    { to: '/settings', label: 'Settings', perm: 'settings', Icon: LuSettings },
+    { to: '/settings', label: 'Settings', perm: 'till_settings', Icon: LuSettings },
   ];
   // The person's own landing screen comes first on the phone bar.
   const home = homeFor(user.role);

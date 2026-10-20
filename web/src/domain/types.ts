@@ -207,6 +207,8 @@ export interface CreditEntry {
 /** Payment method id used when a customer pays with their change balance. */
 export const CREDIT_METHOD = 'change_credit';
 
+export type PrintWhen = 'on_pay' | 'on_next' | 'button';
+
 export interface Settings {
   branchId: ID;
   /** Show the Favourites button on the till (default on). */
@@ -224,7 +226,20 @@ export interface Settings {
   cardTo: number;
   /** Slip numbers restart each day from 1. */
   slipResetDaily: boolean;
-  autoPrintKitchen: boolean;
+  /** @deprecated replaced by printWhen; kept so older saved data still loads. */
+  autoPrintKitchen?: boolean;
+  /**
+   * When tickets print after a payment (default 'on_pay'):
+   * on_pay = straight away; on_next = when the cashier presses "Print & next customer";
+   * button = only when someone presses Print.
+   */
+  printWhen?: PrintWhen;
+  /** Print a kitchen ticket (default on). Off = the kitchen works from the kitchen screen only. */
+  printKitchenTicket?: boolean;
+  /** Print a change slip when a customer leaves change (default on). */
+  printChangeSlip?: boolean;
+  /** Go back to Sell by itself this many seconds after an order (0 = wait for the cashier). */
+  autoNextSeconds?: number;
   /** Order card turns amber after this many minutes. */
   warnAfterMinutes: number;
   /** Order counts as late after this many minutes (default 5). */

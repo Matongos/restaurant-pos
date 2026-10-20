@@ -12,7 +12,7 @@ Point-of-sale system for a pay-first, counter-service restaurant: the customer p
 | Login | Everyone | 4-digit PIN; each role sees only its screens |
 | Sell | Cashier | Photo tiles (sold-out meals hidden), Eat In / Take Away, notes, total in every currency. On phones the order stays docked under the meals, so every tap is visible; categories wrap so all show, search is one tap |
 | Payment | Cashier | Type the amount received and see at once: **SHORT**, **NO CHANGE** or **GIVE CHANGE**. Cash / EcoCash / InnBucks / Swipe / **Their change**, any currency, split payments. Keeping change and the customer's name happen in the change panel. The confirm button says what is missing |
-| Order sent | Cashier | Big number to hand over, kitchen ticket, customer slip and change voucher previews, print |
+| Order sent | Cashier | Big number to hand over and what printed. **Printing is a setting** (manager or owner): print straight away on payment (default), one "Print & next customer" button, or only when Print is pressed; kitchen ticket and change slip can each be switched off; optional auto return to Sell after 3/5/10 s (any touch stops it) |
 | Customer Display | Second monitor | Items as they are entered, total, paid, change, logo when idle |
 | Active Orders | Cashier, attendant | Clock per order ticking every second, amber then red **LATE** (default 5 min, set in Settings), mark served (card is freed), **add a drink to an existing number**, reprint |
 | Kitchen Display | Kitchen | Live clocks, late warning, tick done, recall |
@@ -24,7 +24,7 @@ Point-of-sale system for a pay-first, counter-service restaurant: the customer p
 | Cancel a sale | Cashier asks, manager approves | Reason, money back (cash or to the customer's change), manager or owner PIN. The sale stays in the records marked cancelled; customer change used on it is put back |
 | Analytics | Manager, owner | X-style overview: metric cards with change vs the previous period (same time of day), trend chart hourly / daily / weekly / monthly over Today, 7, 28 or 90 days. **Busy times & staff**: weekday × hour heat map, Breakfast / Lunch / Supper, staff needed per hour. **What sells when**: pick Sadza, Drinks or any meal to see its rush and a "ready by" time; preparation plan for every ingredient. Serving speed and money |
 | Staff | Manager, owner | **Add, edit, suspend, remove** people and **change PINs**. Managers look after cashiers, kitchen and attendants; only the owner can add or change managers and owners. Nobody can change their own role or suspend/remove themselves, and there is always at least one owner. PINs are 4 digits, unique, not four of the same digit. Suspending signs the person out on every till at once. Removed staff keep their name on past sales and records. Every change is logged with who made it |
-| Settings | Owner | Logo, name, colour, receipt text, card/slip mode and range, **payment methods on/off**, currencies and rates, menu with photos, late time, parts of the day, staff capacity |
+| Settings | Owner (managers: Numbers & printing, Serving times) | Logo, name, colour, receipt text, card/slip mode and range, **payment methods on/off**, currencies and rates, menu with photos, late time, parts of the day, staff capacity |
 
 Demo PINs: Owner `1234` · Manager `2222` · Cashier `1111` · Kitchen `3333` · Attendant `4444`.
 

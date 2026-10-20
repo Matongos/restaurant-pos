@@ -1,26 +1,32 @@
 import { useState } from 'react';
-import { setExampleHistory, resetDemo, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useStore } from '../store/store';
-import type { Currency, MenuItem, NumberMode } from '../domain/types';
+import { setExampleHistory, resetDemo, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
+import type { Currency, MenuItem, NumberMode, PrintWhen } from '../domain/types';
 import { compressLogo, compressPhoto } from '../components/photo';
 import { Dialog, TopBar, toast } from '../components/ui';
 import { fmt } from '../domain/money';
-import { mealInitials, uid } from '../domain/rules';
+import { can, mealInitials, uid } from '../domain/rules';
 import { LuCamera, LuStore } from 'react-icons/lu';
 import CategoryEditor from '../components/CategoryEditor';
 
 type Tab = 'general' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'kitchen' | 'demo';
 
+/** Tabs a manager may change: how the till runs day to day. Everything else is the owner's. */
+const MANAGER_TABS: Tab[] = ['numbers', 'kitchen'];
+
 export default function SettingsScreen() {
-  const [tab, setTab] = useState<Tab>('general');
-  const tabs: [Tab, string][] = [
+  const user = useCurrentUser()!;
+  const owner = can(user.role, 'settings');
+  const [tab, setTab] = useState<Tab>(owner ? 'general' : 'numbers');
+  const allTabs: [Tab, string][] = [
     ['general', 'Restaurant & branding'],
-    ['numbers', 'Order numbers & printing'],
+    ['numbers', 'Numbers & printing'],
     ['payments', 'Payment methods'],
     ['currencies', 'Currencies'],
     ['menu', 'Menu & categories'],
     ['kitchen', 'Serving times'],
     ['demo', 'Demo data'],
   ];
+  const tabs = owner ? allTabs : allTabs.filter(([k]) => MANAGER_TABS.includes(k));
   return (
     <div className="app">
       <TopBar title="Settings" />
@@ -109,6 +115,77 @@ function General() {
   );
 }
 
+const PRINT_WHEN: [PrintWhen, string, string][] = [
+  ['on_pay', 'Print straight away', 'Tickets print the moment the payment is confirmed. The kitchen never misses an order. Recommended when busy.'],
+  ['on_next', 'Print & next customer', 'One button after each sale prints the tickets and goes back to Sell.'],
+  ['button', 'Only when Print is pressed', 'Nothing prints unless someone presses Print. For when the kitchen works from the kitchen screen.'],
+];
+
+function Printing() {
+  const s = useStore((st) => st.settings);
+  const when = s.printWhen ?? 'on_pay';
+  const kitchen = s.printKitchenTicket !== false;
+  const changeSlip = s.printChangeSlip !== false;
+  const auto = s.autoNextSeconds ?? 0;
+  const slip = s.numberMode !== 'card';
+  return (
+    <>
+      <div className="section-title">After a payment</div>
+      <div className="toggle-list" role="radiogroup" aria-label="When tickets print">
+        {PRINT_WHEN.map(([k, title, desc]) => (
+          <button key={k} role="radio" aria-checked={when === k} className={`toggle ${when === k ? 'chosen' : ''}`} onClick={() => updateSettings({ printWhen: k })}>
+            <span>
+              {title}
+              <span className="sub">{desc}</span>
+            </span>
+            {when === k && <span className="st">IN USE</span>}
+          </button>
+        ))}
+      </div>
+
+      <div className="section-title">What prints</div>
+      <div className="switch-rows">
+        <div className="switch-row">
+          <div className="grow">
+            <b>Kitchen ticket</b>
+            <div className="muted">Off = the kitchen works from the kitchen screen only.</div>
+          </div>
+          <button className={`switch ${kitchen ? 'on' : ''}`} onClick={() => updateSettings({ printKitchenTicket: !kitchen })} aria-label="Print kitchen ticket" aria-pressed={kitchen}>
+            <span />
+          </button>
+        </div>
+        <div className="switch-row">
+          <div className="grow">
+            <b>Change slip</b>
+            <div className="muted">When a customer leaves change: their name, amount and code to bring back.</div>
+          </div>
+          <button className={`switch ${changeSlip ? 'on' : ''}`} onClick={() => updateSettings({ printChangeSlip: !changeSlip })} aria-label="Print change slip" aria-pressed={changeSlip}>
+            <span />
+          </button>
+        </div>
+        <div className="switch-row">
+          <div className="grow">
+            <b>Customer number slip</b>
+            <div className="muted">{slip ? 'Prints because customers get a printed number (set above).' : 'Not printed: customers get a physical card (set above).'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="section-title">Go back to Sell by itself</div>
+      <div className="seg" role="radiogroup" aria-label="Go back to Sell by itself">
+        {[0, 3, 5, 10].map((n) => (
+          <button key={n} role="radio" aria-checked={auto === n} className={auto === n ? 'on' : ''} onClick={() => updateSettings({ autoNextSeconds: n })}>
+            {n === 0 ? 'Off — wait for the cashier' : `After ${n} seconds`}
+          </button>
+        ))}
+      </div>
+      <p className="muted" style={{ fontSize: 13 }}>
+        The order number stays on screen for that long, then the till is ready for the next customer. Touching the screen stops the countdown.
+      </p>
+    </>
+  );
+}
+
 function Numbers() {
   const s = useStore((st) => st.settings);
   const modes: [NumberMode, string, string][] = [
@@ -147,11 +224,7 @@ function Numbers() {
           <input type="number" value={s.cardTo} onChange={(e) => updateSettings({ cardTo: Math.max(s.cardFrom, Number(e.target.value)) })} />
         </label>
       </div>
-      <div className="section-title">Printing</div>
-      <label className="row">
-        <input type="checkbox" checked={s.autoPrintKitchen} onChange={(e) => updateSettings({ autoPrintKitchen: e.target.checked })} />
-        Print automatically when an order is confirmed
-      </label>
+      <Printing />
       <p className="muted" style={{ fontSize: 13 }}>
         In this prototype printing opens the browser's print dialog. The desktop app prints straight to the 80 mm kitchen printer with no
         dialog.
