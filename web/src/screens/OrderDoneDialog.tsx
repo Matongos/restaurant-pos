@@ -37,7 +37,9 @@ export default function OrderDoneDialog({ result, onNew }: { result: PlaceOrderS
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Enter' && onNew();
+    // Ignore the Enter that confirmed the payment, so the number stays on screen.
+    const openedAt = Date.now();
+    const onKey = (e: KeyboardEvent) => e.key === 'Enter' && !e.repeat && Date.now() - openedAt > 600 && onNew();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onNew]);

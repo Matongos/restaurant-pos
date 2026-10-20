@@ -11,7 +11,7 @@ import TodaysMenu from './screens/TodaysMenu';
 import ActiveOrders from './screens/ActiveOrders';
 import Kitchen from './screens/Kitchen';
 import ChangeOwedScreen from './screens/ChangeOwed';
-import SettingsScreen from './screens/Settings';
+import SettingsScreen, { MenuScreen } from './screens/Settings';
 import Reports from './screens/Reports';
 
 const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
@@ -21,6 +21,7 @@ const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/kitchen': { perm: 'kitchen', el: Kitchen },
   '/change-owed': { perm: 'change_owed', el: ChangeOwedScreen },
   '/settings': { perm: 'settings', el: SettingsScreen },
+  '/menu': { perm: 'menu_edit', el: MenuScreen },
   '/reports': { perm: 'reports', el: Reports },
 };
 

@@ -7,6 +7,7 @@ import type { MenuItem, OrderLine } from '../domain/types';
 import { Dialog, TopBar } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
+import CollectChangeDialog from '../components/CollectChangeDialog';
 
 const TILL_ID = 'till-1';
 const FAV = '__fav';
@@ -34,6 +35,7 @@ export default function Till() {
   const [paying, setPaying] = useState(false);
   const [done, setDone] = useState<PlaceOrderSuccess | null>(null);
   const [noteFor, setNoteFor] = useState<OrderLine | null>(null);
+  const [collecting, setCollecting] = useState(false);
 
   const total = round2(lines.reduce((s, l) => s + l.qty * l.unitPrice, 0));
 
@@ -84,7 +86,11 @@ export default function Till() {
 
   return (
     <div className="app">
-      <TopBar title={addonFor ? 'Add to order' : 'New Order'} />
+      <TopBar title={addonFor ? 'Add to order' : 'New Order'}>
+        <button className="btn collect-btn" onClick={() => setCollecting(true)}>
+          💵 Collect change
+        </button>
+      </TopBar>
       <div className="till">
         <section className="ticket-panel">
           {parent ? (
@@ -215,6 +221,7 @@ export default function Till() {
         />
       )}
       {done && <OrderDoneDialog result={done} onNew={newOrder} />}
+      {collecting && <CollectChangeDialog onClose={() => setCollecting(false)} />}
       {noteFor && (
         <NoteDialog
           line={noteFor}

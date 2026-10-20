@@ -40,6 +40,7 @@ export default function Home() {
     { key: 'owed', icon: '💵', title: 'Customer Change', desc: 'Change we are holding for customers', to: '/change-owed', badge: openOwed, show: can(user.role, 'change_owed') },
     { key: 'menu', icon: '🍽️', title: "Today's Menu", desc: soldOut ? `${soldOut} ingredient(s) sold out` : 'Switch meals sold out / available', to: '/todays-menu', show: can(user.role, 'todays_menu') },
     { key: 'display', icon: '🖥️', title: 'Customer Display', desc: 'Open on the second screen', onClick: openDisplay, show: can(user.role, 'screens') || can(user.role, 'take_orders') },
+    { key: 'menu-photos', icon: '📷', title: 'Menu & Photos', desc: 'Change meal photos, names and prices', to: '/menu', show: can(user.role, 'menu_edit') },
     { key: 'reports', icon: '📊', title: 'Reports', desc: 'Today’s sales, payments, cashiers', to: '/reports', show: can(user.role, 'reports') },
     { key: 'settings', icon: '⚙️', title: 'Settings', desc: 'Logo, menu, currencies, numbers', to: '/settings', show: can(user.role, 'settings') },
   ];

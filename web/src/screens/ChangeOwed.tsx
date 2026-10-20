@@ -5,6 +5,7 @@ import { fmt, round2 } from '../domain/money';
 import { changeVoucherHTML, printTickets } from '../print/tickets';
 import { Dialog, TopBar, toast } from '../components/ui';
 import { describeCustomer } from '../components/CustomerPicker';
+import CollectChangeDialog from '../components/CollectChangeDialog';
 import type { CreditEntry, Customer } from '../domain/types';
 
 const KIND_LABEL: Record<CreditEntry['kind'], string> = {
@@ -25,6 +26,7 @@ export default function CustomerChange() {
   const [q, setQ] = useState('');
   const [tab, setTab] = useState<'owed' | 'all'>('owed');
   const [open, setOpen] = useState<Customer | null>(null);
+  const [collecting, setCollecting] = useState(false);
 
   const bal = useMemo(() => balances(credit), [credit]);
   const totalOwed = useMemo(() => round2([...bal.values()].reduce((a, b) => a + Math.max(0, b), 0)), [bal]);
@@ -49,7 +51,11 @@ export default function CustomerChange() {
 
   return (
     <div className="app">
-      <TopBar title="Customer Change" />
+      <TopBar title="Customer Change">
+        <button className="btn primary" onClick={() => setCollecting(true)}>
+          💵 Collect change
+        </button>
+      </TopBar>
       <div className="page">
         <div className="page-narrow">
           <div className="row wrap" style={{ marginBottom: 14 }}>
@@ -119,6 +125,7 @@ export default function CustomerChange() {
           </p>
         </div>
       </div>
+      {collecting && <CollectChangeDialog onClose={() => setCollecting(false)} />}
       {open && <CustomerDialog customerId={open.id} onClose={() => setOpen(null)} />}
     </div>
   );

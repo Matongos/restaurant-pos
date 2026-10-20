@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { resetDemo, updateSettings, upsertCurrency, upsertMenuItem, useStore } from '../store/store';
+import { removeExampleHistory, resetDemo, updateSettings, upsertCurrency, upsertMenuItem, useStore } from '../store/store';
 import type { Currency, MenuItem, NumberMode } from '../domain/types';
 import { compressLogo, compressPhoto } from '../components/photo';
 import { Dialog, TopBar, toast } from '../components/ui';
@@ -271,7 +271,7 @@ function AddCurrency({ onClose }: { onClose: () => void }) {
   );
 }
 
-function MenuEditor() {
+export function MenuEditor() {
   const menu = useStore((s) => s.menu);
   const categories = useStore((s) => s.categories);
   const currencies = useStore((s) => s.currencies);
@@ -321,7 +321,9 @@ function MenuEditor() {
                 </div>
               </td>
               <td>{fmt(m.price, base)}</td>
-              <td className="muted">{m.photo ? 'Photo ✓' : 'No photo yet'}</td>
+              <td style={{ textAlign: 'right' }}>
+                <span className="btn">📷 {m.photo ? 'Change photo' : 'Add photo'}</span>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -479,6 +481,20 @@ function Demo() {
   return (
     <>
       <p>This prototype keeps its data in this browser. Reset puts back the demo menu and removes all orders.</p>
+      <p className="muted">
+        The last 30 days of orders are generated examples (marked as training) so the graphs in Reports have something to show.
+      </p>
+      <button
+        className="btn"
+        style={{ marginBottom: 12 }}
+        onClick={() => {
+          removeExampleHistory();
+          toast('Example history removed');
+        }}
+      >
+        Remove example history
+      </button>
+      <br />
       {!sure ? (
         <button className="btn danger" onClick={() => setSure(true)}>
           Reset demo data
@@ -502,5 +518,21 @@ function Demo() {
         </div>
       )}
     </>
+  );
+}
+
+/** Stand-alone screen so managers can change meal photos and prices without full settings access. */
+export function MenuScreen() {
+  return (
+    <div className="app">
+      <TopBar title="Menu & Photos" />
+      <div className="page">
+        <div className="page-narrow">
+          <div className="card" style={{ padding: 20 }}>
+            <MenuEditor />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

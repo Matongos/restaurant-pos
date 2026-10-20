@@ -38,19 +38,38 @@ export function balances(credit: CreditEntry[]): Map<string, number> {
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
 
-/** Customers whose name matches what has been typed (start of first or last name), people owed change first. */
-export function findCustomers(customers: Customer[], credit: CreditEntry[], typed: string, limit = 6): Customer[] {
+/**
+ * Find customers from whatever the cashier types: part of a name, a note ("mbare"),
+ * 3+ digits of a phone number, or a slip code. Best matches first, then people owed change.
+ */
+export function findCustomers(
+  customers: Customer[],
+  credit: CreditEntry[],
+  typed: string,
+  opts: { limit?: number; onlyWithBalance?: boolean } = {},
+): Customer[] {
   const q = norm(typed);
   if (!q) return [];
   const bal = balances(credit);
   const digits = q.replace(/\D/g, '');
+  const codeOwners = new Set(credit.filter((e) => e.code && e.code.toLowerCase() === q).map((e) => e.customerId));
+  const score = (c: Customer): number => {
+    const n = norm(c.name);
+    if (codeOwners.has(c.id)) return 100;
+    if (n === q) return 90;
+    if (n.startsWith(q)) return 80;
+    if (n.split(' ').some((w) => w.startsWith(q))) return 70;
+    if (digits.length >= 3 && (c.phone ?? '').replace(/\D/g, '').includes(digits)) return 60;
+    if (q.length >= 3 && n.includes(q)) return 40;
+    if (q.length >= 3 && norm(c.note ?? '').includes(q)) return 30;
+    return 0;
+  };
   return customers
-    .filter((c) => {
-      const n = norm(c.name);
-      return n.startsWith(q) || n.split(' ').some((w) => w.startsWith(q)) || (digits.length >= 3 && (c.phone ?? '').replace(/\D/g, '').includes(digits));
-    })
-    .sort((a, b) => (bal.get(b.id) ?? 0) - (bal.get(a.id) ?? 0) || b.lastSeenAt.localeCompare(a.lastSeenAt))
-    .slice(0, limit);
+    .map((c) => ({ c, s: score(c), b: bal.get(c.id) ?? 0 }))
+    .filter((x) => x.s > 0 && (!opts.onlyWithBalance || x.b > 0))
+    .sort((a, b) => b.s - a.s || b.b - a.b || b.c.lastSeenAt.localeCompare(a.c.lastSeenAt))
+    .slice(0, opts.limit ?? 6)
+    .map((x) => x.c);
 }
 
 /** Other customers with exactly this name (to make the cashier tell them apart). */

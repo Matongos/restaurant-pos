@@ -133,6 +133,8 @@ export interface Order {
   /** Set when this is a drink/extra added to an existing order number. */
   parentOrderId?: ID;
   training: boolean;
+  /** Generated example history (demo only). */
+  example?: boolean;
 }
 
 /**

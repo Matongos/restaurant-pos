@@ -1,5 +1,6 @@
 import type { AppState } from '../domain/types';
 import { todayISO } from '../domain/rules';
+import { exampleHistory } from './exampleHistory';
 
 /**
  * Demo data so the prototype can be clicked through immediately.
@@ -8,6 +9,11 @@ import { todayISO } from '../domain/rules';
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
 
 export function seedState(): AppState {
+  const s = baseState();
+  return { ...s, orders: exampleHistory(s.menu) };
+}
+
+function baseState(): AppState {
   const comp = (id: string, name: string) => ({ id, name, available: true });
   const item = (
     id: string,
@@ -31,7 +37,7 @@ export function seedState(): AppState {
   });
 
   return {
-    version: 2,
+    version: 3,
     settings: {
       branchId: 'main',
       restaurantName: 'Training Restaurant',

@@ -14,6 +14,7 @@ import type {
   Staff,
 } from '../domain/types';
 import { seedState } from '../data/seed';
+import { exampleHistory } from '../data/exampleHistory';
 import { nextFreeCard, cardsInUse, customerBalance, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
 import { CREDIT_METHOD } from '../domain/types';
 import { round2 } from '../domain/money';
@@ -35,7 +36,13 @@ const listeners = new Set<() => void>();
 /** Bring data saved by an older version of the app up to date. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): AppState | null {
-  if (raw?.version === 2) return raw as AppState;
+  if (raw?.version === 3) return raw as AppState;
+  if (raw?.version === 2) {
+    // v3 adds example history for the graphs (only if there is none yet).
+    const st = raw as AppState;
+    const has = st.orders.some((o) => o.example);
+    return { ...st, version: 3, orders: has ? st.orders : [...exampleHistory(st.menu), ...st.orders] } as AppState;
+  }
   if (raw?.version === 1) {
     // v1 kept one-off IOUs; v2 keeps a running change balance per customer.
     const customers: Customer[] = [];
@@ -59,7 +66,7 @@ function migrate(raw: any): AppState | null {
     const settings = { ...rest.settings, warnAfterMinutes: 3, lateAfterMinutes: 5 };
     delete settings.kitchenAmberMinutes;
     delete settings.kitchenRedMinutes;
-    return { ...rest, version: 2, settings, customers, credit } as AppState;
+    return migrate({ ...rest, version: 2, settings, customers, credit });
   }
   return null;
 }
@@ -388,6 +395,10 @@ export function upsertMenuItem(item: MenuItem) {
     const exists = st.menu.some((x) => x.id === item.id);
     return { ...st, menu: exists ? st.menu.map((x) => (x.id === item.id ? item : x)) : [...st.menu, item] };
   });
+}
+
+export function removeExampleHistory() {
+  set((st) => ({ ...st, orders: st.orders.filter((o) => !o.example) }));
 }
 
 export function resetDemo() {

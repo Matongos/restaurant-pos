@@ -4,7 +4,16 @@ import { round2, fmt } from '../domain/money';
 import { balances, fmtDuration, serviceTimes, todayISO } from '../domain/rules';
 import { CREDIT_METHOD } from '../domain/types';
 import { TopBar } from '../components/ui';
+import BarChart from '../components/BarChart';
 
+const TYPE_COLORS = ['#9a3412', '#2563eb', '#6d28d9'];
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const pad = (h: number) => String(h).padStart(2, '0');
+const fmtCount = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+const dayLabel = (iso: string, withWeekday: boolean) => {
+  const d = new Date(iso + 'T12:00:00');
+  return withWeekday ? `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]} ${d.getDate()}` : String(d.getDate());
+};
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -20,11 +29,19 @@ export default function Reports() {
   const base = currencies.find((c) => c.code === settings.baseCurrency)!;
   const lateMs = settings.lateAfterMinutes * 60000;
   const [day, setDay] = useState(todayISO());
+  const [span, setSpan] = useState<1 | 7 | 30>(7);
   const [includeTraining, setIncludeTraining] = useState(true);
 
+  // Dates in the chosen period, oldest first (YYYY-MM-DD).
+  const dates = useMemo(() => {
+    const end = new Date(day + 'T12:00:00');
+    return Array.from({ length: span }, (_, i) => todayISO(new Date(end.getTime() - (span - 1 - i) * 86400000)));
+  }, [day, span]);
+
   const r = useMemo(() => {
+    const dateSet = new Set(dates);
     const list = orders.filter(
-      (o) => o.status !== 'cancelled' && todayISO(new Date(o.createdAt)) === day && (includeTraining || !o.training),
+      (o) => o.status !== 'cancelled' && dateSet.has(todayISO(new Date(o.createdAt))) && (includeTraining || !o.training),
     );
     const sales = round2(list.reduce((s, o) => s + o.total, 0));
     const mains = list.filter((o) => !o.parentOrderId);
@@ -73,17 +90,38 @@ export default function Reports() {
     for (const o of list) byCashier[o.cashierId] = round2((byCashier[o.cashierId] ?? 0) + o.total);
 
     // ---- customer change on this day
-    const dayCredit = credit.filter((e) => todayISO(new Date(e.at)) === day);
+    const dayCredit = credit.filter((e) => dateSet.has(todayISO(new Date(e.at))));
+
+    // ---- when customers come (main orders = customers)
+    const types = orderTypes.filter((t) => t.enabled || mains.some((o) => o.orderTypeId === t.id));
+    const hoursSeen = mains.map((o) => new Date(o.createdAt).getHours());
+    const hFrom = Math.min(6, ...hoursSeen);
+    const hTo = Math.max(20, ...hoursSeen);
+    const hourList = Array.from({ length: hTo - hFrom + 1 }, (_, i) => hFrom + i);
+    const perHour = types.map((t) =>
+      hourList.map((h) => mains.filter((o) => o.orderTypeId === t.id && new Date(o.createdAt).getHours() === h).length / dates.length),
+    );
+    const perDay = types.map((t) => dates.map((d) => mains.filter((o) => o.orderTypeId === t.id && todayISO(new Date(o.createdAt)) === d).length));
+    const hourTotals = hourList.map((_, i) => perHour.reduce((a, s) => a + s[i], 0));
+    const busiestHourIdx = hourTotals.indexOf(Math.max(...hourTotals));
+    const dayTotals = dates.map((_, i) => perDay.reduce((a, s) => a + s[i], 0));
+    const busiestDayIdx = dayTotals.indexOf(Math.max(...dayTotals));
+    const weekday = Array.from({ length: 7 }, (_, wd) => {
+      const ds = dates.filter((d) => new Date(d + 'T12:00:00').getDay() === wd);
+      const total = ds.reduce((a, d) => a + dayTotals[dates.indexOf(d)], 0);
+      return ds.length ? total / ds.length : 0;
+    });
     const sumKind = (k: string) => round2(dayCredit.filter((e) => e.kind === k).reduce((a, e) => a + Math.abs(e.amount), 0));
     const held = round2([...balances(credit).values()].reduce((a, b) => a + Math.max(0, b), 0));
 
     return {
+      types, hourList, perHour, perDay, hourTotals, busiestHourIdx, dayTotals, busiestDayIdx, weekday,
       list, mains, sales, served, waits, kitchen, handover, late, slowest, hours, meals,
       stillWaiting: timed.length - served.length,
       byPay, byItem, byType, byCashier,
       kept: sumKind('change_left'), used: sumKind('used_for_food'), paidOut: sumKind('paid_out'), held,
     };
-  }, [orders, credit, day, includeTraining, lateMs]);
+  }, [orders, credit, dates, includeTraining, lateMs, orderTypes]);
 
   const stat = (label: string, value: string, sub?: string, tone?: 'bad') => (
     <div className="card stat">
@@ -106,8 +144,15 @@ export default function Reports() {
       <div className="page">
         <div className="page-narrow">
           <div className="row wrap" style={{ marginBottom: 16 }}>
+            <div className="seg">
+              {([1, 7, 30] as const).map((n) => (
+                <button key={n} className={span === n ? 'on' : ''} onClick={() => setSpan(n)}>
+                  {n === 1 ? 'One day' : `Last ${n} days`}
+                </button>
+              ))}
+            </div>
             <label className="field" style={{ marginTop: 0 }}>
-              Day
+              {span === 1 ? 'Day' : 'Up to'}
               <input id="report-day" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
             </label>
             <label className="row" style={{ marginTop: 18 }}>
@@ -128,6 +173,50 @@ export default function Reports() {
             )}
           </div>
 
+          <h2 className="rep-h">When customers come</h2>
+          <div className="stats">
+            {stat(
+              'Busiest hour',
+              r.hourTotals[r.busiestHourIdx] > 0 ? `${pad(r.hourList[r.busiestHourIdx])}:00` : '—',
+              r.hourTotals[r.busiestHourIdx] > 0 ? `${fmtCount(r.hourTotals[r.busiestHourIdx])} customers${span > 1 ? ' a day' : ''}` : undefined,
+            )}
+            {span > 1 &&
+              stat(
+                'Busiest day',
+                r.dayTotals[r.busiestDayIdx] > 0 ? dayLabel(dates[r.busiestDayIdx], true) : '—',
+                r.dayTotals[r.busiestDayIdx] > 0 ? `${r.dayTotals[r.busiestDayIdx]} customers` : undefined,
+              )}
+            {span > 1 && stat('Customers a day', fmtCount(r.mains.length / dates.length), 'average')}
+            {stat('Take away', r.mains.length ? `${Math.round((r.mains.filter((o) => o.orderTypeId === 'take_away').length / r.mains.length) * 100)}%` : '—', 'of customers')}
+          </div>
+          <BarChart
+            caption={span === 1 ? 'Customers by hour' : `Customers by hour — average per day, last ${span} days`}
+            labels={r.hourList.map((h) => `${pad(h)}:00`)}
+            series={r.types.map((t, i) => ({ name: t.name, color: TYPE_COLORS[i] ?? '#57534e', values: r.perHour[i] }))}
+            format={fmtCount}
+            unit="customers"
+            highlight={r.busiestHourIdx}
+          />
+          {span > 1 && (
+            <BarChart
+              caption={`Customers per day, last ${span} days`}
+              labels={dates.map((d) => dayLabel(d, span <= 7))}
+              series={r.types.map((t, i) => ({ name: t.name, color: TYPE_COLORS[i] ?? '#57534e', values: r.perDay[i] }))}
+              unit="customers"
+              highlight={r.busiestDayIdx}
+            />
+          )}
+          {span === 30 && (
+            <BarChart
+              caption="Average customers by day of the week"
+              labels={WEEKDAYS}
+              series={[{ name: 'Customers', color: 'var(--brand)', values: [1, 2, 3, 4, 5, 6, 0].map((wd) => r.weekday[wd]) }]}
+              format={fmtCount}
+              height={200}
+              highlight={(() => { const v = [1, 2, 3, 4, 5, 6, 0].map((wd) => r.weekday[wd]); return v.indexOf(Math.max(...v)); })()}
+            />
+          )}
+
           <h2 className="rep-h">Serving times</h2>
           <div className="stats">
             {stat('Kitchen time', avg(r.kitchen) === null ? '—' : fmtDuration(avg(r.kitchen)!), 'paid → food ready')}
@@ -138,7 +227,7 @@ export default function Reports() {
 
           <div className="section-title">Average wait by hour</div>
           {r.hours.length === 0 ? (
-            <p className="muted">No served orders on this day yet.</p>
+            <p className="muted">No served orders in this period yet.</p>
           ) : (
             <div className="hour-chart card">
               {r.hours.map((h) => (
@@ -265,9 +354,9 @@ export default function Reports() {
 
           <div className="section-title">Customer change</div>
           <div className="stats">
-            {stat('Kept for customers', fmt(r.kept, base), 'on this day')}
-            {stat('Used for food', fmt(r.used, base), 'on this day')}
-            {stat('Paid out in cash', fmt(r.paidOut, base), 'on this day')}
+            {stat('Kept for customers', fmt(r.kept, base), 'in this period')}
+            {stat('Used for food', fmt(r.used, base), 'in this period')}
+            {stat('Paid out in cash', fmt(r.paidOut, base), 'in this period')}
             {stat('Holding now', fmt(r.held, base), 'all customers')}
           </div>
 

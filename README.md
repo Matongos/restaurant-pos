@@ -11,14 +11,16 @@ Point-of-sale system for a pay-first, counter-service restaurant: the customer p
 | --- | --- | --- |
 | Login | Everyone | 4-digit PIN; each role sees only its screens |
 | New Order | Cashier | Photo tiles (sold-out meals hidden), Eat In / Take Away, notes, total in every currency |
-| Payment | Cashier | Cash / EcoCash / InnBucks / Swipe, any currency, split payments, change in any currency, **keep change on the customer's balance** or **pay from it**, card number check |
+| Payment | Cashier | Type the amount received and see at once: **SHORT**, **NO CHANGE** or **GIVE CHANGE**. Cash / EcoCash / InnBucks / Swipe / **Their change**, any currency, split payments. Keeping change and the customer's name happen in the change panel. The confirm button says what is missing |
 | Order sent | Cashier | Big number to hand over, kitchen ticket, customer slip and change voucher previews, print |
 | Customer Display | Second monitor | Items as they are entered, total, paid, change, logo when idle |
 | Active Orders | Cashier, attendant | Clock per order ticking every second, amber then red **LATE** (default 5 min, set in Settings), mark served (card is freed), **add a drink to an existing number**, reprint |
 | Kitchen Display | Kitchen | Live clocks, late warning, tick done, recall |
 | Today's Menu | Kitchen, manager | Switch an ingredient (e.g. Beef) sold out and every meal with it disappears from the till |
+| Collect change | Cashier | Button on the till: find the customer by name, phone, note or slip code and hand over their change in two taps |
 | Customer Change | Cashier, manager | One running change balance per customer: kept, used for food, paid out — with full history. Name suggestions while typing; customers with the same name are told apart by phone or a note |
-| Reports | Manager, owner | Sales, average wait, late orders, kitchen and hand-over time, wait by hour and by meal, slowest orders, customer change, payments, best sellers, cashiers |
+| Menu & Photos | Manager, owner | Change meal photos (camera or file), names, prices and ingredients |
+| Reports | Manager, owner | One day / 7 / 30 days. **Customers by hour** (Eat In vs Take Away), customers per day and by weekday, busiest hour and day, sales, average wait, late orders, kitchen and hand-over time, wait by hour and by meal, slowest orders, customer change, payments, best sellers, cashiers |
 | Settings | Owner | Logo, name, colour, receipt text, card/slip mode and range, currencies and rates, menu with photos and ingredients, kitchen timers |
 
 Demo PINs: Owner `1234` · Manager `2222` · Cashier `1111` · Kitchen `3333` · Attendant `4444`.
@@ -39,6 +41,7 @@ Open the address it prints (usually http://localhost:5173).
 - **Phones on the same Wi-Fi:** `npm run dev` also prints a *Network* address (e.g. http://192.168.1.20:5173). Open it on a phone for Today's Menu.
   In the prototype each device keeps its own data; sharing between devices arrives with the local server.
 - **Start again with clean demo data:** Settings → Demo data → Reset.
+- **Example history:** the last 30 days of orders are generated examples (marked as training) so the graphs show something. Remove them in Settings → Demo data.
 
 ## Project layout
 
