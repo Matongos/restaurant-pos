@@ -4,7 +4,8 @@ import type { Currency, MenuItem, NumberMode } from '../domain/types';
 import { compressLogo, compressPhoto } from '../components/photo';
 import { Dialog, TopBar, toast } from '../components/ui';
 import { fmt } from '../domain/money';
-import { uid } from '../domain/rules';
+import { mealInitials, uid } from '../domain/rules';
+import { LuCamera, LuStore } from 'react-icons/lu';
 
 type Tab = 'general' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'kitchen' | 'demo';
 
@@ -52,7 +53,7 @@ function General() {
     <>
       <div className="photo-edit">
         <div className="ph" style={{ width: 140 }}>
-          {s.logo ? <img src={s.logo} alt="" style={{ objectFit: 'contain' }} /> : <span>🏷️</span>}
+          {s.logo ? <img src={s.logo} alt="" style={{ objectFit: 'contain' }} /> : <LuStore aria-hidden="true" />}
         </div>
         <div>
           <label className="btn">
@@ -124,7 +125,7 @@ function Numbers() {
           <button
             key={m}
             className="toggle"
-            style={s.numberMode === m ? { borderColor: 'var(--brand)', background: '#f0fdf4' } : undefined}
+            style={s.numberMode === m ? { borderColor: 'var(--brand)', background: 'var(--brand-soft)' } : undefined}
             onClick={() => updateSettings({ numberMode: m })}
           >
             <span>
@@ -347,7 +348,7 @@ export function MenuEditor() {
               <td style={{ width: 64 }}>
                 <div className="photo-edit">
                   <div className="ph" style={{ width: 48, height: 48, fontSize: 24 }}>
-                    {m.photo ? <img src={m.photo} alt="" /> : m.emoji}
+                    {m.photo ? <img src={m.photo} alt="" /> : mealInitials(m.name || '?')}
                   </div>
                 </div>
               </td>
@@ -355,12 +356,15 @@ export function MenuEditor() {
                 <b>{m.name}</b>
                 <div className="muted" style={{ fontSize: 13 }}>
                   {categories.find((c) => c.id === m.categoryId)?.name}
-                  {m.favourite ? ' · ★ favourite' : ''}
+                  {m.favourite ? ' · favourite' : ''}
                 </div>
               </td>
               <td>{fmt(m.price, base)}</td>
               <td style={{ textAlign: 'right' }}>
-                <span className="btn">📷 {m.photo ? 'Change photo' : 'Add photo'}</span>
+                <span className="btn">
+                  <LuCamera aria-hidden="true" />
+                  {m.photo ? 'Change photo' : 'Add photo'}
+                </span>
               </td>
             </tr>
           ))}
@@ -402,11 +406,12 @@ function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) 
     >
       <div className="photo-edit">
         <div className="ph" style={{ width: 110, height: 110, fontSize: 52 }}>
-          {m.photo ? <img src={m.photo} alt="" /> : m.emoji}
+          {m.photo ? <img src={m.photo} alt="" /> : mealInitials(m.name || '?')}
         </div>
         <div>
           <label className="btn primary">
-            📷 Take / upload photo
+            <LuCamera aria-hidden="true" />
+            Take or upload photo
             <input
               type="file"
               accept="image/*"
@@ -457,10 +462,6 @@ function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) 
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          Picture when no photo (emoji)
-          <input value={m.emoji} onChange={(e) => setM({ ...m, emoji: e.target.value })} />
         </label>
       </div>
       <label className="row" style={{ marginTop: 12 }}>

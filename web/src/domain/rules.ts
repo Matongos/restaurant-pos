@@ -172,3 +172,9 @@ export type TimerState = 'ok' | 'warn' | 'late';
 export function timerState(ms: number, warnMin: number, lateMin: number): TimerState {
   return ms >= lateMin * 60000 ? 'late' : ms >= warnMin * 60000 ? 'warn' : 'ok';
 }
+
+/** Two-letter monogram for a meal without a photo: "Sadza & Beef" -> "SB". */
+export function mealInitials(name: string): string {
+  const words = name.replace(/[^A-Za-z ]/g, ' ').split(/\s+/).filter((w) => w.length > 1 && !/^(and|with|the|of|ml|kg)$/i.test(w));
+  return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? '?').slice(0, 2)).toUpperCase();
+}

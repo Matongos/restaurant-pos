@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { login, useStore } from '../store/store';
+import { LuDelete } from 'react-icons/lu';
 import { BrandMark } from '../components/ui';
 
 export default function Login() {
@@ -32,16 +33,15 @@ export default function Login() {
   }, []);
 
   return (
-    <div className="app">
+    <div className="app solo">
       <div className="login">
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <BrandMark />
+          <div className="login-brand">
+            <BrandMark withName={false} />
+            <div className="name">{settings.restaurantName}</div>
+            <div className="muted">{settings.tagline}</div>
           </div>
-          <div className="muted" style={{ marginTop: 6 }}>
-            {settings.tagline}
-          </div>
-          <h2 style={{ marginTop: 20 }}>Enter your PIN</h2>
+          <h2 style={{ marginTop: 24, fontSize: 18 }}>Enter your PIN</h2>
           <div className="pin-dots">
             {[0, 1, 2, 3].map((i) => (
               <span key={i} className={i < pin.length ? 'on' : ''} />
@@ -54,9 +54,13 @@ export default function Login() {
                 {d}
               </button>
             ))}
-            <button onClick={() => setPin('')}>C</button>
+            <button onClick={() => setPin('')} aria-label="Clear">
+              C
+            </button>
             <button onClick={() => press('0')}>0</button>
-            <button onClick={() => setPin((p) => p.slice(0, -1))}>⌫</button>
+            <button onClick={() => setPin((p) => p.slice(0, -1))} aria-label="Delete last digit">
+              <LuDelete aria-hidden="true" />
+            </button>
           </div>
           <div className="hint">
             Demo PINs — Owner 1234 · Manager 2222 · Cashier 1111 · Kitchen 3333 · Attendant 4444

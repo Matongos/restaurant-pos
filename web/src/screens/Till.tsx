@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useRoute, go } from '../router';
 import { setLiveCart, useCurrentUser, useStore, type PlaceOrderSuccess } from '../store/store';
-import { isSellable } from '../domain/rules';
+import { isSellable, mealInitials } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
 import type { MenuItem, OrderLine } from '../domain/types';
 import { Dialog, TopBar } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
 import CollectChangeDialog from '../components/CollectChangeDialog';
+import { LuChevronDown, LuChevronUp, LuHandCoins, LuMinus, LuPlus, LuSearch, LuStar, LuTrash2 } from 'react-icons/lu';
+
 
 const TILL_ID = 'till-1';
 const FAV = '__fav';
@@ -36,6 +38,7 @@ export default function Till() {
   const [done, setDone] = useState<PlaceOrderSuccess | null>(null);
   const [noteFor, setNoteFor] = useState<OrderLine | null>(null);
   const [collecting, setCollecting] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
 
   const total = round2(lines.reduce((s, l) => s + l.qty * l.unitPrice, 0));
 
@@ -72,6 +75,7 @@ export default function Till() {
 
   const finish = (r: PlaceOrderSuccess) => {
     setPaying(false);
+    setOrderOpen(false);
     setDone(r);
   };
 
@@ -84,28 +88,99 @@ export default function Till() {
 
   const catColor = (id: string) => categories.find((c) => c.id === id)?.color ?? '#999';
 
+  const itemCount = lines.reduce((n, l) => n + l.qty, 0);
+  const qtyOf = (id: string) => lines.filter((l) => l.itemId === id).reduce((n, l) => n + l.qty, 0);
+  const sortedCats = categories.slice().sort((a, b) => a.sort - b.sort);
+  const pickCat = (id: string) => {
+    setCat(id);
+    setSearch('');
+  };
+
   return (
     <div className="app">
-      <TopBar title={addonFor ? 'Add to order' : 'New Order'}>
-        <button className="btn collect-btn" onClick={() => setCollecting(true)}>
-          💵 Collect change
+      <TopBar title={addonFor ? `Add to order #${parent?.number ?? ''}` : 'Sell'}>
+        <button className="btn" onClick={() => setCollecting(true)}>
+          <LuHandCoins aria-hidden="true" />
+          Collect change
         </button>
       </TopBar>
       <div className="till">
-        <section className="ticket-panel">
+        {/* ---------------- menu (centre) */}
+        <section className="menu-panel" aria-label="Menu">
+          <div className="cat-bar">
+            <label className="search">
+              <LuSearch aria-hidden="true" />
+              <input id="menu-search" placeholder="Search meals" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search meals" />
+            </label>
+            <button className={cat === FAV && !search ? 'on' : ''} onClick={() => pickCat(FAV)}>
+              <LuStar aria-hidden="true" />
+              Favourites
+            </button>
+            {sortedCats.map((c) => (
+              <button key={c.id} className={cat === c.id && !search ? 'on' : ''} onClick={() => pickCat(c.id)}>
+                <span className="dot" style={{ background: c.color }} aria-hidden="true" />
+                {c.name}
+              </button>
+            ))}
+          </div>
+          <div className="items">
+            {shown.map((m) => {
+              const q = qtyOf(m.id);
+              return (
+                <button
+                  key={m.id}
+                  className="item"
+                  onClick={() => add(m)}
+                  style={{ '--cat': catColor(m.categoryId) } as CSSProperties}
+                  aria-label={`${m.name}, ${fmt(m.price, base)}${q ? `, ${q} in order` : ''}`}
+                >
+                  <div className="ph">
+                    {m.photo ? (
+                      <img src={m.photo} alt="" />
+                    ) : (
+                      <span className="mono" aria-hidden="true">
+                        {mealInitials(m.name)}
+                      </span>
+                    )}
+                  </div>
+                  {q > 0 && <span className="qty-badge">{q}</span>}
+                  <div className="meta">
+                    <div className="nm">{m.name}</div>
+                    <div className="pr">{fmt(m.price, base)}</div>
+                  </div>
+                </button>
+              );
+            })}
+            {shown.length === 0 && (
+              <div className="empty" style={{ gridColumn: '1/-1' }}>
+                {search ? `No meal matches “${search}”.` : 'Nothing available here right now.'}
+              </div>
+            )}
+          </div>
+          {hiddenCount > 0 && <div className="hidden-note">{hiddenCount} meal(s) hidden because they are sold out.</div>}
+        </section>
+
+        {/* ---------------- current order (right; full-screen sheet on phones) */}
+        <section className={`ticket-panel ${orderOpen ? 'open' : ''}`} aria-label="Current order">
+          <div className="order-head">
+            <h2>{parent ? `Adding to #${parent.number}` : 'Order'}</h2>
+            <button className="btn ghost icon-only sheet-close" onClick={() => setOrderOpen(false)} aria-label="Back to menu">
+              <LuChevronDown aria-hidden="true" />
+            </button>
+          </div>
           {parent ? (
-            <div className="addon-banner" style={{ marginTop: 12 }}>
+            <div className="addon-banner">
               <span>
-                Adding to order <b>#{parent.number}</b> ({orderTypes.find((t) => t.id === parent.orderTypeId)?.name})
+                Drinks or extras for card <b>#{parent.number}</b> ({orderTypes.find((t) => t.id === parent.orderTypeId)?.name})
               </span>
               <button className="btn" onClick={() => go('/till')}>
                 Cancel
               </button>
             </div>
           ) : (
-            <div className="type-toggle">
+            <div className="type-toggle" role="radiogroup" aria-label="Order type">
               {enabledTypes.map((t) => (
-                <button key={t.id} className={`${t.id} ${typeId === t.id ? 'on' : ''}`} onClick={() => setTypeId(t.id)}>
+                <button key={t.id} role="radio" aria-checked={typeId === t.id} className={`${t.id} ${typeId === t.id ? 'on' : ''}`} onClick={() => setTypeId(t.id)}>
                   {t.name}
                   <small>{t.packaging}</small>
                 </button>
@@ -113,31 +188,31 @@ export default function Till() {
             </div>
           )}
           <div className="lines">
-            {lines.length === 0 && <div className="empty">Tap a meal to add it</div>}
+            {lines.length === 0 && <div className="empty">Tap a meal to add it.</div>}
             {lines.map((l) => (
               <div key={l.id} className="line-row">
                 <div className="qty">
-                  <button onClick={() => changeQty(l.id, -1)} aria-label="Less">
-                    −
+                  <button onClick={() => changeQty(l.id, -1)} aria-label={`One less ${l.name}`}>
+                    <LuMinus aria-hidden="true" />
                   </button>
                   <span>{l.qty}</span>
-                  <button onClick={() => changeQty(l.id, 1)} aria-label="More">
-                    +
+                  <button onClick={() => changeQty(l.id, 1)} aria-label={`One more ${l.name}`}>
+                    <LuPlus aria-hidden="true" />
+                  </button>
+                  <button className="note-btn" onClick={() => setNoteFor(l)}>
+                    {l.note ? 'Edit note' : '+ Note'}
                   </button>
                 </div>
                 <div>
                   <div className="nm">{l.name}</div>
-                  {l.note && <div className="nt">» {l.note}</div>}
-                  <div className="nm">
-                    <button onClick={() => setNoteFor(l)}>{l.note ? 'Edit note' : '+ Note'}</button>
-                  </div>
+                  {l.note && <div className="nt">{l.note}</div>}
                 </div>
                 <div className="pr">{fmt(l.qty * l.unitPrice, base)}</div>
               </div>
             ))}
           </div>
           <div className="totals">
-            <div className="big">
+            <div className="total-row">
               <span>Total</span>
               <span>{fmt(total, base)}</span>
             </div>
@@ -149,8 +224,8 @@ export default function Till() {
                 ))}
             </div>
             <div className="actions">
-              <button className="btn big danger" onClick={clear} disabled={!lines.length}>
-                Clear
+              <button className="btn big icon-only" onClick={clear} disabled={!lines.length} aria-label="Clear order" title="Clear order">
+                <LuTrash2 aria-hidden="true" />
               </button>
               <button className="btn big primary" onClick={() => setPaying(true)} disabled={!lines.length}>
                 Pay {fmt(total, base)}
@@ -158,52 +233,17 @@ export default function Till() {
             </div>
           </div>
         </section>
-
-        <section className="menu-panel">
-          <div className="cat-bar">
-            <button
-              className={cat === FAV && !search ? 'on' : ''}
-              style={cat === FAV && !search ? { background: 'var(--ink)', borderColor: 'var(--ink)' } : undefined}
-              onClick={() => {
-                setCat(FAV);
-                setSearch('');
-              }}
-            >
-              ★ Favourites
-            </button>
-            {categories
-              .slice()
-              .sort((a, b) => a.sort - b.sort)
-              .map((c) => (
-                <button
-                  key={c.id}
-                  className={cat === c.id && !search ? 'on' : ''}
-                  style={cat === c.id && !search ? { background: c.color, borderColor: c.color } : undefined}
-                  onClick={() => {
-                    setCat(c.id);
-                    setSearch('');
-                  }}
-                >
-                  {c.name}
-                </button>
-              ))}
-            <input placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <div className="items">
-            {shown.map((m) => (
-              <button key={m.id} className="item" onClick={() => add(m)} style={{ '--cat': catColor(m.categoryId) } as CSSProperties}>
-                <div className="ph">{m.photo ? <img src={m.photo} alt="" /> : <span>{m.emoji}</span>}</div>
-                <div className="meta">
-                  <div className="nm">{m.name}</div>
-                  <div className="pr">{fmt(m.price, base)}</div>
-                </div>
-              </button>
-            ))}
-            {shown.length === 0 && <div className="empty" style={{ gridColumn: '1/-1' }}>Nothing available here.</div>}
-          </div>
-          {hiddenCount > 0 && <div className="hidden-note">{hiddenCount} item(s) hidden because they are sold out.</div>}
-        </section>
       </div>
+
+      {/* Phone: the order is one tap away and always shows the total. */}
+      {lines.length > 0 && !orderOpen && (
+        <button className="order-bar" onClick={() => setOrderOpen(true)}>
+          <span className="count">{itemCount}</span>
+          View order
+          <span className="tot">{fmt(total, base)}</span>
+          <LuChevronUp aria-hidden="true" />
+        </button>
+      )}
 
       {paying && (
         <PayDialog

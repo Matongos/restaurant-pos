@@ -21,7 +21,7 @@ export default function TodaysMenu() {
 
   return (
     <div className="app">
-      <TopBar title="Today's Menu" />
+      <TopBar title="Sold out today" />
       <div className="page">
         <div className="page-narrow">
           <div className="section-title" style={{ marginTop: 0 }}>

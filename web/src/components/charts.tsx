@@ -28,7 +28,7 @@ export function TrendChart({
   format,
   tickFormat = format,
   caption,
-  color = 'var(--brand)',
+  color = 'var(--chart-1)',
   height = 260,
 }: {
   labels: string[];
@@ -160,7 +160,7 @@ export function TrendChart({
 
 /* ------------------------------------------------------------ sparkline */
 
-export function Sparkline({ values, color = 'var(--brand)' }: { values: (number | null)[]; color?: string }) {
+export function Sparkline({ values, color = 'var(--chart-1)' }: { values: (number | null)[]; color?: string }) {
   const W = 120, H = 30;
   const vs = values.map((v) => v ?? 0);
   const max = Math.max(...vs, 0) || 1;

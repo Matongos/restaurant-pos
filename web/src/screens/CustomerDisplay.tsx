@@ -1,4 +1,5 @@
 import { go, useRoute } from '../router';
+import { LuArrowLeft } from 'react-icons/lu';
 import { useStore } from '../store/store';
 import { fmt, fromBase } from '../domain/money';
 
@@ -8,7 +9,8 @@ function BackLink() {
   if (window.opener) return null;
   return (
     <button className="display-back" onClick={() => go('/')}>
-      ← Back to till
+      <LuArrowLeft aria-hidden="true" />
+      Back to till
     </button>
   );
 }

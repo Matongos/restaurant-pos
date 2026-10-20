@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { setOrderStatus, useCurrentUser, useStore } from '../store/store';
 import { fmtDuration, timerState } from '../domain/rules';
 import { Dialog, TopBar, useNow } from '../components/ui';
+import { LuCheck, LuRotateCcw } from 'react-icons/lu';
 import { TIMER_CLASS } from './ActiveOrders';
 
 /**
@@ -34,7 +35,8 @@ export default function Kitchen() {
     <div className="app">
       <TopBar title="Kitchen">
         <button className="btn" onClick={() => setRecallOpen(true)}>
-          ↺ Recall
+          <LuRotateCcw aria-hidden="true" />
+          Recall
         </button>
       </TopBar>
       <div className="page">
@@ -66,7 +68,8 @@ export default function Kitchen() {
                   ))}
                 </div>
                 <button className="kitchen-tick" onClick={() => setOrderStatus(o.id, 'ready', user.id)}>
-                  ✓ Done
+                  <LuCheck aria-hidden="true" />
+                  Done
                 </button>
               </div>
             );

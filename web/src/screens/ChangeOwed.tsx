@@ -6,6 +6,7 @@ import { changeVoucherHTML, printTickets } from '../print/tickets';
 import { Dialog, TopBar, toast } from '../components/ui';
 import { describeCustomer } from '../components/CustomerPicker';
 import CollectChangeDialog from '../components/CollectChangeDialog';
+import { LuHandCoins, LuPrinter } from 'react-icons/lu';
 import type { CreditEntry, Customer } from '../domain/types';
 
 const KIND_LABEL: Record<CreditEntry['kind'], string> = {
@@ -53,9 +54,10 @@ export default function CustomerChange() {
 
   return (
     <div className="app">
-      <TopBar title="Customer Change">
+      <TopBar title="Customer change">
         <button className="btn primary" onClick={() => setCollecting(true)}>
-          💵 Collect change
+          <LuHandCoins aria-hidden="true" />
+          Collect change
         </button>
       </TopBar>
       <div className="page">
@@ -256,7 +258,7 @@ function CustomerDialog({ customerId, onClose }: { customerId: string; onClose: 
               <td>
                 {e.kind === 'change_left' && (
                   <button className="btn" onClick={() => printTickets([changeVoucherHTML(e, c, balance, getState())])} aria-label="Reprint slip">
-                    🖨
+                    <LuPrinter aria-hidden="true" />
                   </button>
                 )}
               </td>

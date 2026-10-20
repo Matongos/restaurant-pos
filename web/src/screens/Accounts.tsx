@@ -60,7 +60,7 @@ const PAID_FROM: Record<PaidFrom, string> = {
   owner: "Owner's pocket",
 };
 const EXPENSE_CATEGORIES = ['Wages', 'Rent', 'Electricity', 'Gas', 'Water', 'Transport', 'Repairs', 'Cleaning', 'Licences & tax', 'Other'];
-const MONEY_COLORS = { sales: '#1f6f43', bought: '#d97706', expenses: '#6d28d9' };
+const MONEY_COLORS = { sales: '#0d9488', bought: '#d97706', expenses: '#7c3aed' };
 
 type Tab = 'profit' | 'purchases' | 'expenses' | 'journal' | 'cancellations';
 const TABS: [Tab, string][] = [
@@ -84,7 +84,7 @@ export default function Accounts() {
 
   return (
     <div className="app">
-      <TopBar title="Accounts" />
+      <TopBar title="Books" />
       <div className="page">
         <div className="an-wrap">
           <div className="an-controls">

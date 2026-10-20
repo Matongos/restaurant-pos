@@ -70,7 +70,7 @@ function baseState(): AppState {
       branchId: 'main',
       restaurantName: 'Training Restaurant',
       tagline: 'Good food, fast',
-      brandColor: '#1f6f43',
+      brandColor: '#0f766e',
       address: '1 Example Street, Harare',
       phone: '+263 77 000 0000',
       receiptFooter: 'Thank you! Keep your card until your food arrives.',

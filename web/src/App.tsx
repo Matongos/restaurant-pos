@@ -2,9 +2,8 @@ import { useEffect, type ComponentType, type ReactElement } from 'react';
 import { useRoute } from './router';
 import { useCurrentUser, useStore } from './store/store';
 import { can, type Permission } from './domain/rules';
-import { ToastHost, TopBar } from './components/ui';
+import { homeFor, ToastHost, TopBar } from './components/ui';
 import Login from './screens/Login';
-import Home from './screens/Home';
 import Till from './screens/Till';
 import CustomerDisplay from './screens/CustomerDisplay';
 import TodaysMenu from './screens/TodaysMenu';
@@ -36,15 +35,20 @@ export default function App() {
     document.documentElement.style.setProperty('--brand', brand);
   }, [brand]);
 
+  // After login (or on an unknown address) each role goes straight to its own screen.
+  const needsLanding = !!user && path !== '/display' && (!ROUTES[path] || !can(user.role, ROUTES[path].perm));
+  useEffect(() => {
+    if (needsLanding && user) window.location.replace(`#${homeFor(user.role)}`);
+  }, [needsLanding, user]);
+
   // The customer display is view-only and needs no login.
   if (path === '/display') return <CustomerDisplay />;
 
   let body: ReactElement;
   if (!user) body = <Login />;
-  else if (path === '/' || path === '') body = <Home />;
   else {
     const r = ROUTES[path];
-    if (!r) body = <Home />;
+    if (!r) body = <div className="app solo" />;
     else if (!can(user.role, r.perm))
       body = (
         <div className="app">

@@ -38,11 +38,14 @@ export default function CustomerPicker({
   onChange,
   autoFocus,
   label = 'Customer name',
+  onEnter,
 }: {
   value: CustomerSelection;
   onChange: (v: CustomerSelection) => void;
   autoFocus?: boolean;
   label?: string;
+  /** Called when Enter is pressed in the name box (e.g. to confirm the payment). */
+  onEnter?: () => void;
 }) {
   const customers = useStore((s) => s.customers);
   const credit = useStore((s) => s.credit);
@@ -102,6 +105,7 @@ export default function CustomerPicker({
           placeholder="Type their name"
           value={typed}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && onEnter?.()}
         />
       </label>
 

@@ -43,7 +43,11 @@ const listeners = new Set<() => void>();
 /** Bring data saved by an older version of the app up to date. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): AppState | null {
-  if (raw?.version === 5) return raw as AppState;
+  if (raw?.version === 5) {
+    const st = raw as AppState;
+    // The old default green becomes the new default teal (a colour the owner chose is kept).
+    return st.settings.brandColor?.toLowerCase() === '#1f6f43' ? { ...st, settings: { ...st.settings, brandColor: '#0f766e' } } : st;
+  }
   if (raw?.version === 4) {
     // v5: accounting (purchases, expenses, cancellations) and cost per plate.
     const st = raw as AppState;

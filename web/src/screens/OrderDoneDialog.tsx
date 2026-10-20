@@ -3,6 +3,7 @@ import { getState, useStore, type PlaceOrderSuccess } from '../store/store';
 import { changeVoucherHTML, customerSlipHTML, kitchenTicketHTML, printTickets, TICKET_CSS } from '../print/tickets';
 import { fmt } from '../domain/money';
 import { Dialog } from '../components/ui';
+import { LuPrinter } from 'react-icons/lu';
 
 export function TicketPaper({ title, html }: { title: string; html: string }) {
   return (
@@ -54,10 +55,11 @@ export default function OrderDoneDialog({ result, onNew }: { result: PlaceOrderS
       footer={
         <>
           <button className="btn big" onClick={() => printTickets(parts.map((p) => p.html))}>
-            🖨 Print {settings.autoPrintKitchen ? 'again' : ''}
+            <LuPrinter aria-hidden="true" />
+            Print {settings.autoPrintKitchen ? 'again' : ''}
           </button>
           <button className="btn big primary" onClick={onNew}>
-            Next customer ↵
+            Next customer
           </button>
         </>
       }

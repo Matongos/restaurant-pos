@@ -3,7 +3,8 @@ import { go } from '../router';
 import { getState, setOrderStatus, useCurrentUser, useStore } from '../store/store';
 import { can, fmtDuration, serviceTimes, timerState, todayISO, type TimerState } from '../domain/rules';
 import { customerSlipHTML, kitchenTicketHTML, printTickets } from '../print/tickets';
-import { TopBar, toast, useNow } from '../components/ui';
+import { MoreMenu, TopBar, toast, useNow } from '../components/ui';
+import { LuBan, LuCheck, LuCookingPot, LuCupSoda, LuPrinter } from 'react-icons/lu';
 import type { Order } from '../domain/types';
 import CancelSaleDialog from '../components/CancelSaleDialog';
 
@@ -45,7 +46,7 @@ export default function ActiveOrders() {
 
   return (
     <div className="app">
-      <TopBar title="Active Orders" />
+      <TopBar title="Orders" />
       <div className="page">
         <div className="filters">
           <div className="tabs" style={{ margin: 0 }}>
@@ -91,18 +92,13 @@ export default function ActiveOrders() {
                   {addons.flatMap((a) =>
                     a.lines.map((l) => (
                       <div key={l.id} className="addon">
-                        + {l.qty} × {l.name} {a.status === 'ready' ? '✓' : ''}
+                        + {l.qty} × {l.name} {a.status === 'ready' ? '(ready)' : ''}
                       </div>
                     )),
                   )}
                 </div>
                 {o.status !== 'served' && (
                   <div className="of">
-                    {o.status === 'in_kitchen' && can(user.role, 'kitchen') && (
-                      <button className="btn" onClick={() => setOrderStatus(o.id, 'ready', user.id)}>
-                        Ready
-                      </button>
-                    )}
                     <button
                       className="btn primary"
                       onClick={() => {
@@ -110,26 +106,33 @@ export default function ActiveOrders() {
                         toast(`Order ${o.number} served${o.numberMode !== 'slip' ? ` — card ${o.number} is free again` : ''}`);
                       }}
                     >
-                      Served ✓
+                      <LuCheck aria-hidden="true" />
+                      Served
                     </button>
                     {can(user.role, 'take_orders') && (
                       <button className="btn" onClick={() => go(`/till?addon=${o.id}`)}>
-                        + Drink
+                        <LuCupSoda aria-hidden="true" />
+                        Drink
                       </button>
                     )}
-                    <button className="btn" onClick={() => reprint(o)} aria-label="Reprint">
-                      🖨
-                    </button>
-                    <button className="btn danger" onClick={() => setCancelling(o)}>
-                      Cancel sale
-                    </button>
+                    <MoreMenu
+                      items={[
+                        ...(o.status === 'in_kitchen' && can(user.role, 'kitchen')
+                          ? [{ label: 'Mark ready', icon: <LuCookingPot aria-hidden="true" />, onClick: () => setOrderStatus(o.id, 'ready', user.id) }]
+                          : []),
+                        { label: 'Reprint ticket', icon: <LuPrinter aria-hidden="true" />, onClick: () => reprint(o) },
+                        { label: 'Cancel sale', icon: <LuBan aria-hidden="true" />, danger: true, onClick: () => setCancelling(o) },
+                      ]}
+                    />
                   </div>
                 )}
                 {o.status === 'served' && (
                   <div className="of">
-                    <button className="btn danger" onClick={() => setCancelling(o)}>
-                      Cancel sale / refund
+                    <button className="btn" onClick={() => reprint(o)}>
+                      <LuPrinter aria-hidden="true" />
+                      Reprint
                     </button>
+                    <MoreMenu items={[{ label: 'Cancel sale / refund', icon: <LuBan aria-hidden="true" />, danger: true, onClick: () => setCancelling(o) }]} />
                   </div>
                 )}
               </div>

@@ -80,7 +80,7 @@ export default function Analytics() {
 
   return (
     <div className="app">
-      <TopBar title="Analytics" />
+      <TopBar title="Reports" />
       <div className="page">
         <div className="an-wrap">
           <div className="an-controls">
@@ -462,7 +462,7 @@ function SellsWhen({ r, all, hours }: Ctx) {
       <BarChart
         caption={`${target.name} — portions by hour${r.days.length > 1 ? ', average per day' : ''}`}
         labels={hours.map(hh)}
-        series={[{ name: target.name, color: 'var(--brand)', values }]}
+        series={[{ name: target.name, color: 'var(--chart-1)', values }]}
         format={one}
         unit="portions"
         highlight={peakIdx}

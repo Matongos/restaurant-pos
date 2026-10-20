@@ -6,6 +6,7 @@ import { CREDIT_METHOD, type OrderLine, type Payment } from '../domain/types';
 import { Dialog, toast } from '../components/ui';
 import CustomerPicker, { selectionReady, type CustomerSelection } from '../components/CustomerPicker';
 import ChangeFinder from '../components/ChangeFinder';
+import { LuHandCoins, LuX } from 'react-icons/lu';
 
 interface Props {
   tillId: string;
@@ -224,7 +225,8 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
               </button>
             ))}
             <button className={findingChange ? 'on' : 'seg-change'} onClick={() => setFindingChange(true)}>
-              👤 Their change
+              <LuHandCoins aria-hidden="true" />
+              Their change
             </button>
           </div>
 
@@ -268,7 +270,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
                       <span>
                         {fmt(creditUsed, base)}
                         <button className="x" onClick={() => setChangeOf(null)} aria-label="Remove">
-                          ✕
+                          <LuX aria-hidden="true" />
                         </button>
                       </span>
                     </div>
@@ -279,7 +281,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
                       <span>
                         {fmt(p.amount, currencies.find((x) => x.code === p.currency))}
                         <button className="x" onClick={() => setSplit((s) => s.filter((_, j) => j !== i))} aria-label="Remove">
-                          ✕
+                          <LuX aria-hidden="true" />
                         </button>
                       </span>
                     </div>
@@ -332,7 +334,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
                   )}
                   {status === 'short' && entered > 0 && (
                     <button className="link-btn" onClick={startSplit}>
-                      Customer pays the rest another way (e.g. EcoCash)? Keep this {fmt(entered, cur)} and add the rest →
+                      Customer pays the rest another way (e.g. EcoCash)? Keep this {fmt(entered, cur)} and add the rest
                     </button>
                   )}
                 </>
@@ -431,7 +433,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
                       Added to their change. New balance {fmt(round2(changeBalance - creditUsed + keepBase), base)}.
                     </div>
                   ) : (
-                    <CustomerPicker value={keepFor} onChange={setKeepFor} autoFocus label="Customer name" />
+                    <CustomerPicker value={keepFor} onChange={setKeepFor} autoFocus label="Customer name" onEnter={confirm} />
                   )}
                 </div>
               )}
