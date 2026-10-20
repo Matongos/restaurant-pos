@@ -1,4 +1,4 @@
-import type { MenuItem, Order } from '../domain/types';
+import type { Cancellation, Expense, MenuItem, Order, Purchase, StockItem } from '../domain/types';
 import { round2 } from '../domain/money';
 
 /**
@@ -97,4 +97,93 @@ export function exampleHistory(menu: MenuItem[], days = 120, now = new Date()): 
     }
   }
   return out;
+}
+
+/* ------------------------------------------------------------------ accounting examples */
+
+
+const REASONS = ['Customer changed their mind', 'Wrong item entered', 'Meal ran out', 'Entered twice'];
+
+/** About 1 in 70 example sales was cancelled (with a refund), so the cancellation log has history. */
+export function exampleCancellations(orders: Order[]): { orders: Order[]; cancellations: Cancellation[] } {
+  const rand = rng(777);
+  const cancellations: Cancellation[] = [];
+  const out = orders.map((o) => {
+    if (!o.example || rand() > 0.014) return o;
+    const placed = Date.parse(o.createdAt);
+    const c: Cancellation = {
+      id: `ex-c${cancellations.length}`,
+      branchId: o.branchId,
+      orderId: o.id,
+      orderNumber: o.number,
+      orderTotal: o.total,
+      reason: REASONS[Math.floor(rand() * REASONS.length)],
+      refund: 'cash',
+      refundAmount: o.total,
+      requestedBy: o.cashierId,
+      approvedBy: 'u-manager',
+      at: new Date(placed + 2 * 60000).toISOString(),
+      example: true,
+    };
+    cancellations.push(c);
+    return {
+      ...o,
+      status: 'cancelled' as const,
+      cancellationId: c.id,
+      history: [o.history[0], o.history[1], { status: 'cancelled' as const, at: c.at, by: 'u-manager' }],
+    };
+  });
+  return { orders: out, cancellations };
+}
+
+/**
+ * Example purchases (twice a week) and running costs, sized like a small busy restaurant:
+ * food and drink about 35–40% of sales, wages weekly, rent and electricity monthly.
+ */
+export function exampleBooks(stock: StockItem[], days = 120, now = new Date()): { purchases: Purchase[]; expenses: Expense[] } {
+  const rand = rng(4242);
+  const byId = new Map(stock.map((s) => [s.id, s]));
+  const purchases: Purchase[] = [];
+  const expenses: Expense[] = [];
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const buy = (id: string, qty: number) => {
+    const s = byId.get(id)!;
+    const unitCost = Math.round((s.lastUnitCost ?? 1) * (0.92 + rand() * 0.16) * 100) / 100;
+    return { stockItemId: id, name: s.name, qty, unit: s.unit, unitCost };
+  };
+  const add = (d: Date, supplier: string, lines: ReturnType<typeof buy>[], paidFrom: Purchase['paidFrom']) => {
+    const total = Math.round(lines.reduce((t, l) => t + l.qty * l.unitCost, 0) * 100) / 100;
+    purchases.push({
+      id: `ex-p${purchases.length}`, branchId: 'main', date: iso(d), supplier, lines, currency: 'USD', total, baseTotal: total,
+      paidFrom, at: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 6, 30).toISOString(), by: 'u-manager', example: true,
+    });
+  };
+  const spend = (d: Date, category: string, description: string, amount: number, paidFrom: Expense['paidFrom']) =>
+    expenses.push({
+      id: `ex-e${expenses.length}`, branchId: 'main', date: iso(d), category, description, currency: 'USD', amount, baseAmount: amount,
+      paidFrom, at: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 17).toISOString(), by: 'u-manager', example: true,
+    });
+
+  for (let k = days; k >= 0; k--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - k);
+    if (d.getTime() > now.getTime()) continue;
+    const wd = d.getDay();
+    if (wd === 1 || wd === 4) {
+      const q = (n: number) => Math.max(1, Math.round(n * (0.85 + rand() * 0.3)));
+      add(d, 'Mbare Musika', [buy('st-veg', 1), buy('st-potato', q(3)), buy('st-beans', q(3))], 'cash_drawer');
+      add(d, 'Butchery', [buy('st-beef', q(15)), buy('st-chicken', q(18)), buy('st-oxtail', q(3)), buy('st-fish', q(4))], 'cash_drawer');
+      add(d, 'Wholesaler', [buy('st-mealie', q(4)), buy('st-rice', q(2)), buy('st-oil', q(3)), buy('st-eggs', q(2)), buy('st-bread', q(8))], 'bank');
+      add(d, 'Drinks depot', [buy('st-soda', q(2)), buy('st-water', q(2)), buy('st-maheu', 1), buy('st-mazoe', 1)], 'cash_drawer');
+      if (wd === 1) add(d, 'Packaging shop', [buy('st-containers', q(4))], 'cash_drawer');
+    }
+    if (wd === 5) spend(d, 'Wages', 'Weekly wages (4 staff)', 360, 'cash_drawer');
+    if (wd === 2 || wd === 5) spend(d, 'Gas', 'LP gas refill', 38, 'cash_drawer');
+    if (wd === 3) spend(d, 'Transport', 'Market transport', 15, 'cash_drawer');
+    if (d.getDate() === 1) {
+      spend(d, 'Rent', 'Monthly rent', 650, 'bank');
+      spend(d, 'Electricity', 'ZESA tokens', 110, 'mobile_money');
+    }
+    if (d.getDate() === 15) spend(d, 'Repairs', 'Stove and plumbing', Math.round(30 + rand() * 60), 'cash_drawer');
+  }
+  return { purchases, expenses };
 }

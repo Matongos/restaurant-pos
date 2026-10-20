@@ -420,3 +420,29 @@ input.need { border-color: var(--warn) !important; background: #fffbeb; }
 .mini-bar span { display: block; height: 100%; background: var(--brand); border-radius: 4px; }
 .staff-dots { color: var(--brand); letter-spacing: 2px; }
 .pick-groups { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+
+/* ---------- cancel sale */
+.cancel-summary { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; background: var(--soft); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.plain-input { width: 100%; margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 16px; }
+.pin-input { width: 160px; font-size: 26px; letter-spacing: 0.4em; text-align: center; border: 2px solid var(--line); border-radius: 12px; padding: 8px; }
+.btn.danger-fill { background: var(--bad); border-color: var(--bad); color: #fff; }
+.tag.void { background: #fee2e2; border-color: #fca5a5; color: var(--bad); }
+.tag.rev { background: #ede9fe; border-color: #c4b5fd; color: #5b21b6; }
+
+/* ---------- accounts */
+.profit-card { background: var(--brand); border-color: var(--brand); color: #fff; }
+.profit-card.loss { background: var(--bad); border-color: var(--bad); }
+.profit-card .lbl, .profit-card .sub { color: rgba(255,255,255,0.85); }
+.pl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-top: 14px; }
+.pl { padding: 16px 18px; }
+.pl-title { font-weight: 800; font-size: 16px; margin-bottom: 8px; }
+.pl-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed var(--line); font-variant-numeric: tabular-nums; }
+.pl-row.minus span:first-child { padding-left: 14px; color: var(--muted); }
+.pl-row.total { font-weight: 800; border-bottom: 1px solid var(--ink); }
+.pl-row.grand { font-weight: 900; font-size: 20px; border-bottom: 0; border-top: 3px double var(--ink); margin-top: 4px; padding-top: 10px; color: var(--good); }
+.pl-row.grand.loss { color: var(--bad); }
+.chips-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+tr.struck td { color: var(--muted); }
+tr.struck td b { text-decoration: line-through; }
+.lines-table input { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 15px; }
+.lines-table td { padding: 6px; }

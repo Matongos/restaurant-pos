@@ -105,11 +105,12 @@ export type Permission =
   | 'menu_edit'
   | 'settings'
   | 'reports'
+  | 'accounts'
   | 'screens';
 
 const PERMS: Record<Role, Permission[]> = {
-  super_admin: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'menu_edit', 'settings', 'reports', 'screens'],
-  manager: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'menu_edit', 'reports', 'screens'],
+  super_admin: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'menu_edit', 'settings', 'reports', 'accounts', 'screens'],
+  manager: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'menu_edit', 'reports', 'accounts', 'screens'],
   cashier: ['take_orders', 'active_orders', 'change_owed'],
   kitchen: ['todays_menu', 'kitchen', 'active_orders'],
   attendant: ['active_orders'],

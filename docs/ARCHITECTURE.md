@@ -7,7 +7,8 @@
 3. **Screens are views of one order feed.** Adding a screen (Now Serving TV, menu board) does not change the core.
 4. **Data, not code.** Order types, currencies, payment methods, roles and printers are records in the database.
 5. **Times recorded from day one.** Every order keeps a status history (placed, in kitchen, ready, served) for kitchen-speed reports.
-6. **Branch-ready.** Every record carries `branchId`; with one restaurant it is invisible.
+6. **Permanent records.** Sales, purchases, expenses and customer-change movements are never edited or deleted. A cancellation or a reversing record corrects a mistake, so every total can be traced.
+7. **Branch-ready.** Every record carries `branchId`; with one restaurant it is invisible.
 
 ## Layers
 

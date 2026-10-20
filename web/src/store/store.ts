@@ -1,7 +1,13 @@
 import { useSyncExternalStore } from 'react';
 import type {
   AppState,
+  Cancellation,
   CreditEntry,
+  Expense,
+  PaidFrom,
+  Purchase,
+  PurchaseLine,
+  RefundMethod,
   Currency,
   Customer,
   LiveCart,
@@ -14,8 +20,8 @@ import type {
   Settings,
   Staff,
 } from '../domain/types';
-import { DEFAULT_MEAL_PERIODS, seedState } from '../data/seed';
-import { exampleHistory } from '../data/exampleHistory';
+import { DEFAULT_MEAL_PERIODS, seedState, STOCK_ITEMS } from '../data/seed';
+import { exampleBooks, exampleCancellations, exampleHistory } from '../data/exampleHistory';
 import { nextFreeCard, cardsInUse, customerBalance, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
 import { CREDIT_METHOD } from '../domain/types';
 import { round2 } from '../domain/money';
@@ -37,16 +43,30 @@ const listeners = new Set<() => void>();
 /** Bring data saved by an older version of the app up to date. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): AppState | null {
-  if (raw?.version === 4) return raw as AppState;
+  if (raw?.version === 5) return raw as AppState;
+  if (raw?.version === 4) {
+    // v5: accounting (purchases, expenses, cancellations) and cost per plate.
+    const st = raw as AppState;
+    const seedMenu = seedState().menu;
+    return {
+      ...st,
+      version: 5,
+      stockItems: STOCK_ITEMS,
+      purchases: [],
+      expenses: [],
+      cancellations: [],
+      menu: st.menu.map((m) => (m.costPerPlate === undefined ? { ...m, costPerPlate: seedMenu.find((x) => x.id === m.id)?.costPerPlate } : m)),
+    };
+  }
   if (raw?.version === 3 || raw?.version === 2) {
     // v4: example history is generated at load instead of saved; analytics settings added.
     const st = raw as AppState;
-    return {
+    return migrate({
       ...st,
       version: 4,
       orders: st.orders.filter((o) => !o.example),
       settings: { ...st.settings, showExampleHistory: true, mealPeriods: DEFAULT_MEAL_PERIODS, customersPerStaffHour: 12 },
-    };
+    } as AppState);
   }
   if (raw?.version === 1) {
     // v1 kept one-off IOUs; v2 keeps a running change balance per customer.
@@ -76,12 +96,32 @@ function migrate(raw: any): AppState | null {
   return null;
 }
 
-/** Add the generated example orders (demo only) in front of the real ones. */
-let examplesCache: Order[] | null = null;
+/** Add the generated example records (demo only) in front of the real ones. They are never saved. */
+let examplesCache: { orders: Order[]; cancellations: Cancellation[]; purchases: Purchase[]; expenses: Expense[] } | null = null;
 function withExamples(st: AppState): AppState {
   if (!st.settings.showExampleHistory) return st;
-  examplesCache = examplesCache ?? exampleHistory(st.menu);
-  return { ...st, orders: [...examplesCache, ...st.orders.filter((o) => !o.example)] };
+  if (!examplesCache) {
+    const sales = exampleCancellations(exampleHistory(st.menu));
+    examplesCache = { ...sales, ...exampleBooks(STOCK_ITEMS) };
+  }
+  const real = stripExamples(st);
+  return {
+    ...real,
+    orders: [...examplesCache.orders, ...real.orders],
+    cancellations: [...examplesCache.cancellations, ...real.cancellations],
+    purchases: [...examplesCache.purchases, ...real.purchases],
+    expenses: [...examplesCache.expenses, ...real.expenses],
+  };
+}
+
+function stripExamples(st: AppState): AppState {
+  return {
+    ...st,
+    orders: st.orders.filter((o) => !o.example),
+    cancellations: st.cancellations.filter((c) => !c.example),
+    purchases: st.purchases.filter((p) => !p.example),
+    expenses: st.expenses.filter((e) => !e.example),
+  };
 }
 
 function load(): AppState {
@@ -102,7 +142,7 @@ let state: AppState = load();
 function persist() {
   try {
     // Example orders are regenerated at load, so they are never written to storage.
-    const toSave = state.settings.showExampleHistory ? { ...state, orders: state.orders.filter((o) => !o.example) } : state;
+    const toSave = stripExamples(state);
     localStorage.setItem(KEY, JSON.stringify(toSave));
   } catch (e) {
     console.warn('Could not save state (storage full?)', e);
@@ -425,7 +465,7 @@ export function upsertMenuItem(item: MenuItem) {
 
 export function setExampleHistory(on: boolean) {
   set((st) => {
-    const next = { ...st, settings: { ...st.settings, showExampleHistory: on }, orders: st.orders.filter((o) => !o.example) };
+    const next = stripExamples({ ...st, settings: { ...st.settings, showExampleHistory: on } });
     return on ? withExamples(next) : next;
   });
 }
@@ -434,4 +474,190 @@ export function resetDemo() {
   state = withExamples(seedState());
   persist();
   emit();
+}
+
+/* -------------------------------------------------------------- accounting */
+
+/** A manager or owner PIN, used to approve cancellations. */
+export function verifyManagerPin(pin: string): Staff | null {
+  return state.staff.find((s) => s.active && s.pin === pin && (s.role === 'manager' || s.role === 'super_admin')) ?? null;
+}
+
+export interface CancelInput {
+  orderId: string;
+  reason: string;
+  refund: RefundMethod;
+  requestedBy: string;
+  approverPin: string;
+}
+
+/**
+ * Cancel a sale. The order is kept (status "cancelled") together with a Cancellation record.
+ * Add-on drinks on the same number are cancelled with it. Customer change that was used
+ * or kept on this sale is put back; a refund can be paid in cash or added to the customer's change.
+ */
+export function cancelOrder(input: CancelInput): { ok: true; cancellation: Cancellation } | { ok: false; error: string } {
+  const approver = verifyManagerPin(input.approverPin);
+  if (!approver) return { ok: false, error: 'That is not a manager or owner PIN.' };
+  if (!input.reason.trim()) return { ok: false, error: 'Give a reason.' };
+  const order = state.orders.find((o) => o.id === input.orderId);
+  if (!order) return { ok: false, error: 'Sale not found.' };
+  if (order.status === 'cancelled') return { ok: false, error: 'This sale is already cancelled.' };
+  const group = state.orders.filter((o) => (o.id === order.id || o.parentOrderId === order.id) && o.status !== 'cancelled');
+  const ids = new Set(group.map((o) => o.id));
+  const total = round2(group.reduce((s, o) => s + o.total, 0));
+  const now = new Date().toISOString();
+
+  // Customer change touched by these sales is put back as it was.
+  const entries: CreditEntry[] = [];
+  for (const e of state.credit) {
+    if (!e.orderId || !ids.has(e.orderId)) continue;
+    if (e.kind === 'used_for_food' || e.kind === 'change_left')
+      entries.push({ id: uid('cr-'), branchId: e.branchId, customerId: e.customerId, kind: 'cancel_adjust', amount: -e.amount, orderId: e.orderId, orderNumber: e.orderNumber, at: now, by: approver.id });
+  }
+  const changeUsed = round2(group.flatMap((o) => o.payments).filter((p) => p.methodId === CREDIT_METHOD).reduce((s, p) => s + p.baseAmount, 0));
+  const refundAmount = input.refund === 'none' ? 0 : round2(Math.max(0, total - changeUsed));
+  if (input.refund === 'to_change') {
+    if (!order.customerId) return { ok: false, error: 'This sale has no customer to give the change to.' };
+    if (refundAmount > 0)
+      entries.push({ id: uid('cr-'), branchId: order.branchId, customerId: order.customerId, kind: 'refund', amount: refundAmount, orderId: order.id, orderNumber: order.number, at: now, by: approver.id });
+  }
+
+  const c: Cancellation = {
+    id: uid('cx-'),
+    branchId: order.branchId,
+    orderId: order.id,
+    orderNumber: order.number,
+    orderTotal: total,
+    reason: input.reason.trim(),
+    refund: input.refund,
+    refundAmount,
+    requestedBy: input.requestedBy,
+    approvedBy: approver.id,
+    at: now,
+  };
+  set((st) => ({
+    ...st,
+    orders: st.orders.map((o) =>
+      ids.has(o.id) ? { ...o, status: 'cancelled', cancellationId: c.id, history: [...o.history, { status: 'cancelled', at: now, by: approver.id }] } : o,
+    ),
+    cancellations: [...st.cancellations, c],
+    credit: entries.length ? [...st.credit, ...entries] : st.credit,
+  }));
+  return { ok: true, cancellation: c };
+}
+
+export interface PurchaseInput {
+  date: string;
+  supplier: string;
+  lines: { name: string; qty: number; unit: string; unitCost: number }[];
+  currency: string;
+  paidFrom: PaidFrom;
+  note?: string;
+  by: string;
+}
+
+export function recordPurchase(input: PurchaseInput): { ok: true; purchase: Purchase } | { ok: false; error: string } {
+  const cur = state.currencies.find((c) => c.code === input.currency);
+  if (!cur) return { ok: false, error: 'Choose a currency.' };
+  const lines = input.lines.filter((l) => l.name.trim() && l.qty > 0 && l.unitCost >= 0);
+  if (!lines.length) return { ok: false, error: 'Add at least one item with a quantity and cost.' };
+  if (!input.supplier.trim()) return { ok: false, error: 'Enter the supplier (where it was bought).' };
+
+  // Each item name becomes (or matches) a stock item, remembering its last cost.
+  const stock = [...state.stockItems];
+  const pl: PurchaseLine[] = lines.map((l) => {
+    const name = l.name.trim();
+    let item = stock.find((s) => s.name.toLowerCase() === name.toLowerCase());
+    if (!item) {
+      item = { id: uid('st-'), name, unit: l.unit.trim() || 'each' };
+      stock.push(item);
+    }
+    const idx = stock.indexOf(item);
+    stock[idx] = { ...item, unit: l.unit.trim() || item.unit, lastUnitCost: round2(l.unitCost / cur.rate) };
+    return { stockItemId: item.id, name: item.name, qty: l.qty, unit: l.unit.trim() || item.unit, unitCost: round2(l.unitCost) };
+  });
+  const total = round2(pl.reduce((s, l) => s + l.qty * l.unitCost, 0));
+  const purchase: Purchase = {
+    id: uid('p-'),
+    branchId: state.settings.branchId,
+    date: input.date,
+    supplier: input.supplier.trim(),
+    lines: pl,
+    currency: cur.code,
+    total,
+    baseTotal: round2(total / cur.rate),
+    paidFrom: input.paidFrom,
+    note: input.note?.trim() || undefined,
+    at: new Date().toISOString(),
+    by: input.by,
+  };
+  set((st) => ({ ...st, stockItems: stock, purchases: [...st.purchases, purchase] }));
+  return { ok: true, purchase };
+}
+
+/** Correct a purchase entered by mistake: adds a reversing record with negative amounts. */
+export function reversePurchase(id: string, reason: string, by: string): { ok: boolean; error?: string } {
+  const p = state.purchases.find((x) => x.id === id);
+  if (!p) return { ok: false, error: 'Not found.' };
+  if (p.reversesId || state.purchases.some((x) => x.reversesId === id)) return { ok: false, error: 'Already reversed.' };
+  if (!reason.trim()) return { ok: false, error: 'Give a reason.' };
+  const r: Purchase = {
+    ...p,
+    id: uid('p-'),
+    lines: p.lines.map((l) => ({ ...l, qty: -l.qty })),
+    total: -p.total,
+    baseTotal: -p.baseTotal,
+    at: new Date().toISOString(),
+    by,
+    reversesId: p.id,
+    reason: reason.trim(),
+    example: undefined,
+  };
+  set((st) => ({ ...st, purchases: [...st.purchases, r] }));
+  return { ok: true };
+}
+
+export interface ExpenseInput {
+  date: string;
+  category: string;
+  description: string;
+  amount: number;
+  currency: string;
+  paidFrom: PaidFrom;
+  by: string;
+}
+
+export function recordExpense(input: ExpenseInput): { ok: true; expense: Expense } | { ok: false; error: string } {
+  const cur = state.currencies.find((c) => c.code === input.currency);
+  if (!cur) return { ok: false, error: 'Choose a currency.' };
+  if (!(input.amount > 0)) return { ok: false, error: 'Enter the amount.' };
+  if (!input.category.trim()) return { ok: false, error: 'Choose what it was for.' };
+  const e: Expense = {
+    id: uid('e-'),
+    branchId: state.settings.branchId,
+    date: input.date,
+    category: input.category.trim(),
+    description: input.description.trim() || input.category.trim(),
+    currency: cur.code,
+    amount: round2(input.amount),
+    baseAmount: round2(input.amount / cur.rate),
+    paidFrom: input.paidFrom,
+    at: new Date().toISOString(),
+    by: input.by,
+  };
+  set((st) => ({ ...st, expenses: [...st.expenses, e] }));
+  return { ok: true, expense: e };
+}
+
+export function reverseExpense(id: string, reason: string, by: string): { ok: boolean; error?: string } {
+  const e = state.expenses.find((x) => x.id === id);
+  if (!e) return { ok: false, error: 'Not found.' };
+  if (e.reversesId || state.expenses.some((x) => x.reversesId === id)) return { ok: false, error: 'Already reversed.' };
+  if (!reason.trim()) return { ok: false, error: 'Give a reason.' };
+  set((st) => ({
+    ...st,
+    expenses: [...st.expenses, { ...e, id: uid('e-'), amount: -e.amount, baseAmount: -e.baseAmount, at: new Date().toISOString(), by, reversesId: e.id, reason: reason.trim(), example: undefined }],
+  }));
+  return { ok: true };
 }

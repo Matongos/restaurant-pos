@@ -12,6 +12,8 @@ const KIND_LABEL: Record<CreditEntry['kind'], string> = {
   change_left: 'Change kept',
   used_for_food: 'Used for food',
   paid_out: 'Paid out in cash',
+  cancel_adjust: 'Sale cancelled — put back',
+  refund: 'Refund of cancelled sale',
 };
 
 const when = (iso: string) =>

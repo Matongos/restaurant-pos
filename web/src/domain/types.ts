@@ -79,6 +79,8 @@ export interface MenuItem {
   isDrink: boolean;
   favourite: boolean;
   sort: number;
+  /** What one portion costs to make (base currency), for profit per meal. Optional. */
+  costPerPlate?: number;
 }
 
 export interface OrderLine {
@@ -137,6 +139,8 @@ export interface Order {
   training: boolean;
   /** Generated example history (demo only). */
   example?: boolean;
+  /** Set when the sale was cancelled. The order itself is never deleted. */
+  cancellationId?: ID;
 }
 
 /**
@@ -154,7 +158,7 @@ export interface Customer {
   lastSeenAt: string;
 }
 
-export type CreditKind = 'change_left' | 'used_for_food' | 'paid_out';
+export type CreditKind = 'change_left' | 'used_for_food' | 'paid_out' | 'cancel_adjust' | 'refund';
 
 /**
  * One movement on a customer's change balance (base currency).
@@ -237,6 +241,84 @@ export interface DayCounter {
   lastSlip: number;
 }
 
+/* ------------------------------------------------------------------ accounting
+ * Every record below is permanent. A mistake is corrected with a reversing record
+ * (reversesId), never by editing or deleting, so the books always add up.
+ */
+
+export type PaidFrom = 'cash_drawer' | 'bank' | 'mobile_money' | 'owner';
+
+export interface StockItem {
+  id: ID;
+  name: string;
+  unit: string; // kg, bag, crate, litre, each
+  lastUnitCost?: number; // base currency
+}
+
+export interface PurchaseLine {
+  stockItemId: ID;
+  name: string;
+  qty: number;
+  unit: string;
+  /** Cost per unit in the purchase currency. */
+  unitCost: number;
+}
+
+export interface Purchase {
+  id: ID;
+  branchId: ID;
+  date: string; // YYYY-MM-DD the goods were bought
+  supplier: string;
+  lines: PurchaseLine[];
+  currency: string;
+  total: number; // in purchase currency
+  baseTotal: number; // in base currency
+  paidFrom: PaidFrom;
+  note?: string;
+  at: string; // when recorded
+  by: ID;
+  /** This record cancels another one (amounts are negative). */
+  reversesId?: ID;
+  reason?: string;
+  example?: boolean;
+}
+
+export interface Expense {
+  id: ID;
+  branchId: ID;
+  date: string;
+  category: string; // Wages, Rent, Electricity, Gas, Transport, Repairs, Other
+  description: string;
+  currency: string;
+  amount: number;
+  baseAmount: number;
+  paidFrom: PaidFrom;
+  at: string;
+  by: ID;
+  reversesId?: ID;
+  reason?: string;
+  example?: boolean;
+}
+
+export type RefundMethod = 'cash' | 'to_change' | 'none';
+
+/** A cancelled sale. The order stays on record; this explains what happened and who approved it. */
+export interface Cancellation {
+  id: ID;
+  branchId: ID;
+  orderId: ID;
+  orderNumber: number;
+  orderTotal: number;
+  reason: string;
+  refund: RefundMethod;
+  /** Money handed back (base currency). */
+  refundAmount: number;
+  requestedBy: ID;
+  approvedBy: ID;
+  at: string;
+  example?: boolean;
+}
+
 export interface AppState {
   version: number;
   settings: Settings;
@@ -250,6 +332,10 @@ export interface AppState {
   orders: Order[];
   customers: Customer[];
   credit: CreditEntry[];
+  stockItems: StockItem[];
+  purchases: Purchase[];
+  expenses: Expense[];
+  cancellations: Cancellation[];
   liveCarts: Record<ID, LiveCart>;
   dayCounter: DayCounter;
 }

@@ -5,6 +5,7 @@ import { can, fmtDuration, serviceTimes, timerState, todayISO, type TimerState }
 import { customerSlipHTML, kitchenTicketHTML, printTickets } from '../print/tickets';
 import { TopBar, toast, useNow } from '../components/ui';
 import type { Order } from '../domain/types';
+import CancelSaleDialog from '../components/CancelSaleDialog';
 
 type Filter = 'waiting' | 'ready' | 'served';
 
@@ -17,6 +18,7 @@ export default function ActiveOrders() {
   const orderTypes = useStore((s) => s.orderTypes);
   const settings = useStore((s) => s.settings);
   const [filter, setFilter] = useState<Filter>('waiting');
+  const [cancelling, setCancelling] = useState<Order | null>(null);
 
   const today = todayISO();
   const mains = useMemo(
@@ -118,6 +120,16 @@ export default function ActiveOrders() {
                     <button className="btn" onClick={() => reprint(o)} aria-label="Reprint">
                       🖨
                     </button>
+                    <button className="btn danger" onClick={() => setCancelling(o)}>
+                      Cancel sale
+                    </button>
+                  </div>
+                )}
+                {o.status === 'served' && (
+                  <div className="of">
+                    <button className="btn danger" onClick={() => setCancelling(o)}>
+                      Cancel sale / refund
+                    </button>
                   </div>
                 )}
               </div>
@@ -125,6 +137,7 @@ export default function ActiveOrders() {
           })}
         </div>
       </div>
+      {cancelling && <CancelSaleDialog order={cancelling} onClose={() => setCancelling(null)} />}
     </div>
   );
 }

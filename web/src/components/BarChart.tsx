@@ -19,6 +19,8 @@ export default function BarChart({
   unit = '',
   highlight,
   caption,
+  grouped = false,
+  tickFormat,
 }: {
   labels: string[];
   series: Series[];
@@ -28,22 +30,26 @@ export default function BarChart({
   /** Index of the column to call out with its total (e.g. the busiest hour). */
   highlight?: number;
   caption: string;
+  /** Bars side by side instead of stacked (e.g. money in vs money out). */
+  grouped?: boolean;
+  /** Shorter labels for the y-axis, e.g. $2k. Defaults to `format`. */
+  tickFormat?: (v: number) => string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const [table, setTable] = useState(false);
 
   const W = 720;
-  const padL = 36, padR = 8, padT = 22, padB = 26;
+  const padL = 46, padR = 8, padT = 22, padB = 26;
   const plotW = W - padL - padR;
   const plotH = height - padT - padB;
   const n = labels.length;
   const totals = useMemo(() => labels.map((_, i) => series.reduce((s, se) => s + (se.values[i] ?? 0), 0)), [labels, series]);
-  const max = Math.max(1, ...totals);
+  const max = Math.max(1, ...(grouped ? series.flatMap((s) => s.values) : totals));
   const ticks = niceTicks(max);
   const top = ticks[ticks.length - 1];
   const y = (v: number) => padT + plotH - (v / top) * plotH;
   const band = plotW / n;
-  const barW = Math.min(24, band * 0.6);
+  const barW = grouped ? Math.min(18, (band * 0.8) / series.length - 2) : Math.min(24, band * 0.6);
   const cx = (i: number) => padL + band * i + band / 2;
   const labelEvery = n > 16 ? Math.ceil(n / 12) : 1;
 
@@ -71,7 +77,7 @@ export default function BarChart({
               <g key={t}>
                 <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="var(--chart-grid)" strokeWidth={1} />
                 <text x={padL - 6} y={y(t) + 4} textAnchor="end" className="tick">
-                  {format(t)}
+                  {(tickFormat ?? format)(t)}
                 </text>
               </g>
             ))}
@@ -82,7 +88,21 @@ export default function BarChart({
                 .filter((p) => p.v > 0);
               return (
                 <g key={lab}>
-                  {parts.map((p, k) => {
+                  {grouped &&
+                    series.map((se, k) => {
+                      const v = se.values[i] ?? 0;
+                      const left = cx(i) - (series.length * (barW + 2)) / 2 + k * (barW + 2) + 1;
+                      const h = Math.max(0, y(0) - y(v));
+                      return (
+                        <path
+                          key={se.name}
+                          d={roundedTop(left, y(v), barW, h, Math.min(4, h))}
+                          fill={se.color}
+                          opacity={hover === null || hover === i ? 1 : 0.55}
+                        />
+                      );
+                    })}
+                  {!grouped && parts.map((p, k) => {
                     const y0 = y(acc);
                     acc += p.v;
                     const y1 = y(acc);
@@ -98,7 +118,7 @@ export default function BarChart({
                       />
                     );
                   })}
-                  {highlight === i && totals[i] > 0 && (
+                  {!grouped && highlight === i && totals[i] > 0 && (
                     <text x={cx(i)} y={y(totals[i]) - 6} textAnchor="middle" className="peak">
                       {format(totals[i])}
                     </text>
@@ -123,7 +143,7 @@ export default function BarChart({
                   <span className="swatch" style={{ background: s.color }} /> {s.name}: <b>{format(s.values[hover] ?? 0)}</b>
                 </div>
               ))}
-              {series.length > 1 && (
+              {series.length > 1 && !grouped && (
                 <div className="tip-total">
                   Total: <b>{format(totals[hover])}</b> {unit}
                 </div>
@@ -140,7 +160,7 @@ export default function BarChart({
                 {series.map((s) => (
                   <th key={s.name}>{s.name}</th>
                 ))}
-                {series.length > 1 && <th>Total</th>}
+                {series.length > 1 && !grouped && <th>Total</th>}
               </tr>
             </thead>
             <tbody>
@@ -152,7 +172,7 @@ export default function BarChart({
                       {format(s.values[i] ?? 0)}
                     </td>
                   ))}
-                  {series.length > 1 && (
+                  {series.length > 1 && !grouped && (
                     <td className="num">
                       <b>{format(totals[i])}</b>
                     </td>

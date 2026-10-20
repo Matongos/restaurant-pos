@@ -41,6 +41,7 @@ export default function Home() {
     { key: 'menu', icon: '🍽️', title: "Today's Menu", desc: soldOut ? `${soldOut} ingredient(s) sold out` : 'Switch meals sold out / available', to: '/todays-menu', show: can(user.role, 'todays_menu') },
     { key: 'display', icon: '🖥️', title: 'Customer Display', desc: 'Open on the second screen', onClick: openDisplay, show: can(user.role, 'screens') || can(user.role, 'take_orders') },
     { key: 'menu-photos', icon: '📷', title: 'Menu & Photos', desc: 'Change meal photos, names and prices', to: '/menu', show: can(user.role, 'menu_edit') },
+    { key: 'accounts', icon: '💼', title: 'Accounts', desc: 'Profit, purchases, expenses, sales journal', to: '/accounts', show: can(user.role, 'accounts') },
     { key: 'reports', icon: '📊', title: 'Analytics', desc: 'Busy times, staffing, what sells when, sales', to: '/reports', show: can(user.role, 'reports') },
     { key: 'settings', icon: '⚙️', title: 'Settings', desc: 'Logo, menu, currencies, numbers', to: '/settings', show: can(user.role, 'settings') },
   ];

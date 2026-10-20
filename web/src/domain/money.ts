@@ -11,7 +11,8 @@ export function fromBase(baseAmount: number, currency: Currency): number {
 }
 
 export function fmt(amount: number, currency?: Pick<Currency, 'symbol' | 'code'>): string {
-  const n = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (!currency) return n;
-  return currency.symbol.length <= 1 ? `${currency.symbol}${n}` : `${currency.symbol} ${n}`;
+  const sign = amount < -0.004 ? '−' : '';
+  const n = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (!currency) return sign + n;
+  return sign + (currency.symbol.length <= 1 ? `${currency.symbol}${n}` : `${currency.symbol} ${n}`);
 }

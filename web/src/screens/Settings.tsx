@@ -438,6 +438,17 @@ function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) 
           <input type="number" step="0.05" value={m.price} onChange={(e) => setM({ ...m, price: Number(e.target.value) })} />
         </label>
         <label className="field">
+          Cost to make one plate (optional)
+          <input
+            type="number"
+            step="0.05"
+            min={0}
+            placeholder="e.g. 1.60"
+            value={m.costPerPlate ?? ''}
+            onChange={(e) => setM({ ...m, costPerPlate: e.target.value === '' ? undefined : Math.max(0, Number(e.target.value)) })}
+          />
+        </label>
+        <label className="field">
           Category
           <select value={m.categoryId} onChange={(e) => setM({ ...m, categoryId: e.target.value })}>
             {categories.map((c) => (

@@ -5,7 +5,29 @@ import { todayISO } from '../domain/rules';
  * Demo data so the prototype can be clicked through immediately.
  * Exchange rates are EXAMPLES only — the manager sets real rates in Settings.
  */
+const COST_PER_PLATE: Record<string, number> = {"m-sadza-beef": 1.6, "m-sadza-chicken": 1.5, "m-rice-beef": 1.7, "m-rice-chicken": 1.6, "m-sadza-oxtail": 2.6, "m-sadza-fish": 2.0, "m-chips-chicken": 1.9, "m-sadza-beans": 0.9, "b-full": 1.2, "b-tea-bread": 0.35, "s-sadza": 0.15, "s-rice": 0.15, "s-chips": 0.5, "s-slaw": 0.2, "d-water": 0.4, "d-soda": 0.55, "d-mazoe": 0.15, "d-maheu": 0.5, "d-tea": 0.1};
+
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
+
+export const STOCK_ITEMS = [
+  { id: 'st-mealie', name: 'Mealie meal (roller meal)', unit: '10 kg bag', lastUnitCost: 7.5 },
+  { id: 'st-rice', name: 'Rice', unit: '10 kg bag', lastUnitCost: 12 },
+  { id: 'st-beef', name: 'Beef', unit: 'kg', lastUnitCost: 6 },
+  { id: 'st-chicken', name: 'Chicken pieces', unit: 'kg', lastUnitCost: 4.2 },
+  { id: 'st-oxtail', name: 'Oxtail', unit: 'kg', lastUnitCost: 9 },
+  { id: 'st-fish', name: 'Bream fish', unit: 'kg', lastUnitCost: 5.5 },
+  { id: 'st-potato', name: 'Potatoes', unit: '10 kg pocket', lastUnitCost: 6 },
+  { id: 'st-veg', name: 'Covo, tomatoes & onions', unit: 'lot', lastUnitCost: 15 },
+  { id: 'st-beans', name: 'Sugar beans', unit: 'kg', lastUnitCost: 2.2 },
+  { id: 'st-oil', name: 'Cooking oil', unit: '2 L', lastUnitCost: 4.5 },
+  { id: 'st-eggs', name: 'Eggs', unit: 'tray of 30', lastUnitCost: 4.5 },
+  { id: 'st-bread', name: 'Bread', unit: 'loaf', lastUnitCost: 1 },
+  { id: 'st-soda', name: 'Soft drinks 500 ml', unit: 'crate of 24', lastUnitCost: 12 },
+  { id: 'st-water', name: 'Bottled water 500 ml', unit: 'pack of 24', lastUnitCost: 8 },
+  { id: 'st-mazoe', name: 'Mazoe concentrate', unit: '2 L', lastUnitCost: 4 },
+  { id: 'st-maheu', name: 'Maheu 500 ml', unit: 'crate of 20', lastUnitCost: 9 },
+  { id: 'st-containers', name: 'Take-away containers', unit: 'pack of 100', lastUnitCost: 9 },
+];
 
 export const DEFAULT_MEAL_PERIODS = [
   { id: 'breakfast', name: 'Breakfast', from: 6, to: 11 },
@@ -39,10 +61,11 @@ function baseState(): AppState {
     isDrink: extra.isDrink ?? false,
     favourite: extra.favourite ?? false,
     sort: 0,
+    costPerPlate: COST_PER_PLATE[id],
   });
 
   return {
-    version: 4,
+    version: 5,
     settings: {
       branchId: 'main',
       restaurantName: 'Training Restaurant',
@@ -128,6 +151,10 @@ function baseState(): AppState {
       item('d-tea', 'Tea', 'drinks', 0.5, '☕', [], { isDrink: true }),
     ],
     orders: [],
+    stockItems: STOCK_ITEMS,
+    purchases: [],
+    expenses: [],
+    cancellations: [],
     // Example customers (to show how same names are told apart). Remove with Settings → Demo data.
     customers: [
       { id: 'cu-anashe-1', branchId: 'main', name: 'Anashe Moyo', phone: '0772 111 222', note: 'Mbare', createdAt: daysAgo(3), lastSeenAt: daysAgo(1) },
