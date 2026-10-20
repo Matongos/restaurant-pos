@@ -10,7 +10,7 @@ Point-of-sale system for a pay-first, counter-service restaurant: the customer p
 | Screen | Who | What |
 | --- | --- | --- |
 | Login | Everyone | 4-digit PIN; each role sees only its screens |
-| New Order | Cashier | Photo tiles (sold-out meals hidden), Eat In / Take Away, notes, total in every currency |
+| Sell | Cashier | Photo tiles (sold-out meals hidden), Eat In / Take Away, notes, total in every currency. On phones the order stays docked under the meals, so every tap is visible; categories wrap so all show, search is one tap |
 | Payment | Cashier | Type the amount received and see at once: **SHORT**, **NO CHANGE** or **GIVE CHANGE**. Cash / EcoCash / InnBucks / Swipe / **Their change**, any currency, split payments. Keeping change and the customer's name happen in the change panel. The confirm button says what is missing |
 | Order sent | Cashier | Big number to hand over, kitchen ticket, customer slip and change voucher previews, print |
 | Customer Display | Second monitor | Items as they are entered, total, paid, change, logo when idle |
@@ -19,7 +19,7 @@ Point-of-sale system for a pay-first, counter-service restaurant: the customer p
 | Today's Menu | Kitchen, manager | Switch an ingredient (e.g. Beef) sold out and every meal with it disappears from the till |
 | Collect change | Cashier | Button on the till: find the customer by name, phone, note or slip code and hand over their change in two taps |
 | Customer Change | Cashier, manager | One running change balance per customer: kept, used for food, paid out — with full history. Name suggestions while typing; customers with the same name are told apart by phone or a note |
-| Menu & Photos | Manager, owner | Change meal photos (camera or file), names, prices and ingredients |
+| Menu & categories | Manager, owner | Change meal photos (camera or file), names, prices and ingredients. **Categories**: add, rename, recolour, reorder, switch off (meals stay findable by search) or delete (meals are moved to another category). Favourites button can be switched off |
 | Accounts | Manager, owner | **Profit and loss** (sales − cancelled − food & stock bought − expenses), cash-drawer movement, money in vs out chart, profit per meal (cost per plate). **Purchases** with supplier, items, quantities and unit costs (names and last prices suggested). **Expenses** by category. **Sales journal** of every sale. **Cancellations** log. Nothing is ever deleted: mistakes are corrected with a visible reversal |
 | Cancel a sale | Cashier asks, manager approves | Reason, money back (cash or to the customer's change), manager or owner PIN. The sale stays in the records marked cancelled; customer change used on it is put back |
 | Analytics | Manager, owner | X-style overview: metric cards with change vs the previous period (same time of day), trend chart hourly / daily / weekly / monthly over Today, 7, 28 or 90 days. **Busy times & staff**: weekday × hour heat map, Breakfast / Lunch / Supper, staff needed per hour. **What sells when**: pick Sadza, Drinks or any meal to see its rush and a "ready by" time; preparation plan for every ingredient. Serving speed and money |

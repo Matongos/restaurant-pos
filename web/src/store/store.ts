@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import type {
   AppState,
   Cancellation,
+  Category,
   CreditEntry,
   Expense,
   PaidFrom,
@@ -485,6 +486,42 @@ export function upsertMenuItem(item: MenuItem) {
     const exists = st.menu.some((x) => x.id === item.id);
     return { ...st, menu: exists ? st.menu.map((x) => (x.id === item.id ? item : x)) : [...st.menu, item] };
   });
+}
+
+/* --------------------------------------------------------------- categories */
+
+export function upsertCategory(c: Category) {
+  set((st) => {
+    const exists = st.categories.some((x) => x.id === c.id);
+    const sort = exists ? c.sort : Math.max(0, ...st.categories.map((x) => x.sort)) + 1;
+    const next = { ...c, name: c.name.trim(), sort };
+    return { ...st, categories: exists ? st.categories.map((x) => (x.id === c.id ? next : x)) : [...st.categories, next] };
+  });
+}
+
+/** Move a category one place left (-1) or right (+1) on the till. */
+export function moveCategory(id: string, dir: -1 | 1) {
+  set((st) => {
+    const sorted = st.categories.slice().sort((a, b) => a.sort - b.sort);
+    const i = sorted.findIndex((c) => c.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= sorted.length) return st;
+    [sorted[i], sorted[j]] = [sorted[j], sorted[i]];
+    return { ...st, categories: sorted.map((c, k) => ({ ...c, sort: k + 1 })) };
+  });
+}
+
+/** Delete a category. Its meals must go somewhere: they are moved to `moveTo`. */
+export function deleteCategory(id: string, moveTo?: string): { ok: true } | { ok: false; error: string } {
+  const used = state.menu.filter((m) => m.categoryId === id).length;
+  if (state.categories.length <= 1) return { ok: false, error: 'Keep at least one category' };
+  if (used && (!moveTo || moveTo === id || !state.categories.some((c) => c.id === moveTo))) return { ok: false, error: 'Choose where its meals go' };
+  set((st) => ({
+    ...st,
+    categories: st.categories.filter((c) => c.id !== id),
+    menu: used ? st.menu.map((m) => (m.categoryId === id ? { ...m, categoryId: moveTo! } : m)) : st.menu,
+  }));
+  return { ok: true };
 }
 
 export function setExampleHistory(on: boolean) {

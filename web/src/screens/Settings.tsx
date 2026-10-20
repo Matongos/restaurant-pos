@@ -6,6 +6,7 @@ import { Dialog, TopBar, toast } from '../components/ui';
 import { fmt } from '../domain/money';
 import { mealInitials, uid } from '../domain/rules';
 import { LuCamera, LuStore } from 'react-icons/lu';
+import CategoryEditor from '../components/CategoryEditor';
 
 type Tab = 'general' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'kitchen' | 'demo';
 
@@ -16,7 +17,7 @@ export default function SettingsScreen() {
     ['numbers', 'Order numbers & printing'],
     ['payments', 'Payment methods'],
     ['currencies', 'Currencies'],
-    ['menu', 'Menu & photos'],
+    ['menu', 'Menu & categories'],
     ['kitchen', 'Serving times'],
     ['demo', 'Demo data'],
   ];
@@ -333,6 +334,9 @@ export function MenuEditor() {
 
   return (
     <>
+      <h3 className="sub-head" style={{ marginTop: 0 }}>Categories</h3>
+      <CategoryEditor />
+      <h3 className="sub-head">Meals and drinks</h3>
       <div className="row" style={{ marginBottom: 12 }}>
         <p className="muted grow" style={{ margin: 0 }}>
           Tap an item to change its photo, price or ingredients.
@@ -626,7 +630,7 @@ function Demo() {
 export function MenuScreen() {
   return (
     <div className="app">
-      <TopBar title="Menu & Photos" />
+      <TopBar title="Menu" />
       <div className="page">
         <div className="page-narrow">
           <div className="card" style={{ padding: 20 }}>

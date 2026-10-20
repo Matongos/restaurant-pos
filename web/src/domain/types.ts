@@ -74,6 +74,8 @@ export interface Category {
   name: string;
   color: string;
   sort: number;
+  /** Hidden categories get no button on the till; their meals still show in search and Favourites. */
+  hidden?: boolean;
 }
 
 /** A part a meal is made of (Beef, Rice, Sadza). Switching one off hides every meal that uses it. */
@@ -207,6 +209,8 @@ export const CREDIT_METHOD = 'change_credit';
 
 export interface Settings {
   branchId: ID;
+  /** Show the Favourites button on the till (default on). */
+  showFavourites?: boolean;
   restaurantName: string;
   tagline: string;
   logo?: string;

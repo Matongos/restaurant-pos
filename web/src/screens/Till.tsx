@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRoute, go } from '../router';
 import { setLiveCart, useCurrentUser, useStore, type PlaceOrderSuccess } from '../store/store';
 import { isSellable, mealInitials } from '../domain/rules';
@@ -8,7 +8,7 @@ import { Dialog, TopBar } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
 import CollectChangeDialog from '../components/CollectChangeDialog';
-import { LuChevronDown, LuChevronUp, LuHandCoins, LuMinus, LuPlus, LuSearch, LuStar, LuTrash2 } from 'react-icons/lu';
+import { LuHandCoins, LuMinus, LuPlus, LuSearch, LuStar, LuTrash2, LuX } from 'react-icons/lu';
 
 
 const TILL_ID = 'till-1';
@@ -25,6 +25,7 @@ export default function Till() {
   const currencies = useStore((s) => s.currencies);
   const baseCode = useStore((s) => s.settings.baseCurrency);
   const orders = useStore((s) => s.orders);
+  const showFav = useStore((s) => s.settings.showFavourites !== false);
 
   const parent = addonFor ? orders.find((o) => o.id === addonFor) : undefined;
   const enabledTypes = useMemo(() => orderTypes.filter((t) => t.enabled), [orderTypes]);
@@ -32,13 +33,26 @@ export default function Till() {
 
   const [typeId, setTypeId] = useState<string>(parent?.orderTypeId ?? enabledTypes[0]?.id ?? 'eat_in');
   const [lines, setLines] = useState<OrderLine[]>([]);
-  const [cat, setCat] = useState<string>(addonFor ? 'drinks' : FAV);
+  const visibleCats = useMemo(() => categories.filter((c) => !c.hidden).sort((a, b) => a.sort - b.sort), [categories]);
+  const firstCat = () => {
+    if (addonFor && visibleCats.some((c) => c.id === 'drinks')) return 'drinks';
+    return showFav ? FAV : visibleCats[0]?.id ?? FAV;
+  };
+  const [cat, setCat] = useState<string>(firstCat);
+  // If the chosen button is switched off in Settings, fall back to the first one still shown.
+  const catGone = cat === FAV ? !showFav : !visibleCats.some((c) => c.id === cat);
+  useEffect(() => {
+    if (catGone) setCat(firstCat());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catGone]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [lastLine, setLastLine] = useState<string | null>(null);
+  const linesRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
   const [paying, setPaying] = useState(false);
   const [done, setDone] = useState<PlaceOrderSuccess | null>(null);
   const [noteFor, setNoteFor] = useState<OrderLine | null>(null);
   const [collecting, setCollecting] = useState(false);
-  const [orderOpen, setOrderOpen] = useState(false);
 
   const total = round2(lines.reduce((s, l) => s + l.qty * l.unitPrice, 0));
 
@@ -48,9 +62,9 @@ export default function Till() {
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (q) return sellable.filter((m) => m.name.toLowerCase().includes(q));
-    if (cat === FAV) return sellable.filter((m) => m.favourite);
+    if (cat === FAV) return showFav ? sellable.filter((m) => m.favourite) : [];
     return sellable.filter((m) => m.categoryId === cat);
-  }, [sellable, cat, search]);
+  }, [sellable, cat, search, showFav]);
 
   // Mirror the order on the customer display while it is being entered.
   useEffect(() => {
@@ -62,12 +76,25 @@ export default function Till() {
   useEffect(() => () => setLiveCart(TILL_ID, null), []);
 
   const add = (m: MenuItem) => {
-    setLines((ls) => {
-      const existing = ls.find((l) => l.itemId === m.id && !l.note);
-      if (existing) return ls.map((l) => (l === existing ? { ...l, qty: l.qty + 1 } : l));
-      return [...ls, { id: crypto.randomUUID(), itemId: m.id, name: m.name, qty: 1, unitPrice: m.price }];
-    });
+    const existing = lines.find((l) => l.itemId === m.id && !l.note);
+    if (existing) {
+      setLines((ls) => ls.map((l) => (l.id === existing.id ? { ...l, qty: l.qty + 1 } : l)));
+      setLastLine(existing.id);
+    } else {
+      const id = crypto.randomUUID();
+      setLines((ls) => [...ls, { id, itemId: m.id, name: m.name, qty: 1, unitPrice: m.price }]);
+      setLastLine(id);
+    }
   };
+
+  // Keep the line just added or changed in view, so the cashier sees every tap land.
+  useEffect(() => {
+    if (!lastLine) return;
+    const el = linesRef.current?.querySelector<HTMLElement>(`[data-line="${lastLine}"]`);
+    el?.scrollIntoView({ block: 'nearest' });
+    const t = setTimeout(() => setLastLine(null), 600);
+    return () => clearTimeout(t);
+  }, [lastLine, lines]);
   const changeQty = (id: string, d: number) =>
     setLines((ls) => ls.flatMap((l) => (l.id !== id ? [l] : l.qty + d <= 0 ? [] : [{ ...l, qty: l.qty + d }])));
 
@@ -75,7 +102,6 @@ export default function Till() {
 
   const finish = (r: PlaceOrderSuccess) => {
     setPaying(false);
-    setOrderOpen(false);
     setDone(r);
   };
 
@@ -90,10 +116,14 @@ export default function Till() {
 
   const itemCount = lines.reduce((n, l) => n + l.qty, 0);
   const qtyOf = (id: string) => lines.filter((l) => l.itemId === id).reduce((n, l) => n + l.qty, 0);
-  const sortedCats = categories.slice().sort((a, b) => a.sort - b.sort);
   const pickCat = (id: string) => {
     setCat(id);
     setSearch('');
+    setSearchOpen(false);
+  };
+  const closeSearch = () => {
+    setSearch('');
+    setSearchOpen(false);
   };
 
   return (
@@ -107,17 +137,35 @@ export default function Till() {
       <div className="till">
         {/* ---------------- menu (centre) */}
         <section className="menu-panel" aria-label="Menu">
-          <div className="cat-bar">
+          <div className={`cat-bar ${searchOpen ? 'searching' : ''}`}>
             <label className="search">
               <LuSearch aria-hidden="true" />
-              <input id="menu-search" placeholder="Search meals" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search meals" />
+              <input
+                id="menu-search"
+                placeholder="Search meals"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
+                aria-label="Search meals"
+                autoFocus={searchOpen}
+              />
+              {searchOpen && (
+                <button className="search-close" onClick={closeSearch} aria-label="Close search">
+                  <LuX aria-hidden="true" />
+                </button>
+              )}
             </label>
-            <button className={cat === FAV && !search ? 'on' : ''} onClick={() => pickCat(FAV)}>
-              <LuStar aria-hidden="true" />
-              Favourites
+            <button className="search-open" onClick={() => setSearchOpen(true)} aria-label="Search meals">
+              <LuSearch aria-hidden="true" />
             </button>
-            {sortedCats.map((c) => (
-              <button key={c.id} className={cat === c.id && !search ? 'on' : ''} onClick={() => pickCat(c.id)}>
+            {showFav && (
+              <button className={`chip ${cat === FAV && !search ? 'on' : ''}`} onClick={() => pickCat(FAV)}>
+                <LuStar aria-hidden="true" />
+                Favourites
+              </button>
+            )}
+            {visibleCats.map((c) => (
+              <button key={c.id} className={`chip ${cat === c.id && !search ? 'on' : ''}`} onClick={() => pickCat(c.id)}>
                 <span className="dot" style={{ background: c.color }} aria-hidden="true" />
                 {c.name}
               </button>
@@ -160,13 +208,13 @@ export default function Till() {
           {hiddenCount > 0 && <div className="hidden-note">{hiddenCount} meal(s) hidden because they are sold out.</div>}
         </section>
 
-        {/* ---------------- current order (right; full-screen sheet on phones) */}
-        <section className={`ticket-panel ${orderOpen ? 'open' : ''}`} aria-label="Current order">
+        {/* ---------------- current order (right; docked under the meals on phones) */}
+        <section className="ticket-panel" aria-label="Current order">
           <div className="order-head">
-            <h2>{parent ? `Adding to #${parent.number}` : 'Order'}</h2>
-            <button className="btn ghost icon-only sheet-close" onClick={() => setOrderOpen(false)} aria-label="Back to menu">
-              <LuChevronDown aria-hidden="true" />
-            </button>
+            <h2>
+              {parent ? `Adding to #${parent.number}` : 'Order'}
+              {itemCount > 0 && <span className="muted"> · {itemCount} {itemCount === 1 ? 'item' : 'items'}</span>}
+            </h2>
           </div>
           {parent ? (
             <div className="addon-banner">
@@ -187,10 +235,10 @@ export default function Till() {
               ))}
             </div>
           )}
-          <div className="lines">
+          <div className="lines" ref={linesRef}>
             {lines.length === 0 && <div className="empty">Tap a meal to add it.</div>}
             {lines.map((l) => (
-              <div key={l.id} className="line-row">
+              <div key={l.id} data-line={l.id} className={`line-row ${lastLine === l.id ? 'just' : ''}`}>
                 <div className="qty">
                   <button onClick={() => changeQty(l.id, -1)} aria-label={`One less ${l.name}`}>
                     <LuMinus aria-hidden="true" />
@@ -199,13 +247,12 @@ export default function Till() {
                   <button onClick={() => changeQty(l.id, 1)} aria-label={`One more ${l.name}`}>
                     <LuPlus aria-hidden="true" />
                   </button>
-                  <button className="note-btn" onClick={() => setNoteFor(l)}>
-                    {l.note ? 'Edit note' : '+ Note'}
-                  </button>
                 </div>
                 <div>
                   <div className="nm">{l.name}</div>
-                  {l.note && <div className="nt">{l.note}</div>}
+                  <button className="note-btn" onClick={() => setNoteFor(l)}>
+                    {l.note ? <span className="nt">{l.note}</span> : '+ Note'}
+                  </button>
                 </div>
                 <div className="pr">{fmt(l.qty * l.unitPrice, base)}</div>
               </div>
@@ -213,7 +260,7 @@ export default function Till() {
           </div>
           <div className="totals">
             <div className="total-row">
-              <span>Total</span>
+              <span>Total{itemCount > 0 && <span className="count"> · {itemCount} {itemCount === 1 ? 'item' : 'items'}</span>}</span>
               <span>{fmt(total, base)}</span>
             </div>
             <div className="alt">
@@ -234,16 +281,6 @@ export default function Till() {
           </div>
         </section>
       </div>
-
-      {/* Phone: the order is one tap away and always shows the total. */}
-      {lines.length > 0 && !orderOpen && (
-        <button className="order-bar" onClick={() => setOrderOpen(true)}>
-          <span className="count">{itemCount}</span>
-          View order
-          <span className="tot">{fmt(total, base)}</span>
-          <LuChevronUp aria-hidden="true" />
-        </button>
-      )}
 
       {paying && (
         <PayDialog

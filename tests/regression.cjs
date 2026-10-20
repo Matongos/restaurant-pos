@@ -130,10 +130,8 @@ const check = (name, cond, detail) => (out[name] = cond ? 'ok' : `FAIL ${detail 
 
   // 7. Phone layout: order bar, sheet, pay, More sheet.
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForSelector('.order-bar');
-  check('order bar', (await page.textContent('.order-bar')).includes('$1.00'));
-  await page.click('.order-bar');
-  await page.waitForTimeout(250);
+  await page.waitForSelector('.ticket-panel .line-row');
+  check('order docked on phone', await page.locator('.ticket-panel button:has-text("Pay $1.00")').isVisible());
   await page.click('.ticket-panel button:has-text("Pay $1.00")');
   await page.fill('#pay-amount', '1');
   await confirmBtn().click();
