@@ -98,7 +98,7 @@ function baseState(): AppState {
       { id: 'u-attendant', name: 'Tafara (Attendant)', pin: '4444', role: 'attendant', active: true },
     ],
     currencies: [
-      { code: 'USD', name: 'US Dollar', symbol: '$', rate: 1, enabled: true, quickCash: [1, 2, 5, 10, 20] },
+      { code: 'USD', name: 'US Dollar', symbol: '$', rate: 1, enabled: true, quickCash: [1, 5, 10, 20, 50] },
       { code: 'ZiG', name: 'Zimbabwe Gold', symbol: 'ZiG', rate: 27, enabled: true, quickCash: [20, 50, 100, 200] },
       { code: 'ZAR', name: 'SA Rand', symbol: 'R', rate: 18, enabled: true, quickCash: [10, 20, 50, 100] },
     ],

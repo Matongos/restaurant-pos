@@ -6,7 +6,7 @@ import { CREDIT_METHOD, type OrderLine, type Payment } from '../domain/types';
 import { Dialog, toast } from '../components/ui';
 import CustomerPicker, { selectionReady, type CustomerSelection } from '../components/CustomerPicker';
 import ChangeFinder from '../components/ChangeFinder';
-import { LuHandCoins, LuX } from 'react-icons/lu';
+import { LuBanknote, LuCircleAlert, LuCircleCheck, LuCreditCard, LuHandCoins, LuSmartphone, LuWallet, LuX } from 'react-icons/lu';
 
 interface Props {
   tillId: string;
@@ -198,33 +198,84 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
   const status: 'waiting' | 'short' | 'exact' | 'change' =
     paidBase <= 0 ? 'waiting' : shortBase > 0 ? 'short' : changeBase > 0 ? 'change' : 'exact';
 
+  const methodIcon = (id: string, isCash: boolean) => {
+    const I = isCash ? LuBanknote : id === 'swipe' ? LuCreditCard : id === 'innbucks' ? LuWallet : LuSmartphone;
+    return <I aria-hidden="true" />;
+  };
+  // Notes a customer would hand over for this bill: skip the ones far too small, show four at most.
+  const dueInCur = fromBase(dueBeforeEntry, cur);
+  const quickNotes = method?.isCash ? cur.quickCash.filter((q) => q >= dueInCur / 4).slice(0, 4) : [];
+  const noteLabel = (q: number) => (Number.isInteger(q) ? `${cur.symbol}${cur.symbol.length > 1 ? ' ' : ''}${q}` : fmt(q, cur));
+  const setAmount = (v: string) => {
+    setAmountStr(v);
+    resetChange();
+  };
+
   return (
     <Dialog
-      title={`Payment · ${fmt(total, base)}`}
+      title="Payment"
       onClose={onCancel}
-      width={940}
+      width={980}
+      className="pay-dialog"
       footer={
         <>
           <button className="btn big" onClick={onCancel}>
             Back
           </button>
           <button className={`btn big ${blocker ? 'blocked' : 'primary'}`} aria-disabled={!!blocker} onClick={confirm}>
+            {!blocker && <LuCircleCheck aria-hidden="true" />}
             {confirmLabel}
           </button>
         </>
       }
     >
-      <div className="pay2">
-        {/* ------------------------------------------------ left: what they give */}
-        <div className="pay-left">
-          <div className="step-label">How are they paying?</div>
-          <div className="seg">
+      {/* ---------------------------------------------- 1. bill and what to do now */}
+      <div className="pay-head">
+        <div className="ph-bill">
+          <span>Total bill</span>
+          <strong>{fmt(total, base)}</strong>
+          {cur.code !== base.code && <small>{fmt(fromBase(total, cur), cur)}</small>}
+        </div>
+        <div className={`ph-status ${status}`} aria-live="polite">
+          <span className="ph-icon" aria-hidden="true">
+            {status === 'short' ? <LuCircleAlert /> : status === 'waiting' ? <LuWallet /> : <LuCircleCheck />}
+          </span>
+          <div>
+            <span>
+              {status === 'waiting' ? 'Amount to pay' : status === 'short' ? 'Short — ask for' : status === 'exact' ? 'Paid exactly' : 'Give change'}
+            </span>
+            <strong>
+              {status === 'waiting' ? fmt(dueBeforeEntry, base) : status === 'short' ? fmt(shortBase, base) : status === 'exact' ? 'No change' : fmt(hand, changeCur)}
+            </strong>
+            {status === 'short' && cur.code !== base.code && <small>{fmt(fromBase(shortBase, cur), cur)} more</small>}
+            {status === 'change' && keepInCur > 0 && (
+              <small>
+                + {fmt(keepInCur, changeCur)} kept for {keepName || 'customer'}
+              </small>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="pay3">
+        {/* ---------------------------------------------- 2. how they pay */}
+        <div className="pay-col">
+          <div className="pay-label">Payment method</div>
+          <div className="method-grid">
             {enabledMethods.map((m) => (
-              <button key={m.id} className={methodId === m.id && !findingChange ? 'on' : ''} onClick={() => { setFindingChange(false); chooseMethod(m.id); }}>
+              <button
+                key={m.id}
+                className={methodId === m.id && !findingChange ? 'on' : ''}
+                onClick={() => {
+                  setFindingChange(false);
+                  chooseMethod(m.id);
+                }}
+              >
+                {methodIcon(m.id, m.isCash)}
                 {m.name}
               </button>
             ))}
-            <button className={findingChange ? 'on' : 'seg-change'} onClick={() => setFindingChange(true)}>
+            <button className={`their-change ${findingChange ? 'on' : ''}`} onClick={() => setFindingChange(true)}>
               <LuHandCoins aria-hidden="true" />
               Their change
             </button>
@@ -250,12 +301,15 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
           ) : (
             <>
               {enabledCur.length > 1 && (
-                <div className="seg cur-seg">
-                  {enabledCur.map((c) => (
-                    <button key={c.code} className={curCode === c.code ? 'on' : ''} onClick={() => chooseCurrency(c.code)}>
-                      {c.code}
-                    </button>
-                  ))}
+                <div className="cur-row">
+                  <span>Currency</span>
+                  <div className="seg small cur-seg">
+                    {enabledCur.map((c) => (
+                      <button key={c.code} className={curCode === c.code ? 'on' : ''} onClick={() => chooseCurrency(c.code)}>
+                        {c.code}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -291,7 +345,17 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
 
               {dueBeforeEntry > 0 || entered > 0 ? (
                 <>
-                  <label className="step-label" htmlFor="pay-amount">
+                  <div className="pay-label">Quick amount</div>
+                  <div className="quick">
+                    <button onClick={() => setAmount(String(fromBase(dueBeforeEntry, cur)))}>Exact</button>
+                    {quickNotes.map((q) => (
+                      <button key={q} onClick={() => setAmount(String(q))}>
+                        {noteLabel(q)}
+                      </button>
+                    ))}
+                  </div>
+
+                  <label className="pay-label" htmlFor="pay-amount">
                     {method?.isCash ? 'Cash received' : `${method?.name} amount`} ({cur.code})
                   </label>
                   <div className={`amount-box ${status}`}>
@@ -301,28 +365,14 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
                       ref={amountRef}
                       autoFocus
                       inputMode="decimal"
-                      placeholder="Type amount"
+                      placeholder="Enter amount received"
                       value={amountStr}
-                      onChange={(e) => {
-                        setAmountStr(e.target.value.replace(/[^\d.]/g, ''));
-                        resetChange();
-                      }}
+                      onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))}
                       onKeyDown={(e) => e.key === 'Enter' && confirm()}
                     />
-                  </div>
-                  <div className="quick">
-                    <button onClick={() => { setAmountStr(String(fromBase(dueBeforeEntry, cur))); resetChange(); }}>Exact</button>
-                    {method?.isCash &&
-                      cur.quickCash
-                        .filter((q) => q >= fromBase(dueBeforeEntry, cur) * 0.5)
-                        .map((q) => (
-                          <button key={q} onClick={() => { setAmountStr(String(q)); resetChange(); }}>
-                            {fmt(q, cur)}
-                          </button>
-                        ))}
                     {amountStr && (
-                      <button onClick={() => { setAmountStr(''); resetChange(); }} className="clear-btn">
-                        Clear
+                      <button className="amount-clear" onClick={() => setAmount('')} aria-label="Clear amount">
+                        <LuX aria-hidden="true" />
                       </button>
                     )}
                   </div>
@@ -339,7 +389,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
                   )}
                 </>
               ) : (
-                <div className="muted" style={{ marginTop: 14 }}>
+                <div className="muted" style={{ marginTop: 6 }}>
                   Nothing more to pay.
                 </div>
               )}
@@ -347,57 +397,22 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
           )}
         </div>
 
-        {/* ------------------------------------------------ right: what happens */}
-        <div className="pay-right">
-          <div className={`status-panel ${status}`}>
-            <div className="sp-row">
-              <span>Total</span>
-              <b>{fmt(total, base)}</b>
-            </div>
-            {paidBase > 0 && (
-              <div className="sp-row">
-                <span>Received</span>
-                <b>{fmt(paidBase, base)}</b>
-              </div>
-            )}
-            <div className="sp-main">
-              {status === 'waiting' && (
-                <>
-                  <span>To pay</span>
-                  <strong>{fmt(total, base)}</strong>
-                  {cur.code !== base.code && <small>{fmt(fromBase(total, cur), cur)}</small>}
-                </>
-              )}
-              {status === 'short' && (
-                <>
-                  <span>SHORT — ask for</span>
-                  <strong>{fmt(shortBase, base)}</strong>
-                  {cur.code !== base.code && <small>{fmt(fromBase(shortBase, cur), cur)} more</small>}
-                </>
-              )}
-              {status === 'exact' && (
-                <>
-                  <span>Paid exactly</span>
-                  <strong>No change</strong>
-                </>
-              )}
-              {status === 'change' && (
-                <>
-                  <span>GIVE CHANGE</span>
-                  <strong>{fmt(hand, changeCur)}</strong>
-                  {keepInCur > 0 && <small>+ {fmt(keepInCur, changeCur)} kept for {keepName || 'customer'}</small>}
-                </>
-              )}
-            </div>
-          </div>
-
+        {/* ---------------------------------------------- 3. change, kept change, card */}
+        <div className="pay-col">
           {status === 'change' && !nonCashOver && (
-            <div className="change-panel">
+            <div className="change-card">
+              <div className="cc-head">
+                <span className="cc-icon" aria-hidden="true">
+                  <LuCircleAlert />
+                </span>
+                <div>
+                  <b>Not enough change?</b>
+                  <div>Hand over what you have. The rest is kept for the customer by name — they use it or collect it later.</div>
+                </div>
+              </div>
               {enabledCur.length > 1 && (
-                <div className="row wrap" style={{ gap: 6 }}>
-                  <span className="muted" style={{ fontSize: 13 }}>
-                    Change in
-                  </span>
+                <div className="cur-row">
+                  <span>Change in</span>
                   <div className="seg small">
                     {enabledCur.map((c) => (
                       <button key={c.code} className={changeCode === c.code ? 'on' : ''} onClick={() => { setChangeCode(c.code); resetChange(); }}>
@@ -407,36 +422,34 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
                   </div>
                 </div>
               )}
-              <div className="short-of-change">
-                <label htmlFor="hand-over">Short of change? Hand over only</label>
-                <div className="row">
-                  <input
-                    id="hand-over"
-                    inputMode="decimal"
-                    value={handStr ?? String(changeInCur)}
-                    onChange={(e) => setHandStr(e.target.value.replace(/[^\d.]/g, ''))}
-                    onKeyDown={(e) => e.key === 'Enter' && confirm()}
-                  />
-                  <button className="btn" onClick={() => setHandStr('0')}>
-                    Keep it all
-                  </button>
-                </div>
-              </div>
-
-              {keepInCur > 0 && (
-                <div className="keep-box">
-                  <div className="keep-title">
-                    Keeping {fmt(keepInCur, changeCur)} for {keepName ? <b>{keepName}</b> : 'this customer'}
+              <div className="cc-fields">
+                <label className="cc-field">
+                  <span>Hand over now ({changeCur.code})</span>
+                  <div className="cc-input">
+                    <span className="sym">{changeCur.symbol}</span>
+                    <input
+                      id="hand-over"
+                      inputMode="decimal"
+                      value={handStr ?? String(changeInCur)}
+                      onChange={(e) => setHandStr(e.target.value.replace(/[^\d.]/g, ''))}
+                      onKeyDown={(e) => e.key === 'Enter' && confirm()}
+                    />
                   </div>
-                  {changeOf ? (
-                    <div className="muted" style={{ fontSize: 13 }}>
-                      Added to their change. New balance {fmt(round2(changeBalance - creditUsed + keepBase), base)}.
-                    </div>
-                  ) : (
-                    <CustomerPicker value={keepFor} onChange={setKeepFor} autoFocus label="Customer name" onEnter={confirm} />
-                  )}
-                </div>
-              )}
+                </label>
+                <button className="btn" onClick={() => setHandStr('0')}>
+                  Keep it all
+                </button>
+              </div>
+              {keepInCur > 0 &&
+                (changeOf ? (
+                  <div className="muted" style={{ fontSize: 13 }}>
+                    {fmt(keepInCur, changeCur)} added to {changeCustomer?.name}'s change. New balance {fmt(round2(changeBalance - creditUsed + keepBase), base)}.
+                  </div>
+                ) : (
+                  <div className="cc-keep">
+                    <CustomerPicker value={keepFor} onChange={setKeepFor} autoFocus label={`Keeping ${fmt(keepInCur, changeCur)} for — customer name`} onEnter={confirm} />
+                  </div>
+                ))}
             </div>
           )}
           {nonCashOver && <div className="warn-box">{method?.name} should be the exact amount. Tap Exact.</div>}
@@ -453,6 +466,31 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
             </div>
           )}
         </div>
+      </div>
+
+      {/* ---------------------------------------------- 4. summary, always in view */}
+      <div className="pay-summary">
+        <div>
+          <span>Received</span>
+          <b>{fmt(paidBase, base)}</b>
+        </div>
+        <div>
+          <span>Change due</span>
+          <b className={hand > 0 ? 'good' : ''}>{fmt(hand, changeCur)}</b>
+        </div>
+        {keepInCur > 0 ? (
+          <div className="kept">
+            <span>Kept</span>
+            <b>
+              {fmt(keepInCur, changeCur)} {keepName ? `· ${keepName}` : ''}
+            </b>
+          </div>
+        ) : status === 'short' ? (
+          <div className="short">
+            <span>Still to pay</span>
+            <b>{fmt(shortBase, base)}</b>
+          </div>
+        ) : null}
       </div>
     </Dialog>
   );

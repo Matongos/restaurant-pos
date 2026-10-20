@@ -245,12 +245,14 @@ export function Dialog({
   children,
   footer,
   width,
+  className = '',
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   width?: number;
+  className?: string;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -259,7 +261,7 @@ export function Dialog({
   }, [onClose]);
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" style={width ? { width: `min(${width}px, 100%)` } : undefined} role="dialog" aria-label={title}>
+      <div className={`dialog ${className}`} style={width ? { width: `min(${width}px, 100%)` } : undefined} role="dialog" aria-label={title}>
         <header>
           <h2>{title}</h2>
           <button className="btn ghost icon-only" onClick={onClose} aria-label="Close">

@@ -124,7 +124,7 @@ const check = (name, cond, detail) => (out[name] = cond ? 'ok' : `FAIL ${detail 
   await page.click('.nav-item:has-text("Sell")');
   await page.click('.item:has-text("Water 500ml")');
   await page.click('button:has-text("Pay $1.00")');
-  const methods = await page.locator('.pay-left .seg').first().locator('button').allTextContents();
+  const methods = (await page.locator('.method-grid button').allTextContents()).map(t=>t.trim());
   check('methods trimmed', methods.join('|') === 'Cash|Their change', methods.join('|'));
   await page.click('.dialog footer button:has-text("Back")');
 
