@@ -63,6 +63,9 @@ export default function Kitchen() {
                   {o.lines.map((l) => (
                     <div key={l.id}>
                       <b>{l.qty} ×</b> {l.name}
+                      {l.without?.map((w) => (
+                        <div key={w} className="k-without">» NO {w.toUpperCase()}</div>
+                      ))}
                       {l.note && <div className="muted">» {l.note}</div>}
                     </div>
                   ))}

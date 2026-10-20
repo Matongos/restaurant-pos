@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRoute, go } from '../router';
 import { setLiveCart, useCurrentUser, useStore, type PlaceOrderSuccess } from '../store/store';
-import { isSellable, mealInitials } from '../domain/rules';
+import { comesWith, isSellable, mealInitials } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
 import type { MenuItem, OrderLine } from '../domain/types';
 import { Dialog, TopBar } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
 import CollectChangeDialog from '../components/CollectChangeDialog';
-import { LuCreditCard, LuHandCoins, LuMinus, LuPlus, LuSearch, LuStar, LuTrash2, LuX } from 'react-icons/lu';
+import { LuCheck, LuCreditCard, LuHandCoins, LuMinus, LuPlus, LuSearch, LuStar, LuTrash2, LuX } from 'react-icons/lu';
 
 
 const TILL_ID = 'till-1';
@@ -77,14 +77,19 @@ export default function Till() {
 
   useEffect(() => () => setLiveCart(TILL_ID, null), []);
 
+  // Parts that have run out (e.g. coslo) are left out automatically and shown on the line.
+  const finishedParts = (m: MenuItem) => comesWith(m, components).filter((c) => !c.available).map((c) => c.name);
+  const sameWithout = (a?: string[], b?: string[]) => [...(a ?? [])].sort().join('|') === [...(b ?? [])].sort().join('|');
+
   const add = (m: MenuItem) => {
-    const existing = lines.find((l) => l.itemId === m.id && !l.note);
+    const auto = finishedParts(m);
+    const existing = lines.find((l) => l.itemId === m.id && !l.note && sameWithout(l.without, auto));
     if (existing) {
       setLines((ls) => ls.map((l) => (l.id === existing.id ? { ...l, qty: l.qty + 1 } : l)));
       setLastLine(existing.id);
     } else {
       const id = crypto.randomUUID();
-      setLines((ls) => [...ls, { id, itemId: m.id, name: m.name, qty: 1, unitPrice: m.price }]);
+      setLines((ls) => [...ls, { id, itemId: m.id, name: m.name, qty: 1, unitPrice: m.price, without: auto.length ? auto : undefined }]);
       setLastLine(id);
     }
   };
@@ -97,6 +102,17 @@ export default function Till() {
     const t = setTimeout(() => setLastLine(null), 600);
     return () => clearTimeout(t);
   }, [lastLine, lines]);
+  /** One tap: "Coslo" ⇄ "No coslo" for this line. */
+  const toggleWithout = (id: string, part: string) =>
+    setLines((ls) =>
+      ls.map((l) => {
+        if (l.id !== id) return l;
+        const has = l.without?.includes(part);
+        const without = has ? l.without!.filter((w) => w !== part) : [...(l.without ?? []), part];
+        return { ...l, without: without.length ? without : undefined };
+      }),
+    );
+
   const changeQty = (id: string, d: number) =>
     setLines((ls) => ls.flatMap((l) => (l.id !== id ? [l] : l.qty + d <= 0 ? [] : [{ ...l, qty: l.qty + d }])));
 
@@ -268,9 +284,28 @@ export default function Till() {
                 </div>
                 <div>
                   <div className="nm">{l.name}</div>
-                  <button className="note-btn" onClick={() => setNoteFor(l)}>
-                    {l.note ? <span className="nt">{l.note}</span> : '+ Note'}
-                  </button>
+                  <div className="line-opts">
+                    {comesWith(menu.find((m) => m.id === l.itemId), components).map((c) => {
+                      const off = l.without?.includes(c.name);
+                      return (
+                        <button
+                          key={c.id}
+                          className={`opt-chip ${off ? 'off' : ''}`}
+                          onClick={() => c.available && toggleWithout(l.id, c.name)}
+                          aria-pressed={!off}
+                          aria-label={off ? `No ${c.name} — tap to include` : `With ${c.name} — tap for no ${c.name}`}
+                          disabled={!c.available}
+                        >
+                          {off ? <LuX aria-hidden="true" /> : <LuCheck aria-hidden="true" />}
+                          {off ? `No ${c.name.toLowerCase()}` : c.name}
+                          {!c.available && ' · finished'}
+                        </button>
+                      );
+                    })}
+                    <button className="note-btn" onClick={() => setNoteFor(l)}>
+                      {l.note ? <span className="nt">{l.note}</span> : '+ Note'}
+                    </button>
+                  </div>
                 </div>
                 <div className="pr">{fmt(l.qty * l.unitPrice, base)}</div>
               </div>

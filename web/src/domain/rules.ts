@@ -1,9 +1,29 @@
-import type { AppState, CreditEntry, Customer, MenuItem, Order, Role, Staff } from './types';
+import type { AppState, Component, CreditEntry, Customer, MenuItem, Order, Role, Staff } from './types';
 
 /** A meal can be sold only if it is switched on AND every component it uses is available. */
 export function isSellable(item: MenuItem, state: Pick<AppState, 'components'>): boolean {
   if (!item.available) return false;
-  return item.componentIds.every((cid) => state.components.find((c) => c.id === cid)?.available !== false);
+  // Only the main parts hide a meal; a finished "comes with" part (coslo) just gets left out.
+  const optional = new Set(item.optionalIds ?? []);
+  return item.componentIds.every((cid) => optional.has(cid) || state.components.find((c) => c.id === cid)?.available !== false);
+}
+
+/** "Coslo (cabbage salad)" -> "Coslo": the short name used on buttons and tickets. */
+export const shortName = (name: string) => name.replace(/\s*\(.*\)\s*/g, '').trim() || name;
+
+/** The parts a meal comes with that the customer can say no to, and whether each is still available. */
+export function comesWith(item: MenuItem | undefined, components: Component[]): { id: string; name: string; available: boolean }[] {
+  if (!item?.optionalIds?.length) return [];
+  return item.optionalIds
+    .filter((id) => item.componentIds.includes(id))
+    .map((id) => components.find((c) => c.id === id))
+    .filter((c): c is Component => !!c)
+    .map((c) => ({ id: c.id, name: shortName(c.name), available: c.available }));
+}
+
+/** What the kitchen needs to know about a line beyond its name: "No coslo · extra gravy". */
+export function lineExtras(l: { note?: string; without?: string[] }): string {
+  return [...(l.without ?? []).map((w) => `No ${w.toLowerCase()}`), l.note].filter(Boolean).join(' · ');
 }
 
 /** Cards currently held by customers (orders not yet served). */

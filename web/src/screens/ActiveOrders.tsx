@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { go } from '../router';
 import { getState, setOrderStatus, useCurrentUser, useStore } from '../store/store';
-import { can, fmtDuration, serviceTimes, timerState, todayISO, type TimerState } from '../domain/rules';
+import { can, fmtDuration, lineExtras, serviceTimes, timerState, todayISO, type TimerState } from '../domain/rules';
 import { customerSlipHTML, kitchenTicketHTML, printTickets } from '../print/tickets';
 import { MoreMenu, TopBar, toast, useNow } from '../components/ui';
 import { LuBan, LuCheck, LuCookingPot, LuCupSoda, LuPrinter } from 'react-icons/lu';
@@ -86,7 +86,7 @@ export default function ActiveOrders() {
                   {o.lines.map((l) => (
                     <div key={l.id}>
                       {l.qty} × {l.name}
-                      {l.note && <span className="muted"> — {l.note}</span>}
+                      {lineExtras(l) && <span className="muted"> — {lineExtras(l)}</span>}
                     </div>
                   ))}
                   {addons.flatMap((a) =>

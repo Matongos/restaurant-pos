@@ -764,3 +764,22 @@ tr.struck td b { text-decoration: line-through; }
 @media (min-width: 900px) { .cat-bar .search-open { display: none; } }
 @media (max-width: 899px) { .item.has-photo .ph { aspect-ratio: auto; height: 72px; } }
 .items { grid-auto-rows: max-content; }
+
+/* "Comes with" toggles on order lines (Coslo ⇄ No coslo) */
+.line-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.opt-chip { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 10px; border-radius: 16px; border: 1px solid var(--good); background: var(--good-soft); color: var(--good); font-size: 13px; font-weight: 700; }
+.opt-chip svg { width: 14px; height: 14px; }
+.opt-chip.off { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+.opt-chip:disabled { opacity: 1; cursor: default; }
+.line-row .line-opts .note-btn { min-height: 32px; padding: 0 4px; }
+.k-without { font-weight: 900; color: var(--bad); }
+@media (max-width: 899px) {
+  .opt-chip { min-height: 30px; padding: 0 8px; font-size: 12px; }
+  .line-row .line-opts .note-btn { min-height: 30px; }
+}
+
+.made-with button { display: inline-flex; align-items: center; flex-direction: column; justify-content: center; line-height: 1.15; }
+.made-with button small { font-size: 11px; font-weight: 700; opacity: 0.85; }
+.made-with .mw-main { background: var(--brand); border-color: var(--brand); color: #fff; }
+.made-with .mw-optional { background: var(--good-soft); border-color: var(--good); color: var(--good); border-style: dashed; }
+.mw-summary { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; font-size: 13px; color: var(--ink); }

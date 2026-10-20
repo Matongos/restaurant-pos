@@ -98,6 +98,11 @@ export interface MenuItem {
   /** Fallback picture when there is no photo yet. */
   emoji: string;
   componentIds: ID[];
+  /**
+   * The parts of componentIds the meal "comes with" that a customer may say no to (e.g. coslo, covo).
+   * If one of these runs out the meal stays on sale; the order is marked "no coslo" instead.
+   */
+  optionalIds?: ID[];
   available: boolean;
   isDrink: boolean;
   favourite: boolean;
@@ -113,6 +118,8 @@ export interface OrderLine {
   qty: number;
   unitPrice: number;
   note?: string;
+  /** "Comes with" parts left out, by name, e.g. ["Coslo"]. Printed as NO COSLO on the kitchen ticket. */
+  without?: string[];
 }
 
 export interface Payment {

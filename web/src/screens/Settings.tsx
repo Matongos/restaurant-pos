@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { setExampleHistory, resetDemo, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
+import { addComponent, setExampleHistory, resetDemo, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
 import type { Currency, MenuItem, NumberMode, PrintWhen } from '../domain/types';
 import { compressLogo, compressPhoto } from '../components/photo';
 import { Dialog, TopBar, toast } from '../components/ui';
@@ -454,7 +454,6 @@ export function MenuEditor() {
 
 function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) {
   const categories = useStore((s) => s.categories);
-  const components = useStore((s) => s.components);
   const [m, setM] = useState<MenuItem>(item);
   const valid = m.name.trim() && m.price >= 0;
   return (
@@ -545,24 +544,81 @@ function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) 
         <input type="checkbox" checked={m.favourite} onChange={(e) => setM({ ...m, favourite: e.target.checked })} />
         Show in Favourites (first screen at the till)
       </label>
-      <div className="section-title">Made with (hidden if any of these is sold out)</div>
-      <div className="seg">
+      <MadeWith m={m} setM={setM} />
+    </Dialog>
+  );
+}
+
+/**
+ * What the meal is made of, in two groups:
+ * - Main parts: if one is sold out the meal disappears from the till (no beef = no Rice & Beef).
+ * - Comes with: the customer may say no (coslo, covo). If it runs out the meal stays on sale
+ *   and orders are marked "no coslo".
+ * Tap a part to move it: not used → main part → comes with → not used.
+ */
+function MadeWith({ m, setM }: { m: MenuItem; setM: (m: MenuItem) => void }) {
+  const components = useStore((s) => s.components);
+  const [newName, setNewName] = useState('');
+  const optional = new Set(m.optionalIds ?? []);
+  const state = (id: string) => (!m.componentIds.includes(id) ? 'none' : optional.has(id) ? 'optional' : 'main');
+  const cycle = (id: string) => {
+    const now = state(id);
+    const ids = m.componentIds.filter((x) => x !== id);
+    const opt = (m.optionalIds ?? []).filter((x) => x !== id);
+    if (now === 'none') setM({ ...m, componentIds: [...ids, id], optionalIds: opt.length ? opt : undefined });
+    else if (now === 'main') setM({ ...m, componentIds: [...ids, id], optionalIds: [...opt, id] });
+    else setM({ ...m, componentIds: ids, optionalIds: opt.length ? opt : undefined });
+  };
+  const addNew = () => {
+    const id = addComponent(newName);
+    if (!id) return;
+    setNewName('');
+    if (!m.componentIds.includes(id)) setM({ ...m, componentIds: [...m.componentIds, id], optionalIds: [...(m.optionalIds ?? []), id] });
+  };
+  const mains = components.filter((c) => state(c.id) === 'main');
+  const extras = components.filter((c) => state(c.id) === 'optional');
+  return (
+    <>
+      <div className="section-title">What it is made of</div>
+      <p className="hint" style={{ marginTop: -4 }}>
+        Tap to switch between <b>not used</b>, <b>main part</b> and <b>comes with</b>.
+      </p>
+      <div className="seg made-with">
         {components.map((c) => {
-          const on = m.componentIds.includes(c.id);
+          const st = state(c.id);
           return (
-            <button
-              key={c.id}
-              className={on ? 'on' : ''}
-              onClick={() =>
-                setM({ ...m, componentIds: on ? m.componentIds.filter((x) => x !== c.id) : [...m.componentIds, c.id] })
-              }
-            >
+            <button key={c.id} className={`mw-${st}`} onClick={() => cycle(c.id)} aria-label={`${c.name}: ${st === 'none' ? 'not used' : st === 'main' ? 'main part' : 'comes with, customer can say no'}`}>
               {c.name}
+              {st !== 'none' && <small>{st === 'main' ? 'main' : 'comes with'}</small>}
             </button>
           );
         })}
       </div>
-    </Dialog>
+      <div className="mw-summary">
+        <div>
+          <b>Main parts</b> — if one runs out, the meal is hidden:{' '}
+          {mains.length ? mains.map((c) => c.name).join(', ') : <span className="muted">none</span>}
+        </div>
+        <div>
+          <b>Comes with</b> — the cashier can tap “No …”; if it runs out the meal stays on sale:{' '}
+          {extras.length ? extras.map((c) => c.name).join(', ') : <span className="muted">none</span>}
+        </div>
+      </div>
+      <div className="row" style={{ marginTop: 10 }}>
+        <input
+          id="new-part"
+          className="plain-input grow"
+          style={{ marginTop: 0 }}
+          placeholder="New ingredient or side, e.g. Coslo"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && addNew()}
+        />
+        <button className="btn" onClick={addNew} disabled={!newName.trim()}>
+          Add
+        </button>
+      </div>
+    </>
   );
 }
 

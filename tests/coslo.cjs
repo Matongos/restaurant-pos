@@ -1,0 +1,57 @@
+const { chromium } = require('/opt/npm-tools/node_modules/playwright');
+const URL='http://localhost:8765/'; const out={}; const check=(n,c,d)=>out[n]=c?'ok':`FAIL ${d??''}`;
+(async()=>{const b=await chromium.launch(); const page=await b.newPage({viewport:{width:1366,height:768}}); const errors=[];
+page.on('pageerror',e=>errors.push(e.message));
+const pin=async(c)=>{await page.waitForSelector('.keypad'); for(const d of c) await page.click(`.keypad button:text-is("${d}")`);};
+const KEY='restaurant-pos.state.v1';
+await page.goto(URL); await page.evaluate(()=>localStorage.clear()); await page.reload();
+// --- migration from v6 data (no coslo, no optional parts)
+await page.evaluate((k)=>{},KEY);
+await pin('2222'); await page.waitForSelector('.items');
+await page.evaluate((k)=>{const st=JSON.parse(localStorage.getItem(k)); st.version=6; st.components=st.components.filter(c=>c.id!=='coslo'); st.menu.forEach(m=>{delete m.optionalIds; m.componentIds=m.componentIds.filter(x=>x!=='coslo');}); localStorage.setItem(k,JSON.stringify(st));},KEY);
+await page.reload(); await page.waitForSelector('.items');
+const mig=await page.evaluate((k)=>{const st=JSON.parse(localStorage.getItem(k)); const rb=st.menu.find(m=>m.id==='m-rice-beef'); const sb=st.menu.find(m=>m.id==='m-sadza-beef'); return {v:st.version, coslo:st.components.some(c=>c.id==='coslo'), rb, sb};},KEY);
+check('migrated v7', mig.v===7 && mig.coslo && mig.rb.componentIds.includes('coslo') && mig.rb.optionalIds.join()==='coslo' && mig.sb.optionalIds.join()==='greens', JSON.stringify(mig));
+// --- till
+await page.click('.item:has-text("Rice & Beef")'); await page.click('.item:has-text("Rice & Beef")');
+const line=()=>page.locator('.line-row').first();
+check('chip shows coslo', (await line().locator('.opt-chip').textContent()).trim()==='Coslo');
+await line().locator('.opt-chip').click();
+check('toggled no coslo', (await line().locator('.opt-chip').textContent()).trim()==='No coslo');
+await page.click('.item:has-text("Rice & Beef")');
+check('new plain line', (await page.locator('.line-row').count())===2 && (await page.locator('.line-row').nth(1).locator('.opt-chip').textContent()).trim()==='Coslo');
+await page.click('.item:has-text("Sadza & Beef")');
+check('sadza shows greens', (await page.locator('.line-row').nth(2).locator('.opt-chip').textContent()).trim()==='Greens');
+await page.click('.ticket-panel button:has-text("Pay")'); await page.click('.quick button:has-text("Exact")');
+await page.locator('.dialog footer button').last().click(); await page.waitForSelector('.done-number');
+const ticket=await page.textContent('.ticket-previews');
+check('ticket NO COSLO', ticket.includes('» NO COSLO') && (ticket.match(/NO COSLO/g)||[]).length===1, ticket);
+await page.click('text=Next customer');
+await page.click('.nav-item:has-text("Kitchen")'); await page.waitForSelector('.ocard');
+check('kitchen shows', (await page.locator('.k-without').first().textContent()).includes('NO COSLO'));
+await page.screenshot({path:'look/d-50-kitchen-coslo.png'});
+await page.click('.nav-item:has-text("Orders")'); await page.waitForSelector('.ocard');
+check('orders shows', (await page.locator('.ocard').first().textContent()).includes('No coslo'));
+// --- coslo finished: meal stays, line marked
+await page.click('.nav-item:has-text("Sold out")'); await page.click('.toggle:has-text("Coslo")');
+await page.click('.nav-item:has-text("Sell")'); await page.waitForSelector('.items');
+check('rice beef still on sale', (await page.locator('.item:has-text("Rice & Beef")').count())===1);
+await page.click('.item:has-text("Rice & Beef")');
+check('auto no coslo finished', (await line().locator('.opt-chip').textContent()).includes('No coslo · finished') && await line().locator('.opt-chip').isDisabled());
+await page.screenshot({path:'look/d-51-sell-finished.png'});
+await page.click('[aria-label="Clear order"]');
+await page.click('.nav-item:has-text("Sold out")'); await page.click('.toggle:has-text("Coslo")'); await page.click('.toggle:has-text("Beef")');
+await page.click('.nav-item:has-text("Sell")'); await page.waitForSelector('.items');
+check('beef still hides', (await page.locator('.item:has-text("Rice & Beef")').count())===0);
+await page.click('.nav-item:has-text("Sold out")'); await page.click('.toggle:has-text("Beef")');
+// --- meal editor
+await page.click('.nav-item:has-text("Menu")'); await page.waitForSelector('table.list');
+await page.click('table.list tr:has-text("Chips & Chicken")');
+await page.fill('#new-part','Tomato sauce'); await page.click('.dialog button:has-text("Add"):not(:has-text("photo"))');
+check('new part is comes-with', (await page.locator('.made-with .mw-optional').allTextContents()).join().includes('Tomato sauce'));
+await page.screenshot({path:'look/d-52-madewith.png'});
+await page.locator('.dialog footer button').last().click();
+await page.click('.nav-item:has-text("Sell")'); await page.click('.chip:has-text("Meals")'); await page.click('.item:has-text("Chips & Chicken")');
+check('new part chip on till', (await line().locator('.opt-chip').textContent()).trim()==='Tomato sauce');
+await page.setViewportSize({width:390,height:844}); await page.click('.item:has-text("Rice & Chicken")'); await page.screenshot({path:'look/p-53-sell-coslo.png'});
+out.errors=errors; console.log(JSON.stringify(out,null,1)); await b.close();})().catch(e=>{console.log(JSON.stringify(out,null,1));console.error(e);process.exit(1)});

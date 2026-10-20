@@ -46,13 +46,25 @@ const listeners = new Set<() => void>();
 /** Bring data saved by an older version of the app up to date. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): AppState | null {
-  if (raw?.version === 6) return raw as AppState;
+  if (raw?.version === 7) return raw as AppState;
+  if (raw?.version === 6) {
+    // v7: meals "come with" parts the customer can say no to (coslo with rice meals, covo with sadza).
+    const st = raw as AppState;
+    const components = st.components.some((c) => c.id === 'coslo') ? st.components : [...st.components, { id: 'coslo', name: 'Coslo (cabbage salad)', available: true }];
+    const menu = st.menu.map((m) => {
+      if (m.optionalIds) return m;
+      const withCoslo = (m.id === 'm-rice-beef' || m.id === 'm-rice-chicken') && !m.componentIds.includes('coslo') ? [...m.componentIds, 'coslo'] : m.componentIds;
+      const optionalIds = withCoslo.filter((id) => id === 'coslo' || id === 'greens');
+      return { ...m, componentIds: withCoslo, optionalIds: optionalIds.length ? optionalIds : undefined };
+    });
+    return { ...st, version: 7, components, menu };
+  }
   if (raw?.version === 5) {
     // v6: staff management (history of staff changes).
     const st = raw as AppState;
     // The old default green becomes the new default teal (a colour the owner chose is kept).
     const settings = st.settings.brandColor?.toLowerCase() === '#1f6f43' ? { ...st.settings, brandColor: '#0f766e' } : st.settings;
-    return { ...st, version: 6, settings, staffLog: [] };
+    return migrate({ ...st, version: 6, settings, staffLog: [] });
   }
   if (raw?.version === 4) {
     // v5: accounting (purchases, expenses, cancellations) and cost per plate.
@@ -431,6 +443,17 @@ export function setComponentAvailable(id: string, available: boolean, by?: strin
     ...st,
     components: st.components.map((c) => (c.id === id ? { ...c, available, changedAt, changedBy: by } : c)),
   }));
+}
+
+/** A new ingredient or side (e.g. "Coslo"), so meals can be made with it and it can be marked sold out. */
+export function addComponent(name: string): string | null {
+  const clean = name.trim();
+  if (!clean) return null;
+  const existing = state.components.find((c) => c.name.toLowerCase() === clean.toLowerCase());
+  if (existing) return existing.id;
+  const id = uid('c-');
+  set((st) => ({ ...st, components: [...st.components, { id, name: clean, available: true }] }));
+  return id;
 }
 
 export function setItemAvailable(id: string, available: boolean) {

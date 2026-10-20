@@ -22,7 +22,9 @@ export function kitchenTicketHTML(order: Order, s: AppState): string {
   const lines = order.lines
     .map(
       (l) =>
-        `<div class="line"><b>${l.qty} ×</b> ${esc(l.name)}</div>${l.note ? `<div class="note">» ${esc(l.note)}</div>` : ''}`,
+        `<div class="line"><b>${l.qty} ×</b> ${esc(l.name)}</div>` +
+          (l.without ?? []).map((w) => `<div class="without">» NO ${esc(w.toUpperCase())}</div>`).join('') +
+          (l.note ? `<div class="note">» ${esc(l.note)}</div>` : ''),
     )
     .join('');
   return `
@@ -102,6 +104,7 @@ export const TICKET_CSS = `
   .small{text-align:center;font-size:11px}
   .line{font-size:16px;margin:3px 0}
   .note{font-size:13px;margin-left:16px}
+  .without{font-size:15px;font-weight:900;margin-left:16px;letter-spacing:.02em}
   .meta{font-size:11px;text-align:center}
   .training,.addon{text-align:center;font-weight:800;border:2px solid #000;padding:2px;margin-bottom:4px}
   .logo{display:block;margin:0 auto 4px;max-width:40mm;max-height:20mm;filter:grayscale(1)}

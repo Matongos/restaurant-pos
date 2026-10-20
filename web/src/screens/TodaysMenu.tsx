@@ -13,7 +13,8 @@ export default function TodaysMenu() {
     const off = new Set(components.filter((c) => !c.available).map((c) => c.id));
     const map: Record<string, string[]> = {};
     for (const m of menu) {
-      const names = m.componentIds.filter((id) => off.has(id)).map((id) => components.find((c) => c.id === id)!.name);
+      const optional = new Set(m.optionalIds ?? []);
+      const names = m.componentIds.filter((id) => off.has(id) && !optional.has(id)).map((id) => components.find((c) => c.id === id)!.name);
       if (names.length) map[m.id] = names;
     }
     return map;
@@ -25,7 +26,7 @@ export default function TodaysMenu() {
       <div className="page">
         <div className="page-narrow">
           <div className="section-title" style={{ marginTop: 0 }}>
-            Ingredients — switching one off hides every meal that uses it
+            Ingredients — switching a main part off hides its meals; a side like coslo is just left out
           </div>
           <div className="toggle-list">
             {components.map((c) => (

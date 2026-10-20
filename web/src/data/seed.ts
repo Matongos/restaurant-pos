@@ -49,7 +49,7 @@ function baseState(): AppState {
     price: number,
     emoji: string,
     componentIds: string[],
-    extra: Partial<{ isDrink: boolean; favourite: boolean }> = {},
+    extra: Partial<{ isDrink: boolean; favourite: boolean; optionalIds: string[] }> = {},
   ) => ({
     id,
     name,
@@ -57,6 +57,7 @@ function baseState(): AppState {
     price,
     emoji,
     componentIds,
+    optionalIds: extra.optionalIds,
     available: true,
     isDrink: extra.isDrink ?? false,
     favourite: extra.favourite ?? false,
@@ -65,7 +66,7 @@ function baseState(): AppState {
   });
 
   return {
-    version: 6,
+    version: 7,
     settings: {
       branchId: 'main',
       restaurantName: 'Training Restaurant',
@@ -129,18 +130,19 @@ function baseState(): AppState {
       comp('fish', 'Fish'),
       comp('beans', 'Beans'),
       comp('greens', 'Greens (covo)'),
+      comp('coslo', 'Coslo (cabbage salad)'),
       comp('eggs', 'Eggs'),
       comp('bread', 'Bread'),
     ],
     menu: [
-      item('m-sadza-beef', 'Sadza & Beef', 'meals', 4, '🥩', ['sadza', 'beef', 'greens'], { favourite: true }),
-      item('m-sadza-chicken', 'Sadza & Chicken', 'meals', 4, '🍗', ['sadza', 'chicken', 'greens'], { favourite: true }),
-      item('m-rice-beef', 'Rice & Beef', 'meals', 4, '🍛', ['rice', 'beef'], { favourite: true }),
-      item('m-rice-chicken', 'Rice & Chicken', 'meals', 4, '🍚', ['rice', 'chicken'], { favourite: true }),
-      item('m-sadza-oxtail', 'Sadza & Oxtail', 'meals', 6, '🍲', ['sadza', 'oxtail', 'greens']),
-      item('m-sadza-fish', 'Sadza & Fish', 'meals', 5, '🐟', ['sadza', 'fish', 'greens']),
+      item('m-sadza-beef', 'Sadza & Beef', 'meals', 4, '🥩', ['sadza', 'beef', 'greens'], { favourite: true, optionalIds: ['greens'] }),
+      item('m-sadza-chicken', 'Sadza & Chicken', 'meals', 4, '🍗', ['sadza', 'chicken', 'greens'], { favourite: true, optionalIds: ['greens'] }),
+      item('m-rice-beef', 'Rice & Beef', 'meals', 4, '🍛', ['rice', 'beef', 'coslo'], { favourite: true, optionalIds: ['coslo'] }),
+      item('m-rice-chicken', 'Rice & Chicken', 'meals', 4, '🍚', ['rice', 'chicken', 'coslo'], { favourite: true, optionalIds: ['coslo'] }),
+      item('m-sadza-oxtail', 'Sadza & Oxtail', 'meals', 6, '🍲', ['sadza', 'oxtail', 'greens'], { optionalIds: ['greens'] }),
+      item('m-sadza-fish', 'Sadza & Fish', 'meals', 5, '🐟', ['sadza', 'fish', 'greens'], { optionalIds: ['greens'] }),
       item('m-chips-chicken', 'Chips & Chicken', 'meals', 4.5, '🍟', ['chips', 'chicken'], { favourite: true }),
-      item('m-sadza-beans', 'Sadza & Beans', 'meals', 3, '🫘', ['sadza', 'beans', 'greens']),
+      item('m-sadza-beans', 'Sadza & Beans', 'meals', 3, '🫘', ['sadza', 'beans', 'greens'], { optionalIds: ['greens'] }),
       item('b-full', 'Eggs, Sausage & Bread', 'breakfast', 3, '🍳', ['eggs', 'bread']),
       item('b-tea-bread', 'Tea & Bread', 'breakfast', 1, '🥖', ['bread']),
       item('s-sadza', 'Extra Sadza', 'sides', 0.5, '⚪', ['sadza']),
