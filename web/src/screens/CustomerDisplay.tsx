@@ -1,8 +1,18 @@
-import { useRoute } from '../router';
+import { go, useRoute } from '../router';
 import { useStore } from '../store/store';
 import { fmt, fromBase } from '../domain/money';
 
 /** View-only screen for the customer-facing monitor. Open with #/display?till=till-1 */
+function BackLink() {
+  // Shown only when the display was opened in the same window (no second screen).
+  if (window.opener) return null;
+  return (
+    <button className="display-back" onClick={() => go('/')}>
+      ← Back to till
+    </button>
+  );
+}
+
 export default function CustomerDisplay() {
   const { query } = useRoute();
   const tillId = query.get('till') ?? 'till-1';
@@ -15,6 +25,7 @@ export default function CustomerDisplay() {
   if (!cart || cart.lines.length === 0) {
     return (
       <div className="cdisplay">
+        <BackLink />
         <div className="idle">
           <div>
             {settings.logo && <img src={settings.logo} alt="" />}
@@ -32,6 +43,7 @@ export default function CustomerDisplay() {
 
   return (
     <div className="cdisplay">
+      <BackLink />
       <div className="left">
         <h1>Your order</h1>
         {type && <span className="typebadge">{type.name}</span>}

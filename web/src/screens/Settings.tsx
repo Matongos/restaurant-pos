@@ -454,20 +454,32 @@ function KitchenSettings() {
 }
 
 function Demo() {
+  const [sure, setSure] = useState(false);
   return (
     <>
       <p>This prototype keeps its data in this browser. Reset puts back the demo menu and removes all orders.</p>
-      <button
-        className="btn danger"
-        onClick={() => {
-          if (confirm('Remove all orders and settings and restore the demo data?')) {
-            resetDemo();
-            toast('Demo data restored');
-          }
-        }}
-      >
-        Reset demo data
-      </button>
+      {!sure ? (
+        <button className="btn danger" onClick={() => setSure(true)}>
+          Reset demo data
+        </button>
+      ) : (
+        <div className="row wrap">
+          <b>Remove all orders and settings?</b>
+          <button className="btn" onClick={() => setSure(false)}>
+            Keep them
+          </button>
+          <button
+            className="btn primary"
+            onClick={() => {
+              resetDemo();
+              setSure(false);
+              toast('Demo data restored');
+            }}
+          >
+            Yes, reset
+          </button>
+        </div>
+      )}
     </>
   );
 }

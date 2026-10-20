@@ -95,27 +95,44 @@ export function useStore<T>(selector: (s: AppState) => T): T {
 /* ------------------------------------------------------------------ session */
 
 const SESSION_KEY = 'restaurant-pos.session';
+let memorySession: string | null = null;
+function readSession(): string | null {
+  try {
+    return sessionStorage.getItem(SESSION_KEY);
+  } catch {
+    return memorySession;
+  }
+}
+function writeSession(id: string | null) {
+  memorySession = id;
+  try {
+    if (id) sessionStorage.setItem(SESSION_KEY, id);
+    else sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* storage blocked: keep the session in memory */
+  }
+}
 
 export function currentUser(): Staff | null {
-  const id = sessionStorage.getItem(SESSION_KEY);
+  const id = readSession();
   return state.staff.find((s) => s.id === id) ?? null;
 }
 
 export function useCurrentUser(): Staff | null {
-  const id = useSyncExternalStore(subscribe, () => sessionStorage.getItem(SESSION_KEY));
+  const id = useSyncExternalStore(subscribe, readSession);
   const staff = useStore((s) => s.staff);
   return staff.find((s) => s.id === id) ?? null;
 }
 
 export function login(pin: string): Staff | null {
   const user = state.staff.find((s) => s.active && s.pin === pin) ?? null;
-  if (user) sessionStorage.setItem(SESSION_KEY, user.id);
+  if (user) writeSession(user.id);
   emit();
   return user;
 }
 
 export function logout() {
-  sessionStorage.removeItem(SESSION_KEY);
+  writeSession(null);
   emit();
 }
 

@@ -28,8 +28,9 @@ export default function Home() {
   const soldOut = useMemo(() => components.filter((c) => !c.available).length, [components]);
 
   const openDisplay = () => {
-    window.open('#/display?till=till-1', 'customer-display', 'popup,width=1024,height=640');
-    toast('Customer display opened — drag it to the second screen and press F11.');
+    const w = window.open('#/display?till=till-1', 'customer-display', 'popup,width=1024,height=640');
+    if (w) toast('Customer display opened — drag it to the second screen and press F11.');
+    else go('/display?till=till-1');
   };
 
   const tiles: Tile[] = [
