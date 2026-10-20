@@ -20,7 +20,7 @@ export default function ActiveOrders() {
 
   const today = todayISO();
   const mains = useMemo(
-    () => orders.filter((o) => !o.parentOrderId && todayISO(new Date(o.createdAt)) === today),
+    () => orders.filter((o) => !o.parentOrderId && !o.example && todayISO(new Date(o.createdAt)) === today),
     [orders, today],
   );
   const addonsOf = (id: string) => orders.filter((o) => o.parentOrderId === id);

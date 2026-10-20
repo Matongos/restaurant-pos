@@ -12,7 +12,7 @@ import ActiveOrders from './screens/ActiveOrders';
 import Kitchen from './screens/Kitchen';
 import ChangeOwedScreen from './screens/ChangeOwed';
 import SettingsScreen, { MenuScreen } from './screens/Settings';
-import Reports from './screens/Reports';
+import Analytics from './screens/Analytics';
 
 const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/till': { perm: 'take_orders', el: Till },
@@ -22,7 +22,7 @@ const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/change-owed': { perm: 'change_owed', el: ChangeOwedScreen },
   '/settings': { perm: 'settings', el: SettingsScreen },
   '/menu': { perm: 'menu_edit', el: MenuScreen },
-  '/reports': { perm: 'reports', el: Reports },
+  '/reports': { perm: 'reports', el: Analytics },
 };
 
 export default function App() {

@@ -1,18 +1,19 @@
 import { useState } from 'react';
-import { removeExampleHistory, resetDemo, updateSettings, upsertCurrency, upsertMenuItem, useStore } from '../store/store';
+import { setExampleHistory, resetDemo, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useStore } from '../store/store';
 import type { Currency, MenuItem, NumberMode } from '../domain/types';
 import { compressLogo, compressPhoto } from '../components/photo';
 import { Dialog, TopBar, toast } from '../components/ui';
 import { fmt } from '../domain/money';
 import { uid } from '../domain/rules';
 
-type Tab = 'general' | 'numbers' | 'currencies' | 'menu' | 'kitchen' | 'demo';
+type Tab = 'general' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'kitchen' | 'demo';
 
 export default function SettingsScreen() {
   const [tab, setTab] = useState<Tab>('general');
   const tabs: [Tab, string][] = [
     ['general', 'Restaurant & branding'],
     ['numbers', 'Order numbers & printing'],
+    ['payments', 'Payment methods'],
     ['currencies', 'Currencies'],
     ['menu', 'Menu & photos'],
     ['kitchen', 'Serving times'],
@@ -33,6 +34,7 @@ export default function SettingsScreen() {
           <div className="card" style={{ padding: 20 }}>
             {tab === 'general' && <General />}
             {tab === 'numbers' && <Numbers />}
+            {tab === 'payments' && <PaymentMethods />}
             {tab === 'currencies' && <Currencies />}
             {tab === 'menu' && <MenuEditor />}
             {tab === 'kitchen' && <KitchenSettings />}
@@ -152,6 +154,42 @@ function Numbers() {
         In this prototype printing opens the browser's print dialog. The desktop app prints straight to the 80 mm kitchen printer with no
         dialog.
       </p>
+    </>
+  );
+}
+
+function PaymentMethods() {
+  const methods = useStore((s) => s.paymentMethods);
+  const onCount = methods.filter((m) => m.enabled).length;
+  return (
+    <>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Switch off what this restaurant does not accept. It disappears from the payment screen and comes back exactly as it was when switched on
+        again. Paying with a customer's kept change is always available.
+      </p>
+      <div className="toggle-list">
+        {methods.map((m) => (
+          <div key={m.id} className={`toggle ${m.enabled ? '' : 'off'}`}>
+            <span>
+              {m.name}
+              <span className="sub">{m.isCash ? 'Cash — change can be given' : m.requiresReference ? 'Asks for a reference number' : 'Exact amount'}</span>
+            </span>
+            <button
+              className={`switch ${m.enabled ? 'on' : ''}`}
+              role="switch"
+              aria-checked={m.enabled}
+              aria-label={`Accept ${m.name}`}
+              disabled={m.enabled && onCount === 1}
+              onClick={() => updatePaymentMethod(m.id, { enabled: !m.enabled })}
+            >
+              <span />
+            </button>
+          </div>
+        ))}
+      </div>
+      {!methods.some((m) => m.isCash && m.enabled) && (
+        <p style={{ color: 'var(--warn)', fontWeight: 700 }}>Cash is switched off, so the till cannot give change.</p>
+      )}
     </>
   );
 }
@@ -471,8 +509,72 @@ function KitchenSettings() {
             onChange={(e) => updateSettings({ warnAfterMinutes: Math.min(s.lateAfterMinutes, Math.max(0, Number(e.target.value))) })}
           />
         </label>
+        <label className="field">
+          One server handles (customers an hour)
+          <input
+            id="staff-capacity"
+            type="number"
+            min={1}
+            value={s.customersPerStaffHour}
+            onChange={(e) => updateSettings({ customersPerStaffHour: Math.max(1, Number(e.target.value)) })}
+          />
+        </label>
       </div>
+      <div className="section-title">Parts of the day (used in Analytics)</div>
+      <table className="list">
+        <tbody>
+          {s.mealPeriods.map((p, i) => (
+            <tr key={p.id}>
+              <td>
+                <input
+                  id={`period-name-${p.id}`}
+                  value={p.name}
+                  onChange={(e) => updateSettings({ mealPeriods: s.mealPeriods.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })}
+                />
+              </td>
+              <td>
+                from{' '}
+                <input
+                  id={`period-from-${p.id}`}
+                  type="number"
+                  min={0}
+                  max={23}
+                  style={{ width: 70 }}
+                  value={p.from}
+                  onChange={(e) => updateSettings({ mealPeriods: s.mealPeriods.map((x, j) => (j === i ? { ...x, from: Math.min(x.to - 1, Math.max(0, Number(e.target.value))) } : x)) })}
+                />
+                :00 to{' '}
+                <input
+                  id={`period-to-${p.id}`}
+                  type="number"
+                  min={1}
+                  max={24}
+                  style={{ width: 70 }}
+                  value={p.to}
+                  onChange={(e) => updateSettings({ mealPeriods: s.mealPeriods.map((x, j) => (j === i ? { ...x, to: Math.max(x.from + 1, Math.min(24, Number(e.target.value))) } : x)) })}
+                />
+                :00
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </>
+  );
+}
+
+function ExampleToggle() {
+  const on = useStore((s) => s.settings.showExampleHistory);
+  return (
+    <div className="toggle" style={{ marginBottom: 14 }}>
+      <span>
+        Example history (last 120 days)
+        <span className="sub">Generated orders so Analytics has something to show. Marked as training; never saved.</span>
+      </span>
+      <button className={`switch ${on ? 'on' : ''}`} role="switch" aria-checked={on} aria-label="Show example history" onClick={() => setExampleHistory(!on)}>
+        <span />
+      </button>
+    </div>
   );
 }
 
@@ -481,20 +583,7 @@ function Demo() {
   return (
     <>
       <p>This prototype keeps its data in this browser. Reset puts back the demo menu and removes all orders.</p>
-      <p className="muted">
-        The last 30 days of orders are generated examples (marked as training) so the graphs in Reports have something to show.
-      </p>
-      <button
-        className="btn"
-        style={{ marginBottom: 12 }}
-        onClick={() => {
-          removeExampleHistory();
-          toast('Example history removed');
-        }}
-      >
-        Remove example history
-      </button>
-      <br />
+      <ExampleToggle />
       {!sure ? (
         <button className="btn danger" onClick={() => setSure(true)}>
           Reset demo data

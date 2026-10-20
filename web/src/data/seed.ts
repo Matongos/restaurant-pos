@@ -1,6 +1,5 @@
 import type { AppState } from '../domain/types';
 import { todayISO } from '../domain/rules';
-import { exampleHistory } from './exampleHistory';
 
 /**
  * Demo data so the prototype can be clicked through immediately.
@@ -8,9 +7,15 @@ import { exampleHistory } from './exampleHistory';
  */
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
 
+export const DEFAULT_MEAL_PERIODS = [
+  { id: 'breakfast', name: 'Breakfast', from: 6, to: 11 },
+  { id: 'lunch', name: 'Lunch', from: 11, to: 16 },
+  { id: 'supper', name: 'Supper', from: 16, to: 22 },
+];
+
+/** Fresh demo state. Example history is added by the store at load time (never saved). */
 export function seedState(): AppState {
-  const s = baseState();
-  return { ...s, orders: exampleHistory(s.menu) };
+  return baseState();
 }
 
 function baseState(): AppState {
@@ -37,7 +42,7 @@ function baseState(): AppState {
   });
 
   return {
-    version: 3,
+    version: 4,
     settings: {
       branchId: 'main',
       restaurantName: 'Training Restaurant',
@@ -55,6 +60,9 @@ function baseState(): AppState {
       warnAfterMinutes: 3,
       lateAfterMinutes: 5,
       trainingMode: true,
+      showExampleHistory: true,
+      mealPeriods: DEFAULT_MEAL_PERIODS,
+      customersPerStaffHour: 12,
     },
     staff: [
       { id: 'u-owner', name: 'Owner', pin: '1234', role: 'super_admin', active: true },

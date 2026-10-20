@@ -20,8 +20,8 @@ Point-of-sale system for a pay-first, counter-service restaurant: the customer p
 | Collect change | Cashier | Button on the till: find the customer by name, phone, note or slip code and hand over their change in two taps |
 | Customer Change | Cashier, manager | One running change balance per customer: kept, used for food, paid out — with full history. Name suggestions while typing; customers with the same name are told apart by phone or a note |
 | Menu & Photos | Manager, owner | Change meal photos (camera or file), names, prices and ingredients |
-| Reports | Manager, owner | One day / 7 / 30 days. **Customers by hour** (Eat In vs Take Away), customers per day and by weekday, busiest hour and day, sales, average wait, late orders, kitchen and hand-over time, wait by hour and by meal, slowest orders, customer change, payments, best sellers, cashiers |
-| Settings | Owner | Logo, name, colour, receipt text, card/slip mode and range, currencies and rates, menu with photos and ingredients, kitchen timers |
+| Analytics | Manager, owner | X-style overview: metric cards with change vs the previous period (same time of day), trend chart hourly / daily / weekly / monthly over Today, 7, 28 or 90 days. **Busy times & staff**: weekday × hour heat map, Breakfast / Lunch / Supper, staff needed per hour. **What sells when**: pick Sadza, Drinks or any meal to see its rush and a "ready by" time; preparation plan for every ingredient. Serving speed and money |
+| Settings | Owner | Logo, name, colour, receipt text, card/slip mode and range, **payment methods on/off**, currencies and rates, menu with photos, late time, parts of the day, staff capacity |
 
 Demo PINs: Owner `1234` · Manager `2222` · Cashier `1111` · Kitchen `3333` · Attendant `4444`.
 
@@ -41,7 +41,7 @@ Open the address it prints (usually http://localhost:5173).
 - **Phones on the same Wi-Fi:** `npm run dev` also prints a *Network* address (e.g. http://192.168.1.20:5173). Open it on a phone for Today's Menu.
   In the prototype each device keeps its own data; sharing between devices arrives with the local server.
 - **Start again with clean demo data:** Settings → Demo data → Reset.
-- **Example history:** the last 30 days of orders are generated examples (marked as training) so the graphs show something. Remove them in Settings → Demo data.
+- **Example history:** 120 days of generated example orders (marked as training, never saved) so Analytics shows something. Switch it off in Settings → Demo data.
 
 ## Project layout
 

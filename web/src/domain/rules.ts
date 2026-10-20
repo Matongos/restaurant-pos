@@ -155,7 +155,8 @@ export function serviceTimes(o: Order) {
   const placed = at('placed') ?? o.createdAt;
   // Use the LAST "ready" in case the kitchen recalled the order.
   const ready = [...o.history].reverse().find((h) => h.status === 'ready')?.at;
-  const served = at('served');
+  // An order closed automatically (its card was reused) has no real "served" time.
+  const served = o.history.find((h) => h.status === 'served' && !h.auto)?.at;
   const p = Date.parse(placed);
   return {
     placed,

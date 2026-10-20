@@ -2,7 +2,7 @@ import type { MenuItem, Order } from '../domain/types';
 import { round2 } from '../domain/money';
 
 /**
- * 30 days of EXAMPLE orders so the reports and graphs show something on day one.
+ * 120 days of EXAMPLE orders so the reports and graphs show something on day one.
  * Every example order is marked `training` and `example`, so it is kept out of
  * real reports (untick "Include training orders") and can be removed in
  * Settings → Demo data. Nothing here is real restaurant data.
@@ -24,7 +24,7 @@ const HOUR_WEIGHT: Record<number, number> = {
 // Sunday quieter, Friday and Saturday busier.
 const DAY_FACTOR = [0.7, 1, 0.95, 1, 1.05, 1.25, 1.35];
 
-export function exampleHistory(menu: MenuItem[], days = 30, now = new Date()): Order[] {
+export function exampleHistory(menu: MenuItem[], days = 120, now = new Date()): Order[] {
   const rand = rng(20261020);
   const meals = menu.filter((m) => m.categoryId === 'meals');
   const breakfast = menu.filter((m) => m.categoryId === 'breakfast');
@@ -33,7 +33,9 @@ export function exampleHistory(menu: MenuItem[], days = 30, now = new Date()): O
   const out: Order[] = [];
   let seq = 0;
 
-  for (let d = days; d >= 1; d--) {
+  // Includes today up to 15 minutes ago, so "Today" can be compared with yesterday.
+  const cutoff = now.getTime() - 15 * 60000;
+  for (let d = days; d >= 0; d--) {
     const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - d);
     const factor = DAY_FACTOR[day.getDay()];
     let card = 1;
@@ -42,6 +44,7 @@ export function exampleHistory(menu: MenuItem[], days = 30, now = new Date()): O
       const count = Math.round(w * factor * (0.75 + rand() * 0.5));
       for (let k = 0; k < count; k++) {
         const placed = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour, Math.floor(rand() * 60), Math.floor(rand() * 60));
+        if (placed.getTime() > cutoff) continue;
         const morning = hour < 10;
         const pool = morning && breakfast.length ? breakfast : meals;
         const main = pool[Math.floor(rand() * pool.length)];

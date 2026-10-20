@@ -65,9 +65,9 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
       ? 'Enter card number'
       : card < settings.cardFrom || card > settings.cardTo
         ? `Cards run ${settings.cardFrom}–${settings.cardTo}`
-        : inUse.has(card)
-          ? `Card ${card} is still out`
-          : '';
+        : '';
+  // Not blocking: nobody may have pressed "Served", so if the cashier holds the card it is back.
+  const cardWarn = needsCard && !cardProblem && inUse.has(card) ? `Card ${card} was not marked served — it will be closed now` : '';
 
   const cur = enabledCur.find((c) => c.code === curCode) ?? base;
   const method = enabledMethods.find((m) => m.id === methodId);
@@ -106,7 +106,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
   else if (shortBase > 0) blocker = `Short by ${fmt(shortBase, base)}`;
   else if (nonCashOver) blocker = `${method?.name} amount is more than the total`;
   else if (method?.requiresReference && entered > 0 && !reference.trim()) blocker = `Enter ${method.name} reference`;
-  else if (!keepReady) blocker = keepSelection.kind === 'none' ? 'Enter name for kept change' : 'Add phone or note';
+  else if (!keepReady) blocker = keepSelection.kind === 'none' ? 'Type name for kept change' : 'Same person? Tap them or add phone';
   else if (cardProblem) blocker = cardProblem;
   const confirmLabel = blocker || (hand > 0 ? `Confirm · give ${fmt(hand, changeCur)} change` : 'Confirm & send to kitchen');
 
@@ -424,7 +424,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
               {keepInCur > 0 && (
                 <div className="keep-box">
                   <div className="keep-title">
-                    Keeping {fmt(keepInCur, changeCur)} for {changeOf ? <b>{keepName}</b> : 'this customer'}
+                    Keeping {fmt(keepInCur, changeCur)} for {keepName ? <b>{keepName}</b> : 'this customer'}
                   </div>
                   {changeOf ? (
                     <div className="muted" style={{ fontSize: 13 }}>
@@ -440,11 +440,11 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
           {nonCashOver && <div className="warn-box">{method?.name} should be the exact amount. Tap Exact.</div>}
 
           {needsCard && (
-            <div className={`number-box ${cardProblem ? 'bad' : ''}`}>
+            <div className={`number-box ${cardProblem ? 'bad' : cardWarn ? 'warn' : ''}`}>
               <div className="grow">
                 <b>Card to hand over</b>
                 <div className="muted" style={{ fontSize: 13 }}>
-                  {cardProblem || 'Change it if you give a different card'}
+                  {cardProblem || cardWarn || 'Change it if you give a different card'}
                 </div>
               </div>
               <input id="card-number" inputMode="numeric" value={cardStr} onChange={(e) => setCardStr(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => e.key === 'Enter' && confirm()} />

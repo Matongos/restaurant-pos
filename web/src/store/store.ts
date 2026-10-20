@@ -10,10 +10,11 @@ import type {
   OrderLine,
   OrderStatus,
   Payment,
+  PaymentMethod,
   Settings,
   Staff,
 } from '../domain/types';
-import { seedState } from '../data/seed';
+import { DEFAULT_MEAL_PERIODS, seedState } from '../data/seed';
 import { exampleHistory } from '../data/exampleHistory';
 import { nextFreeCard, cardsInUse, customerBalance, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
 import { CREDIT_METHOD } from '../domain/types';
@@ -36,12 +37,16 @@ const listeners = new Set<() => void>();
 /** Bring data saved by an older version of the app up to date. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): AppState | null {
-  if (raw?.version === 3) return raw as AppState;
-  if (raw?.version === 2) {
-    // v3 adds example history for the graphs (only if there is none yet).
+  if (raw?.version === 4) return raw as AppState;
+  if (raw?.version === 3 || raw?.version === 2) {
+    // v4: example history is generated at load instead of saved; analytics settings added.
     const st = raw as AppState;
-    const has = st.orders.some((o) => o.example);
-    return { ...st, version: 3, orders: has ? st.orders : [...exampleHistory(st.menu), ...st.orders] } as AppState;
+    return {
+      ...st,
+      version: 4,
+      orders: st.orders.filter((o) => !o.example),
+      settings: { ...st.settings, showExampleHistory: true, mealPeriods: DEFAULT_MEAL_PERIODS, customersPerStaffHour: 12 },
+    };
   }
   if (raw?.version === 1) {
     // v1 kept one-off IOUs; v2 keeps a running change balance per customer.
@@ -71,24 +76,34 @@ function migrate(raw: any): AppState | null {
   return null;
 }
 
+/** Add the generated example orders (demo only) in front of the real ones. */
+let examplesCache: Order[] | null = null;
+function withExamples(st: AppState): AppState {
+  if (!st.settings.showExampleHistory) return st;
+  examplesCache = examplesCache ?? exampleHistory(st.menu);
+  return { ...st, orders: [...examplesCache, ...st.orders.filter((o) => !o.example)] };
+}
+
 function load(): AppState {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const migrated = migrate(JSON.parse(raw));
-      if (migrated) return migrated;
+      if (migrated) return withExamples(migrated);
     }
   } catch {
     /* ignore and fall back to demo data */
   }
-  return seedState();
+  return withExamples(seedState());
 }
 
 let state: AppState = load();
 
 function persist() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(state));
+    // Example orders are regenerated at load, so they are never written to storage.
+    const toSave = state.settings.showExampleHistory ? { ...state, orders: state.orders.filter((o) => !o.example) } : state;
+    localStorage.setItem(KEY, JSON.stringify(toSave));
   } catch (e) {
     console.warn('Could not save state (storage full?)', e);
   }
@@ -230,7 +245,6 @@ export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
   } else {
     const chosen = input.cardNumber ?? nextFreeCard(s.orders, s.settings.cardFrom, s.settings.cardTo);
     if (chosen == null) return { ok: false, error: 'All cards are in use. Mark served orders first.' };
-    if (cardsInUse(s.orders).has(chosen)) return { ok: false, error: `Card ${chosen} is still with another customer.` };
     if (chosen < s.settings.cardFrom || chosen > s.settings.cardTo)
       return { ok: false, error: `Card must be between ${s.settings.cardFrom} and ${s.settings.cardTo}.` };
     number = chosen;
@@ -298,10 +312,18 @@ export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
   }
 
   const custId = customer?.id;
+  // A card handed over again is evidently back: close the order still holding it.
+  const reusedCard = !input.parentOrderId && mode !== 'slip' && cardsInUse(s.orders).has(number);
+  const open = (o: Order) => o.status === 'in_kitchen' || o.status === 'ready';
+  const oldIds = new Set(reusedCard ? s.orders.filter((o) => !o.parentOrderId && o.number === number && open(o)).map((o) => o.id) : []);
+  const closeOld = (o: Order): Order =>
+    (oldIds.has(o.id) || (o.parentOrderId && oldIds.has(o.parentOrderId))) && open(o)
+      ? { ...o, status: 'served', history: [...o.history, { status: 'served', at: now, by: input.cashierId, auto: true }] }
+      : o;
   set((st) => ({
     ...st,
     dayCounter,
-    orders: [...st.orders, order],
+    orders: [...st.orders.map(closeOld), order],
     customers: newCustomer
       ? [...st.customers, newCustomer]
       : custId
@@ -380,6 +402,10 @@ export function updateSettings(patch: Partial<Settings>) {
   set((st) => ({ ...st, settings: { ...st.settings, ...patch } }));
 }
 
+export function updatePaymentMethod(id: string, patch: Partial<PaymentMethod>) {
+  set((st) => ({ ...st, paymentMethods: st.paymentMethods.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
+}
+
 export function upsertCurrency(c: Currency) {
   set((st) => {
     const exists = st.currencies.some((x) => x.code === c.code);
@@ -397,12 +423,15 @@ export function upsertMenuItem(item: MenuItem) {
   });
 }
 
-export function removeExampleHistory() {
-  set((st) => ({ ...st, orders: st.orders.filter((o) => !o.example) }));
+export function setExampleHistory(on: boolean) {
+  set((st) => {
+    const next = { ...st, settings: { ...st.settings, showExampleHistory: on }, orders: st.orders.filter((o) => !o.example) };
+    return on ? withExamples(next) : next;
+  });
 }
 
 export function resetDemo() {
-  state = seedState();
+  state = withExamples(seedState());
   persist();
   emit();
 }

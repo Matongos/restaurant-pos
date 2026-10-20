@@ -10,13 +10,16 @@ export type CustomerSelection =
   | { kind: 'existing'; id: string }
   | { kind: 'new'; name: string; phone: string; note: string };
 
-/** True when the selection is complete enough to save change against. */
+/**
+ * Ready to save change against?
+ * A typed name is enough on its own. Only when someone with exactly that name
+ * already exists must the cashier say "same person" (pick them) or add a phone/note.
+ */
 export function selectionReady(sel: CustomerSelection, customers: Customer[]): boolean {
   if (sel.kind === 'existing') return true;
   if (sel.kind === 'none') return false;
   const name = tidyName(sel.name);
   if (name.length < 2) return false;
-  // Same name already on file: need a phone or a note to tell them apart.
   if (sameNameCustomers(customers, name).length > 0) return !!(sel.phone.trim() || sel.note.trim());
   return true;
 }
@@ -46,18 +49,24 @@ export default function CustomerPicker({
   const baseCode = useStore((s) => s.settings.baseCurrency);
   const currencies = useStore((s) => s.currencies);
   const base = currencies.find((c) => c.code === baseCode)!;
-  const [typed, setTyped] = useState('');
   const bal = useMemo(() => balances(credit), [credit]);
+  const [showDetails, setShowDetails] = useState(false);
 
-  const matches = useMemo(() => findCustomers(customers, credit, typed), [customers, credit, typed]);
-  const suggestions = useMemo(
-    () =>
-      nameSuggestions(
-        typed,
-        customers.map((c) => c.name),
-      ).filter((n) => !matches.some((m) => m.name.toLowerCase() === n.toLowerCase())),
-    [typed, customers, matches],
+  const typed = value.kind === 'new' ? value.name : '';
+  const phone = value.kind === 'new' ? value.phone : '';
+  const note = value.kind === 'new' ? value.note : '';
+  const twins = useMemo(() => (typed.trim() ? sameNameCustomers(customers, typed) : []), [customers, typed]);
+  const similar = useMemo(
+    () => (typed.trim().length >= 2 ? findCustomers(customers, credit, typed, { limit: 4 }).filter((c) => !twins.includes(c)) : []),
+    [customers, credit, typed, twins],
   );
+  const names = useMemo(
+    () => nameSuggestions(typed, customers.map((c) => c.name), 4).filter((n) => !typed.toLowerCase().startsWith(n.toLowerCase() + ' ')),
+    [typed, customers],
+  );
+
+  const setText = (name: string) =>
+    onChange(name.trim() ? { kind: 'new', name, phone, note } : { kind: 'none' });
 
   if (value.kind === 'existing') {
     const c = customers.find((x) => x.id === value.id);
@@ -69,104 +78,106 @@ export default function CustomerPicker({
           <b>{c.name}</b>
           <div className="muted" style={{ fontSize: 13 }}>
             {describeCustomer(c) || 'No phone or note'} · last here {lastSeen(c.lastSeenAt)}
+            {b > 0 && ` · already has ${fmt(b, base)}`}
           </div>
         </div>
-        <span className={`tag ${b > 0 ? 'open' : ''}`}>{b > 0 ? `${fmt(b, base)} change` : 'No change'}</span>
-        <button className="btn" onClick={() => onChange({ kind: 'none' })}>
-          Change
+        <button className="btn" onClick={() => onChange({ kind: 'new', name: c.name, phone: '', note: '' })}>
+          Not them
         </button>
       </div>
     );
   }
 
-  if (value.kind === 'new') {
-    const twins = sameNameCustomers(customers, value.name);
-    const needsDetail = twins.length > 0 && !(value.phone.trim() || value.note.trim());
-    return (
-      <div className="cust-new">
-        <div className="row">
-          <b className="grow">New customer: {tidyName(value.name)}</b>
-          <button className="btn" onClick={() => onChange({ kind: 'none' })}>
-            Change
-          </button>
-        </div>
-        {twins.length > 0 && (
-          <div className="twin-warn">
-            {twins.length === 1 ? 'There is already a customer' : `There are already ${twins.length} customers`} called{' '}
-            <b>{tidyName(value.name)}</b> ({twins.map((t) => describeCustomer(t) || 'no details').join('; ')}). Add a phone or a note so you
-            can tell them apart — or pick them above if it is the same person.
-          </div>
-        )}
-        <div className="form-grid">
-          <label className="field">
-            Phone {twins.length ? '' : '(optional)'}
-            <input
-              id="cust-phone"
-              inputMode="tel"
-              value={value.phone}
-              onChange={(e) => onChange({ ...value, phone: e.target.value })}
-              style={needsDetail ? { borderColor: 'var(--warn)' } : undefined}
-            />
-          </label>
-          <label className="field">
-            Note to recognise them (optional)
-            <input
-              id="cust-note"
-              placeholder="e.g. Mbare, nurse, red cap"
-              value={value.note}
-              onChange={(e) => onChange({ ...value, note: e.target.value })}
-              style={needsDetail ? { borderColor: 'var(--warn)' } : undefined}
-            />
-          </label>
-        </div>
-      </div>
-    );
-  }
+  const needDetail = twins.length > 0;
+  const detailsOpen = showDetails || needDetail;
 
   return (
     <div className="cust-pick">
       <label className="field" style={{ marginTop: 0 }}>
         {label}
         <input
-          id="cust-search"
+          id="cust-name"
           autoFocus={autoFocus}
           autoComplete="off"
-          placeholder="Type a name or phone"
+          placeholder="Type their name"
           value={typed}
-          onChange={(e) => setTyped(e.target.value)}
+          onChange={(e) => setText(e.target.value)}
         />
       </label>
-      {typed.trim() && (
-        <div className="cust-list">
-          {matches.map((c) => {
-            const b = bal.get(c.id) ?? 0;
-            return (
-              <button key={c.id} className="cust-opt" onClick={() => onChange({ kind: 'existing', id: c.id })}>
-                <span className="grow">
-                  <b>{c.name}</b>
-                  <span className="muted"> {describeCustomer(c) && `· ${describeCustomer(c)}`}</span>
-                  <span className="sub">last here {lastSeen(c.lastSeenAt)}</span>
-                </span>
-                {b > 0 && <span className="tag open">{fmt(b, base)}</span>}
-              </button>
-            );
-          })}
-          {suggestions.length > 0 && (
-            <div className="name-sugg">
-              {suggestions.map((n) => (
-                <button key={n} onClick={() => setTyped(n + ' ')}>
-                  {n}
-                </button>
-              ))}
-            </div>
-          )}
-          {tidyName(typed).length >= 2 && (
-            <button className="cust-opt new" onClick={() => onChange({ kind: 'new', name: tidyName(typed), phone: '', note: '' })}>
-              + New customer “{tidyName(typed)}”
+
+      {names.length > 0 && !twins.length && (
+        <div className="name-sugg">
+          {names.map((n) => (
+            <button key={n} onClick={() => setText(n)}>
+              {n}
             </button>
-          )}
+          ))}
         </div>
       )}
+
+      {needDetail && (
+        <div className="twin-ask">
+          <div>
+            <b>{tidyName(typed)}</b> is already a customer. Is it the same person?
+          </div>
+          {twins.map((c) => (
+            <button key={c.id} className="cust-opt" onClick={() => onChange({ kind: 'existing', id: c.id })}>
+              <span className="grow">
+                <b>Yes — {c.name}</b>
+                <span className="sub">
+                  {describeCustomer(c) || 'No phone or note'} · last here {lastSeen(c.lastSeenAt)}
+                </span>
+              </span>
+              {(bal.get(c.id) ?? 0) > 0 && <span className="tag open">{fmt(bal.get(c.id)!, base)}</span>}
+            </button>
+          ))}
+          <div className="muted" style={{ fontSize: 13 }}>
+            A different person? Add their phone or a note below so you can tell them apart.
+          </div>
+        </div>
+      )}
+
+      {!needDetail && similar.length > 0 && (
+        <div className="similar">
+          <span className="muted">Or is it:</span>
+          {similar.map((c) => (
+            <button key={c.id} className="chip-btn" onClick={() => onChange({ kind: 'existing', id: c.id })}>
+              {c.name}
+              {describeCustomer(c) && <span className="muted"> · {describeCustomer(c)}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {typed.trim() &&
+        (detailsOpen ? (
+          <div className="form-grid">
+            <label className="field">
+              Phone {needDetail ? '' : '(optional)'}
+              <input
+                id="cust-phone"
+                inputMode="tel"
+                value={phone}
+                onChange={(e) => onChange({ kind: 'new', name: typed, phone: e.target.value, note })}
+                className={needDetail && !phone && !note ? 'need' : undefined}
+              />
+            </label>
+            <label className="field">
+              Note {needDetail ? '' : '(optional)'}
+              <input
+                id="cust-note"
+                placeholder="e.g. Mbare, nurse, red cap"
+                value={note}
+                onChange={(e) => onChange({ kind: 'new', name: typed, phone, note: e.target.value })}
+                className={needDetail && !phone && !note ? 'need' : undefined}
+              />
+            </label>
+          </div>
+        ) : (
+          <button className="link-btn" onClick={() => setShowDetails(true)}>
+            + Add phone or note (optional)
+          </button>
+        ))}
     </div>
   );
 }

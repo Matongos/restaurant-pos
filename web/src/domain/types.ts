@@ -106,6 +106,8 @@ export interface StatusEvent {
   status: OrderStatus | 'placed';
   at: string;
   by?: ID;
+  /** Set when the system closed the order (its card was handed out again). */
+  auto?: boolean;
 }
 
 export type NumberMode = 'card' | 'slip' | 'both';
@@ -199,6 +201,19 @@ export interface Settings {
   /** Order counts as late after this many minutes (default 5). */
   lateAfterMinutes: number;
   trainingMode: boolean;
+  /** Show generated example history (demo). It is never saved. */
+  showExampleHistory: boolean;
+  /** Named parts of the day used by analytics, e.g. Breakfast 6–10. `to` is the hour it ends (exclusive). */
+  mealPeriods: MealPeriod[];
+  /** How many customers one server can handle in an hour (for staffing advice). */
+  customersPerStaffHour: number;
+}
+
+export interface MealPeriod {
+  id: ID;
+  name: string;
+  from: number;
+  to: number;
 }
 
 /** What the customer display shows while the cashier is entering an order. */
