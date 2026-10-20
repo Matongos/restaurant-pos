@@ -5,6 +5,8 @@ import { todayISO } from '../domain/rules';
  * Demo data so the prototype can be clicked through immediately.
  * Exchange rates are EXAMPLES only — the manager sets real rates in Settings.
  */
+const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
+
 export function seedState(): AppState {
   const comp = (id: string, name: string) => ({ id, name, available: true });
   const item = (
@@ -29,7 +31,7 @@ export function seedState(): AppState {
   });
 
   return {
-    version: 1,
+    version: 2,
     settings: {
       branchId: 'main',
       restaurantName: 'Training Restaurant',
@@ -44,8 +46,8 @@ export function seedState(): AppState {
       cardTo: 60,
       slipResetDaily: true,
       autoPrintKitchen: false,
-      kitchenAmberMinutes: 5,
-      kitchenRedMinutes: 10,
+      warnAfterMinutes: 3,
+      lateAfterMinutes: 5,
       trainingMode: true,
     },
     staff: [
@@ -112,7 +114,16 @@ export function seedState(): AppState {
       item('d-tea', 'Tea', 'drinks', 0.5, '☕', [], { isDrink: true }),
     ],
     orders: [],
-    changeOwed: [],
+    // Example customers (to show how same names are told apart). Remove with Settings → Demo data.
+    customers: [
+      { id: 'cu-anashe-1', branchId: 'main', name: 'Anashe Moyo', phone: '0772 111 222', note: 'Mbare', createdAt: daysAgo(3), lastSeenAt: daysAgo(1) },
+      { id: 'cu-anashe-2', branchId: 'main', name: 'Anashe', note: 'Works at the bank', createdAt: daysAgo(10), lastSeenAt: daysAgo(10) },
+      { id: 'cu-tendai', branchId: 'main', name: 'Tendai Ncube', phone: '0713 555 010', createdAt: daysAgo(2), lastSeenAt: daysAgo(2) },
+    ],
+    credit: [
+      { id: 'cr-1', branchId: 'main', customerId: 'cu-anashe-1', kind: 'change_left', amount: 1, code: 'K7QX2', currency: 'USD', orderNumber: 12, at: daysAgo(1), by: 'u-cashier' },
+      { id: 'cr-2', branchId: 'main', customerId: 'cu-tendai', kind: 'change_left', amount: 6, code: 'P3MZA', currency: 'USD', orderNumber: 4, at: daysAgo(2), by: 'u-cashier' },
+    ],
     liveCarts: {},
     dayCounter: { date: todayISO(), lastSlip: 0 },
   };

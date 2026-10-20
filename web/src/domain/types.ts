@@ -124,8 +124,8 @@ export interface Order {
   /** Change handed back, in base currency. */
   changeGiven: number;
   changeCurrency: string;
-  /** IOU created because the cashier was short of change. */
-  changeOwedId?: ID;
+  /** Customer the order is linked to (when they used or left change). */
+  customerId?: ID;
   status: OrderStatus;
   history: StatusEvent[];
   cashierId: ID;
@@ -135,29 +135,46 @@ export interface Order {
   training: boolean;
 }
 
-export interface ChangeOwedPayout {
-  amount: number; // base currency
-  at: string;
-  by: ID;
-  method: 'cash' | 'credit';
-}
-
-export interface ChangeOwed {
+/**
+ * A regular customer. Change left with the restaurant is kept as a running
+ * balance on the customer, so it can be collected or spent on food any day.
+ */
+export interface Customer {
   id: ID;
   branchId: ID;
-  code: string;
-  orderId: ID;
-  orderNumber: number;
-  customerName: string;
+  name: string;
   phone?: string;
-  /** Amount owed in base currency. */
-  amount: number;
-  /** Currency the customer expects the change in. */
-  currency: string;
-  payouts: ChangeOwedPayout[];
+  /** Helps tell people with the same name apart: "Mbare", "nurse", "red cap". */
+  note?: string;
   createdAt: string;
-  createdBy: ID;
+  lastSeenAt: string;
 }
+
+export type CreditKind = 'change_left' | 'used_for_food' | 'paid_out';
+
+/**
+ * One movement on a customer's change balance (base currency).
+ * change_left is positive; used_for_food and paid_out are negative.
+ * Balance = sum of amounts. No entry is ever edited, so the history is a full audit trail.
+ */
+export interface CreditEntry {
+  id: ID;
+  branchId: ID;
+  customerId: ID;
+  kind: CreditKind;
+  amount: number;
+  /** Voucher code printed when change is left. */
+  code?: string;
+  /** Currency the customer expects the change in (informational). */
+  currency?: string;
+  orderId?: ID;
+  orderNumber?: number;
+  at: string;
+  by: ID;
+}
+
+/** Payment method id used when a customer pays with their change balance. */
+export const CREDIT_METHOD = 'change_credit';
 
 export interface Settings {
   branchId: ID;
@@ -175,8 +192,10 @@ export interface Settings {
   /** Slip numbers restart each day from 1. */
   slipResetDaily: boolean;
   autoPrintKitchen: boolean;
-  kitchenAmberMinutes: number;
-  kitchenRedMinutes: number;
+  /** Order card turns amber after this many minutes. */
+  warnAfterMinutes: number;
+  /** Order counts as late after this many minutes (default 5). */
+  lateAfterMinutes: number;
   trainingMode: boolean;
 }
 
@@ -189,6 +208,9 @@ export interface LiveCart {
   paid?: number;
   change?: number;
   changeCurrency?: string;
+  /** Change kept for the customer on their balance. */
+  kept?: number;
+  customerName?: string;
   message?: string;
   updatedAt: string;
 }
@@ -209,7 +231,8 @@ export interface AppState {
   components: Component[];
   menu: MenuItem[];
   orders: Order[];
-  changeOwed: ChangeOwed[];
+  customers: Customer[];
+  credit: CreditEntry[];
   liveCarts: Record<ID, LiveCart>;
   dayCounter: DayCounter;
 }

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { go } from '../router';
 import { updateSettings, useCurrentUser, useStore } from '../store/store';
-import { can, changeOwedBalance } from '../domain/rules';
+import { balances, can } from '../domain/rules';
 import { TopBar, toast } from '../components/ui';
 
 interface Tile {
@@ -20,11 +20,11 @@ export default function Home() {
   const user = useCurrentUser()!;
   const settings = useStore((s) => s.settings);
   const orders = useStore((s) => s.orders);
-  const changeOwed = useStore((s) => s.changeOwed);
+  const credit = useStore((s) => s.credit);
   const components = useStore((s) => s.components);
 
   const openOrders = useMemo(() => orders.filter((o) => !o.parentOrderId && (o.status === 'in_kitchen' || o.status === 'ready')).length, [orders]);
-  const openOwed = useMemo(() => changeOwed.filter((c) => changeOwedBalance(c) > 0).length, [changeOwed]);
+  const openOwed = useMemo(() => [...balances(credit).values()].filter((b) => b > 0).length, [credit]);
   const soldOut = useMemo(() => components.filter((c) => !c.available).length, [components]);
 
   const openDisplay = () => {
@@ -37,7 +37,7 @@ export default function Home() {
     { key: 'till', icon: '🧾', title: 'New Order', desc: 'Take payment and send to the kitchen', to: '/till', hero: true, show: can(user.role, 'take_orders') },
     { key: 'orders', icon: '🔢', title: 'Active Orders', desc: 'Numbers waiting, mark served, add a drink', to: '/orders', badge: openOrders, show: can(user.role, 'active_orders') },
     { key: 'kitchen', icon: '👩‍🍳', title: 'Kitchen Display', desc: 'Tick orders done, timers, recall', to: '/kitchen', show: can(user.role, 'kitchen') },
-    { key: 'owed', icon: '💵', title: 'Change Owed', desc: 'Customers waiting for their change', to: '/change-owed', badge: openOwed, show: can(user.role, 'change_owed') },
+    { key: 'owed', icon: '💵', title: 'Customer Change', desc: 'Change we are holding for customers', to: '/change-owed', badge: openOwed, show: can(user.role, 'change_owed') },
     { key: 'menu', icon: '🍽️', title: "Today's Menu", desc: soldOut ? `${soldOut} ingredient(s) sold out` : 'Switch meals sold out / available', to: '/todays-menu', show: can(user.role, 'todays_menu') },
     { key: 'display', icon: '🖥️', title: 'Customer Display', desc: 'Open on the second screen', onClick: openDisplay, show: can(user.role, 'screens') || can(user.role, 'take_orders') },
     { key: 'reports', icon: '📊', title: 'Reports', desc: 'Today’s sales, payments, cashiers', to: '/reports', show: can(user.role, 'reports') },

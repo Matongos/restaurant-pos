@@ -117,6 +117,16 @@ export function ToastHost() {
   return msg ? <div className="toast">{msg}</div> : null;
 }
 
+/** Current time, refreshed every `ms` (live timers). */
+export function useNow(ms = 1000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return now;
+}
+
 /** Re-render every `ms` (for timers). */
 export function useTick(ms = 10000) {
   const [, set] = useState(0);

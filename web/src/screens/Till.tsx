@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useRoute, go } from '../router';
-import { setLiveCart, useCurrentUser, useStore } from '../store/store';
+import { setLiveCart, useCurrentUser, useStore, type PlaceOrderSuccess } from '../store/store';
 import { isSellable } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
-import type { ChangeOwed, MenuItem, Order, OrderLine } from '../domain/types';
+import type { MenuItem, OrderLine } from '../domain/types';
 import { Dialog, TopBar } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
@@ -32,7 +32,7 @@ export default function Till() {
   const [cat, setCat] = useState<string>(addonFor ? 'drinks' : FAV);
   const [search, setSearch] = useState('');
   const [paying, setPaying] = useState(false);
-  const [done, setDone] = useState<{ order: Order; changeOwed?: ChangeOwed } | null>(null);
+  const [done, setDone] = useState<PlaceOrderSuccess | null>(null);
   const [noteFor, setNoteFor] = useState<OrderLine | null>(null);
 
   const total = round2(lines.reduce((s, l) => s + l.qty * l.unitPrice, 0));
@@ -68,7 +68,7 @@ export default function Till() {
 
   const clear = () => setLines([]);
 
-  const finish = (r: { order: Order; changeOwed?: ChangeOwed }) => {
+  const finish = (r: PlaceOrderSuccess) => {
     setPaying(false);
     setDone(r);
   };
@@ -214,7 +214,7 @@ export default function Till() {
           onDone={finish}
         />
       )}
-      {done && <OrderDoneDialog order={done.order} changeOwed={done.changeOwed} onNew={newOrder} />}
+      {done && <OrderDoneDialog result={done} onNew={newOrder} />}
       {noteFor && (
         <NoteDialog
           line={noteFor}

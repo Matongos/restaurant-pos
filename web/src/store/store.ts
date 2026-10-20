@@ -1,8 +1,9 @@
 import { useSyncExternalStore } from 'react';
 import type {
   AppState,
-  ChangeOwed,
+  CreditEntry,
   Currency,
+  Customer,
   LiveCart,
   MenuItem,
   Order,
@@ -13,7 +14,8 @@ import type {
   Staff,
 } from '../domain/types';
 import { seedState } from '../data/seed';
-import { nextFreeCard, cardsInUse, todayISO, uid, voucherCode } from '../domain/rules';
+import { nextFreeCard, cardsInUse, customerBalance, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
+import { CREDIT_METHOD } from '../domain/types';
 import { round2 } from '../domain/money';
 
 /**
@@ -30,12 +32,44 @@ import { round2 } from '../domain/money';
 const KEY = 'restaurant-pos.state.v1';
 const listeners = new Set<() => void>();
 
+/** Bring data saved by an older version of the app up to date. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function migrate(raw: any): AppState | null {
+  if (raw?.version === 2) return raw as AppState;
+  if (raw?.version === 1) {
+    // v1 kept one-off IOUs; v2 keeps a running change balance per customer.
+    const customers: Customer[] = [];
+    const credit: CreditEntry[] = [];
+    for (const c of raw.changeOwed ?? []) {
+      const cu: Customer = {
+        id: uid('cu-'),
+        branchId: c.branchId,
+        name: c.customerName,
+        phone: c.phone,
+        createdAt: c.createdAt,
+        lastSeenAt: c.createdAt,
+      };
+      customers.push(cu);
+      credit.push({ id: uid('cr-'), branchId: c.branchId, customerId: cu.id, kind: 'change_left', amount: c.amount, code: c.code, currency: c.currency, orderId: c.orderId, orderNumber: c.orderNumber, at: c.createdAt, by: c.createdBy });
+      for (const p of c.payouts ?? [])
+        credit.push({ id: uid('cr-'), branchId: c.branchId, customerId: cu.id, kind: p.method === 'cash' ? 'paid_out' : 'used_for_food', amount: -p.amount, at: p.at, by: p.by });
+    }
+    const { changeOwed: _old, ...rest } = raw;
+    void _old;
+    const settings = { ...rest.settings, warnAfterMinutes: 3, lateAfterMinutes: 5 };
+    delete settings.kitchenAmberMinutes;
+    delete settings.kitchenRedMinutes;
+    return { ...rest, version: 2, settings, customers, credit } as AppState;
+  }
+  return null;
+}
+
 function load(): AppState {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as AppState;
-      if (parsed.version === 1) return parsed;
+      const migrated = migrate(JSON.parse(raw));
+      if (migrated) return migrated;
     }
   } catch {
     /* ignore and fall back to demo data */
@@ -147,12 +181,27 @@ export interface PlaceOrderInput {
   changeCurrency: string;
   /** Card number chosen by the cashier (card / both modes). */
   cardNumber?: number;
-  owe?: { customerName: string; phone?: string; amount: number; currency: string };
+  /** Existing customer, or details of a new one. Needed when change is used or kept. */
+  customer?: CustomerRef;
+  /** Change (base currency) kept on the customer's balance instead of handed over. */
+  keep?: { amount: number; currency: string };
   parentOrderId?: string;
   cashierId: string;
 }
 
-export type PlaceOrderResult = { ok: true; order: Order; changeOwed?: ChangeOwed } | { ok: false; error: string };
+export type CustomerRef = { id: string } | { name: string; phone?: string; note?: string };
+
+export interface PlaceOrderSuccess {
+  ok: true;
+  order: Order;
+  customer?: Customer;
+  /** The 'change left' entry, when change was kept. */
+  kept?: CreditEntry;
+  /** Change used from the balance to pay for this order. */
+  used: number;
+  balanceAfter?: number;
+}
+export type PlaceOrderResult = PlaceOrderSuccess | { ok: false; error: string };
 
 export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
   const s = state;
@@ -206,32 +255,55 @@ export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
     training: s.settings.trainingMode,
   };
 
-  let changeOwed: ChangeOwed | undefined;
-  if (input.owe && input.owe.amount > 0) {
-    changeOwed = {
-      id: uid('c-'),
-      branchId: s.settings.branchId,
-      code: voucherCode(),
-      orderId: order.id,
-      orderNumber: number,
-      customerName: input.owe.customerName.trim(),
-      phone: input.owe.phone?.trim() || undefined,
-      amount: round2(input.owe.amount),
-      currency: input.owe.currency,
-      payouts: [],
-      createdAt: now,
-      createdBy: input.cashierId,
-    };
-    order.changeOwedId = changeOwed.id;
+  // ---- customer change balance
+  const used = round2(input.payments.filter((p) => p.methodId === CREDIT_METHOD).reduce((a, p) => a + p.baseAmount, 0));
+  const keepAmount = round2(input.keep?.amount ?? 0);
+  let customer: Customer | undefined;
+  let newCustomer: Customer | undefined;
+  const entries: CreditEntry[] = [];
+
+  if (used > 0 || keepAmount > 0) {
+    if (!input.customer) return { ok: false, error: 'Choose the customer first.' };
+    const ref = input.customer;
+    if (!('name' in ref)) {
+      customer = s.customers.find((c) => c.id === ref.id);
+      if (!customer) return { ok: false, error: 'Customer not found.' };
+    } else {
+      const name = tidyName(ref.name);
+      if (!name) return { ok: false, error: 'Enter the customer name.' };
+      newCustomer = customer = {
+        id: uid('cu-'),
+        branchId: s.settings.branchId,
+        name,
+        phone: ref.phone?.trim() || undefined,
+        note: ref.note?.trim() || undefined,
+        createdAt: now,
+        lastSeenAt: now,
+      };
+    }
+    const balance = customerBalance(s.credit, customer.id);
+    if (used > balance + 0.004) return { ok: false, error: `${customer.name} only has ${balance.toFixed(2)} change.` };
+    order.customerId = customer.id;
+    if (used > 0)
+      entries.push({ id: uid('cr-'), branchId: order.branchId, customerId: customer.id, kind: 'used_for_food', amount: -used, orderId: order.id, orderNumber: number, at: now, by: input.cashierId });
+    if (keepAmount > 0)
+      entries.push({ id: uid('cr-'), branchId: order.branchId, customerId: customer.id, kind: 'change_left', amount: keepAmount, code: voucherCode(), currency: input.keep!.currency, orderId: order.id, orderNumber: number, at: now, by: input.cashierId });
   }
 
+  const custId = customer?.id;
   set((st) => ({
     ...st,
     dayCounter,
     orders: [...st.orders, order],
-    changeOwed: changeOwed ? [...st.changeOwed, changeOwed] : st.changeOwed,
+    customers: newCustomer
+      ? [...st.customers, newCustomer]
+      : custId
+        ? st.customers.map((c) => (c.id === custId ? { ...c, lastSeenAt: now } : c))
+        : st.customers,
+    credit: entries.length ? [...st.credit, ...entries] : st.credit,
   }));
-  return { ok: true, order, changeOwed };
+  const kept = entries.find((e) => e.kind === 'change_left');
+  return { ok: true, order, customer, kept, used, balanceAfter: custId ? customerBalance(state.credit, custId) : undefined };
 }
 
 export function setOrderStatus(orderId: string, status: OrderStatus, by?: string) {
@@ -271,15 +343,27 @@ export function setItemAvailable(id: string, available: boolean) {
   set((st) => ({ ...st, menu: st.menu.map((m) => (m.id === id ? { ...m, available } : m)) }));
 }
 
-/* ------------------------------------------------------------- change owed */
+/* --------------------------------------------------------- customer change */
 
-export function payOutChangeOwed(id: string, amount: number, by: string, method: 'cash' | 'credit') {
+/** Hand change from the balance back to the customer in cash. */
+export function payOutChange(customerId: string, amount: number, by: string): { ok: boolean; error?: string } {
+  const bal = customerBalance(state.credit, customerId);
+  const a = round2(amount);
+  if (!(a > 0)) return { ok: false, error: 'Enter an amount.' };
+  if (a > bal + 0.004) return { ok: false, error: 'That is more than the balance.' };
   const at = new Date().toISOString();
   set((st) => ({
     ...st,
-    changeOwed: st.changeOwed.map((c) =>
-      c.id === id ? { ...c, payouts: [...c.payouts, { amount: round2(amount), at, by, method }] } : c,
-    ),
+    credit: [...st.credit, { id: uid('cr-'), branchId: st.settings.branchId, customerId, kind: 'paid_out', amount: -a, at, by }],
+    customers: st.customers.map((c) => (c.id === customerId ? { ...c, lastSeenAt: at } : c)),
+  }));
+  return { ok: true };
+}
+
+export function updateCustomer(id: string, patch: Partial<Pick<Customer, 'name' | 'phone' | 'note'>>) {
+  set((st) => ({
+    ...st,
+    customers: st.customers.map((c) => (c.id === id ? { ...c, ...patch, name: patch.name ? tidyName(patch.name) : c.name } : c)),
   }));
 }
 

@@ -1,64 +1,74 @@
 import { useMemo, useState } from 'react';
-import { getState, payOutChangeOwed, useCurrentUser, useStore } from '../store/store';
-import { changeOwedBalance } from '../domain/rules';
-import { fmt, fromBase, round2 } from '../domain/money';
+import { getState, payOutChange, updateCustomer, useCurrentUser, useStore } from '../store/store';
+import { balances, sameNameCustomers } from '../domain/rules';
+import { fmt, round2 } from '../domain/money';
 import { changeVoucherHTML, printTickets } from '../print/tickets';
 import { Dialog, TopBar, toast } from '../components/ui';
-import type { ChangeOwed } from '../domain/types';
+import { describeCustomer } from '../components/CustomerPicker';
+import type { CreditEntry, Customer } from '../domain/types';
 
-export default function ChangeOwedScreen() {
-  const user = useCurrentUser()!;
-  const all = useStore((s) => s.changeOwed);
+const KIND_LABEL: Record<CreditEntry['kind'], string> = {
+  change_left: 'Change kept',
+  used_for_food: 'Used for food',
+  paid_out: 'Paid out in cash',
+};
+
+const when = (iso: string) =>
+  new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+export default function CustomerChange() {
+  const customers = useStore((s) => s.customers);
+  const credit = useStore((s) => s.credit);
   const currencies = useStore((s) => s.currencies);
-  const staff = useStore((s) => s.staff);
   const baseCode = useStore((s) => s.settings.baseCurrency);
   const base = currencies.find((c) => c.code === baseCode)!;
   const [q, setQ] = useState('');
-  const [tab, setTab] = useState<'open' | 'settled'>('open');
-  const [paying, setPaying] = useState<ChangeOwed | null>(null);
+  const [tab, setTab] = useState<'owed' | 'all'>('owed');
+  const [open, setOpen] = useState<Customer | null>(null);
+
+  const bal = useMemo(() => balances(credit), [credit]);
+  const totalOwed = useMemo(() => round2([...bal.values()].reduce((a, b) => a + Math.max(0, b), 0)), [bal]);
 
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return all
-      .filter((c) => (tab === 'open' ? changeOwedBalance(c) > 0 : changeOwedBalance(c) <= 0))
+    const digits = term.replace(/\D/g, '');
+    const codeHit = new Set(credit.filter((e) => e.code && e.code.toLowerCase() === term).map((e) => e.customerId));
+    return customers
+      .filter((c) => tab === 'all' || (bal.get(c.id) ?? 0) > 0)
       .filter(
         (c) =>
           !term ||
-          c.customerName.toLowerCase().includes(term) ||
-          (c.phone ?? '').includes(term) ||
-          c.code.toLowerCase().includes(term) ||
-          String(c.orderNumber) === term,
+          codeHit.has(c.id) ||
+          c.name.toLowerCase().split(' ').some((w) => w.startsWith(term)) ||
+          c.name.toLowerCase().startsWith(term) ||
+          (c.note ?? '').toLowerCase().includes(term) ||
+          (digits.length >= 3 && (c.phone ?? '').replace(/\D/g, '').includes(digits)),
       )
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [all, q, tab]);
-
-  const totalOpen = round2(all.reduce((s, c) => s + Math.max(0, changeOwedBalance(c)), 0));
-  const age = (iso: string) => {
-    const days = Math.floor((Date.now() - Date.parse(iso)) / 86400000);
-    return days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
-  };
+      .sort((a, b) => (bal.get(b.id) ?? 0) - (bal.get(a.id) ?? 0) || b.lastSeenAt.localeCompare(a.lastSeenAt));
+  }, [customers, credit, bal, q, tab]);
 
   return (
     <div className="app">
-      <TopBar title="Change Owed" />
+      <TopBar title="Customer Change" />
       <div className="page">
         <div className="page-narrow">
           <div className="row wrap" style={{ marginBottom: 14 }}>
             <div className="tabs" style={{ margin: 0 }}>
-              <button className={tab === 'open' ? 'on' : ''} onClick={() => setTab('open')}>
-                Still owed
+              <button className={tab === 'owed' ? 'on' : ''} onClick={() => setTab('owed')}>
+                Owed change
               </button>
-              <button className={tab === 'settled' ? 'on' : ''} onClick={() => setTab('settled')}>
-                Settled
+              <button className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')}>
+                All customers ({customers.length})
               </button>
             </div>
             <div className="grow" />
-            <b>Total still owed: {fmt(totalOpen, base)}</b>
+            <b>We are holding {fmt(totalOwed, base)} for customers</b>
           </div>
           <input
+            id="change-search"
             className="amount-input"
             style={{ fontSize: 18, fontWeight: 500 }}
-            placeholder="Search name, phone, voucher code or order number"
+            placeholder="Search name, phone, note or slip code"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -67,105 +77,189 @@ export default function ChangeOwedScreen() {
               <thead>
                 <tr>
                   <th>Customer</th>
-                  <th>Code</th>
-                  <th>Owed</th>
-                  <th>Balance</th>
-                  <th>When</th>
+                  <th>Change held</th>
+                  <th>Last here</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {list.map((c) => {
-                  const bal = changeOwedBalance(c);
-                  const cur = currencies.find((x) => x.code === c.currency) ?? base;
+                  const b = bal.get(c.id) ?? 0;
+                  const twins = sameNameCustomers(customers, c.name, c.id).length;
                   return (
-                    <tr key={c.id}>
+                    <tr key={c.id} onClick={() => setOpen(c)} style={{ cursor: 'pointer' }}>
                       <td>
-                        <b>{c.customerName}</b>
+                        <b>{c.name}</b> {twins > 0 && <span className="tag">same name ×{twins + 1}</span>}
                         <div className="muted" style={{ fontSize: 13 }}>
-                          {c.phone ?? '—'} · order #{c.orderNumber} · by {staff.find((s) => s.id === c.createdBy)?.name}
+                          {describeCustomer(c) || 'No phone or note'}
                         </div>
                       </td>
                       <td>
-                        <span className="tag">{c.code}</span>
+                        <span className={`tag ${b > 0 ? 'open' : 'paid'}`}>{b > 0 ? fmt(b, base) : 'Nothing'}</span>
                       </td>
-                      <td>{fmt(c.amount, base)}</td>
+                      <td className="muted">{when(c.lastSeenAt)}</td>
                       <td>
-                        <span className={`tag ${bal > 0 ? 'open' : 'paid'}`}>
-                          {bal > 0 ? `${fmt(bal, base)}${cur.code !== base.code ? ` (${fmt(fromBase(bal, cur), cur)})` : ''}` : 'Paid'}
-                        </span>
-                      </td>
-                      <td className="muted">{age(c.createdAt)}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>
-                        {bal > 0 && (
-                          <button className="btn primary" onClick={() => setPaying(c)}>
-                            Pay out
-                          </button>
-                        )}{' '}
-                        <button className="btn" onClick={() => printTickets([changeVoucherHTML(c, getState())])} aria-label="Reprint voucher">
-                          🖨
-                        </button>
+                        <button className="btn">Open</button>
                       </td>
                     </tr>
                   );
                 })}
                 {list.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="empty">
-                      Nothing here.
+                    <td colSpan={4} className="empty">
+                      {tab === 'owed' ? 'Nobody is owed change.' : 'No customers found.'}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+          <p className="muted" style={{ fontSize: 13 }}>
+            Change is added at the till when a customer leaves it, and taken off when they use it for food or collect it.
+          </p>
         </div>
       </div>
-      {paying && (
-        <PayOutDialog
-          c={paying}
-          onClose={() => setPaying(null)}
-          onPay={(amount, method) => {
-            payOutChangeOwed(paying.id, amount, user.id, method);
-            toast(method === 'cash' ? `Paid ${fmt(amount, base)} to ${paying.customerName}` : `Used ${fmt(amount, base)} as credit`);
-            setPaying(null);
-          }}
-        />
-      )}
+      {open && <CustomerDialog customerId={open.id} onClose={() => setOpen(null)} />}
     </div>
   );
 }
 
-function PayOutDialog({ c, onClose, onPay }: { c: ChangeOwed; onClose: () => void; onPay: (amount: number, method: 'cash' | 'credit') => void }) {
+function CustomerDialog({ customerId, onClose }: { customerId: string; onClose: () => void }) {
+  const user = useCurrentUser()!;
+  const customers = useStore((s) => s.customers);
+  const credit = useStore((s) => s.credit);
+  const staff = useStore((s) => s.staff);
   const currencies = useStore((s) => s.currencies);
   const baseCode = useStore((s) => s.settings.baseCurrency);
-  const base = currencies.find((x) => x.code === baseCode)!;
-  const bal = changeOwedBalance(c);
-  const [amt, setAmt] = useState(String(bal));
-  const n = Math.min(bal, Number(amt) || 0);
+  const base = currencies.find((c) => c.code === baseCode)!;
+  const c = customers.find((x) => x.id === customerId)!;
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ name: c.name, phone: c.phone ?? '', note: c.note ?? '' });
+
+  const history = useMemo(() => {
+    let running = 0;
+    return credit
+      .filter((e) => e.customerId === customerId)
+      .sort((a, b) => a.at.localeCompare(b.at))
+      .map((e) => ({ e, after: (running = round2(running + e.amount)) }))
+      .reverse();
+  }, [credit, customerId]);
+  const balance = history[0]?.after ?? 0;
+  const [amt, setAmt] = useState(String(balance));
+
   return (
     <Dialog
-      title={`Pay ${c.customerName}`}
+      title={c.name}
       onClose={onClose}
-      width={520}
+      width={640}
       footer={
-        <>
-          <button className="btn" disabled={!(n > 0)} onClick={() => onPay(n, 'credit')}>
-            Use as credit on food
-          </button>
-          <button className="btn primary" disabled={!(n > 0)} onClick={() => onPay(n, 'cash')}>
-            Pay out cash
-          </button>
-        </>
+        balance > 0 ? (
+          <>
+            <input
+              id="payout-amount"
+              inputMode="decimal"
+              value={amt}
+              onChange={(e) => setAmt(e.target.value.replace(/[^\d.]/g, ''))}
+              style={{ width: 110, fontSize: 18, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 10 }}
+              aria-label="Amount to pay out"
+            />
+            <button
+              className="btn primary"
+              onClick={() => {
+                const r = payOutChange(c.id, Number(amt), user.id);
+                if (!r.ok) return toast(r.error!);
+                toast(`Paid ${fmt(Number(amt), base)} to ${c.name}`);
+                setAmt('0');
+              }}
+            >
+              Pay out cash
+            </button>
+          </>
+        ) : undefined
       }
     >
-      <p>
-        Balance: <b>{fmt(bal, base)}</b> (voucher {c.code})
-      </p>
-      <label className="field">
-        Amount to settle now (can be part of it)
-        <input inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value.replace(/[^\d.]/g, ''))} />
-      </label>
+      <div className="row wrap" style={{ alignItems: 'flex-start' }}>
+        <div className="grow">
+          {!editing ? (
+            <>
+              <div className="muted">{describeCustomer(c) || 'No phone or note'}</div>
+              <button className="btn" style={{ marginTop: 8 }} onClick={() => setEditing(true)}>
+                Edit details
+              </button>
+            </>
+          ) : (
+            <div>
+              <div className="form-grid">
+                <label className="field">
+                  Name
+                  <input id="edit-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                </label>
+                <label className="field">
+                  Phone
+                  <input id="edit-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                </label>
+                <label className="field">
+                  Note
+                  <input id="edit-note" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+                </label>
+              </div>
+              <button
+                className="btn primary"
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  updateCustomer(c.id, { name: form.name, phone: form.phone.trim() || undefined, note: form.note.trim() || undefined });
+                  setEditing(false);
+                }}
+              >
+                Save
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="summary" style={{ minWidth: 180, textAlign: 'right' }}>
+          <div className="muted">Change held</div>
+          <div style={{ fontSize: 30, fontWeight: 900 }}>{fmt(balance, base)}</div>
+        </div>
+      </div>
+      <div className="section-title">History</div>
+      <table className="list">
+        <tbody>
+          {history.map(({ e, after }) => (
+            <tr key={e.id}>
+              <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                {when(e.at)}
+              </td>
+              <td>
+                {KIND_LABEL[e.kind]}
+                {e.orderNumber != null && <span className="muted"> · order #{e.orderNumber}</span>}
+                {e.code && <span className="muted"> · slip {e.code}</span>}
+                <div className="muted" style={{ fontSize: 12 }}>
+                  by {staff.find((s) => s.id === e.by)?.name ?? '—'}
+                </div>
+              </td>
+              <td style={{ fontWeight: 700, color: e.amount > 0 ? 'var(--good)' : 'var(--bad)', whiteSpace: 'nowrap' }}>
+                {e.amount > 0 ? '+' : '−'}
+                {fmt(Math.abs(e.amount), base)}
+              </td>
+              <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                = {fmt(after, base)}
+              </td>
+              <td>
+                {e.kind === 'change_left' && (
+                  <button className="btn" onClick={() => printTickets([changeVoucherHTML(e, c, balance, getState())])} aria-label="Reprint slip">
+                    🖨
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+          {history.length === 0 && (
+            <tr>
+              <td className="muted">No change history yet.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </Dialog>
   );
 }

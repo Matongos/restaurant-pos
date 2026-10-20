@@ -15,7 +15,7 @@ export default function SettingsScreen() {
     ['numbers', 'Order numbers & printing'],
     ['currencies', 'Currencies'],
     ['menu', 'Menu & photos'],
-    ['kitchen', 'Kitchen'],
+    ['kitchen', 'Serving times'],
     ['demo', 'Demo data'],
   ];
   return (
@@ -440,16 +440,37 @@ function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) 
 function KitchenSettings() {
   const s = useStore((st) => st.settings);
   return (
-    <div className="form-grid">
-      <label className="field">
-        Order turns amber after (minutes)
-        <input type="number" value={s.kitchenAmberMinutes} onChange={(e) => updateSettings({ kitchenAmberMinutes: Number(e.target.value) })} />
-      </label>
-      <label className="field">
-        Order turns red after (minutes)
-        <input type="number" value={s.kitchenRedMinutes} onChange={(e) => updateSettings({ kitchenRedMinutes: Number(e.target.value) })} />
-      </label>
-    </div>
+    <>
+      <p className="muted" style={{ marginTop: 0 }}>
+        The clock on each order starts when the cashier confirms it and runs until the food is served. These times also decide which
+        orders count as late in Reports.
+      </p>
+      <div className="form-grid">
+        <label className="field">
+          Order is late after (minutes)
+          <input
+            id="late-after"
+            type="number"
+            min={1}
+            value={s.lateAfterMinutes}
+            onChange={(e) => {
+              const late = Math.max(1, Number(e.target.value));
+              updateSettings({ lateAfterMinutes: late, warnAfterMinutes: Math.min(s.warnAfterMinutes, late) });
+            }}
+          />
+        </label>
+        <label className="field">
+          Warn (amber) after (minutes)
+          <input
+            id="warn-after"
+            type="number"
+            min={0}
+            value={s.warnAfterMinutes}
+            onChange={(e) => updateSettings({ warnAfterMinutes: Math.min(s.lateAfterMinutes, Math.max(0, Number(e.target.value))) })}
+          />
+        </label>
+      </div>
+    </>
   );
 }
 

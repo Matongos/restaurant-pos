@@ -1,19 +1,17 @@
 import { useMemo, useState } from 'react';
 import { go } from '../router';
 import { getState, setOrderStatus, useCurrentUser, useStore } from '../store/store';
-import { can, minutesSince, todayISO } from '../domain/rules';
+import { can, fmtDuration, serviceTimes, timerState, todayISO, type TimerState } from '../domain/rules';
 import { customerSlipHTML, kitchenTicketHTML, printTickets } from '../print/tickets';
-import { TopBar, toast, useTick } from '../components/ui';
+import { TopBar, toast, useNow } from '../components/ui';
 import type { Order } from '../domain/types';
 
 type Filter = 'waiting' | 'ready' | 'served';
 
-export function timerColor(mins: number, amber: number, red: number) {
-  return mins >= red ? 'red' : mins >= amber ? 'amber' : 'green';
-}
+export const TIMER_CLASS: Record<TimerState, string> = { ok: 'green', warn: 'amber', late: 'red' };
 
 export default function ActiveOrders() {
-  useTick(15000);
+  const now = useNow(1000);
   const user = useCurrentUser()!;
   const orders = useStore((s) => s.orders);
   const orderTypes = useStore((s) => s.orderTypes);
@@ -63,10 +61,12 @@ export default function ActiveOrders() {
         {list.length === 0 && <div className="empty">No orders here.</div>}
         <div className="order-grid">
           {list.map((o) => {
-            const mins = minutesSince(o.createdAt);
             const type = orderTypes.find((t) => t.id === o.orderTypeId);
             const addons = addonsOf(o.id);
-            const color = o.status === 'served' ? 'grey' : timerColor(mins, settings.kitchenAmberMinutes, settings.kitchenRedMinutes);
+            const st = serviceTimes(o);
+            const waited = o.status === 'served' ? st.toServedMs ?? 0 : now - Date.parse(st.placed);
+            const state = timerState(waited, settings.warnAfterMinutes, settings.lateAfterMinutes);
+            const color = o.status === 'served' ? (state === 'late' ? 'red-soft' : 'grey') : TIMER_CLASS[state];
             return (
               <div key={o.id} className="ocard">
                 <div className={`oh ${color}`}>
@@ -74,7 +74,9 @@ export default function ActiveOrders() {
                   <span className="t">
                     {type?.ticketLabel}
                     <br />
-                    <small>{o.status === 'served' ? 'served' : `${mins} min`}</small>
+                    <span className="clock">{fmtDuration(waited)}</span>
+                    {state === 'late' && <span className="late-pill">{o.status === 'served' ? 'WAS LATE' : 'LATE'}</span>}
+                    {o.status === 'served' && <small> served</small>}
                   </span>
                 </div>
                 <div className="ob">

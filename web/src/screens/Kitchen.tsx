@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react';
 import { setOrderStatus, useCurrentUser, useStore } from '../store/store';
-import { minutesSince } from '../domain/rules';
-import { Dialog, TopBar, useTick } from '../components/ui';
-import { timerColor } from './ActiveOrders';
+import { fmtDuration, timerState } from '../domain/rules';
+import { Dialog, TopBar, useNow } from '../components/ui';
+import { TIMER_CLASS } from './ActiveOrders';
 
 /**
  * Kitchen display (Phase 2 feature, included in the prototype to show the idea).
  * The only action is "tick done". Ticked orders disappear; Recall brings one back.
  */
 export default function Kitchen() {
-  useTick(5000);
+  const now = useNow(1000);
   const user = useCurrentUser()!;
   const orders = useStore((s) => s.orders);
   const orderTypes = useStore((s) => s.orderTypes);
@@ -41,18 +41,19 @@ export default function Kitchen() {
         {waiting.length === 0 && <div className="empty">All caught up. New orders appear here automatically.</div>}
         <div className="order-grid">
           {waiting.map((o) => {
-            const mins = minutesSince(o.createdAt);
+            const waited = now - Date.parse(o.createdAt);
+            const state = timerState(waited, settings.warnAfterMinutes, settings.lateAfterMinutes);
             const type = orderTypes.find((t) => t.id === o.orderTypeId);
             return (
               <div key={o.id} className="ocard">
-                <div className={`oh ${timerColor(mins, settings.kitchenAmberMinutes, settings.kitchenRedMinutes)}`}>
+                <div className={`oh ${TIMER_CLASS[state]}`}>
                   <span className="n">{o.number}</span>
                   <span className="t">
                     {type?.ticketLabel}
                     <br />
-                    <small>
-                      {mins} min · {type?.packaging}
-                    </small>
+                    <span className="clock">{fmtDuration(waited)}</span>
+                    {state === 'late' && <span className="late-pill">LATE</span>}
+                    <small>{type?.packaging}</small>
                   </span>
                 </div>
                 <div className="ob">

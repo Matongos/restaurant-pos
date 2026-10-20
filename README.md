@@ -11,14 +11,14 @@ Point-of-sale system for a pay-first, counter-service restaurant: the customer p
 | --- | --- | --- |
 | Login | Everyone | 4-digit PIN; each role sees only its screens |
 | New Order | Cashier | Photo tiles (sold-out meals hidden), Eat In / Take Away, notes, total in every currency |
-| Payment | Cashier | Cash / EcoCash / InnBucks / Swipe, any currency, split payments, change in any currency, **owe change** with customer name and voucher, card number check |
+| Payment | Cashier | Cash / EcoCash / InnBucks / Swipe, any currency, split payments, change in any currency, **keep change on the customer's balance** or **pay from it**, card number check |
 | Order sent | Cashier | Big number to hand over, kitchen ticket, customer slip and change voucher previews, print |
 | Customer Display | Second monitor | Items as they are entered, total, paid, change, logo when idle |
-| Active Orders | Cashier, attendant | Waiting time, mark served (card is freed), **add a drink to an existing number**, reprint |
-| Kitchen Display | Kitchen | Timers that turn amber/red, tick done, recall |
+| Active Orders | Cashier, attendant | Clock per order ticking every second, amber then red **LATE** (default 5 min, set in Settings), mark served (card is freed), **add a drink to an existing number**, reprint |
+| Kitchen Display | Kitchen | Live clocks, late warning, tick done, recall |
 | Today's Menu | Kitchen, manager | Switch an ingredient (e.g. Beef) sold out and every meal with it disappears from the till |
-| Change Owed | Cashier, manager | Search by name/phone/code, pay out in part or full, or use as credit |
-| Reports | Manager, owner | Sales, payments by method and currency, best sellers, Eat In vs Take Away, cashiers, kitchen time |
+| Customer Change | Cashier, manager | One running change balance per customer: kept, used for food, paid out — with full history. Name suggestions while typing; customers with the same name are told apart by phone or a note |
+| Reports | Manager, owner | Sales, average wait, late orders, kitchen and hand-over time, wait by hour and by meal, slowest orders, customer change, payments, best sellers, cashiers |
 | Settings | Owner | Logo, name, colour, receipt text, card/slip mode and range, currencies and rates, menu with photos and ingredients, kitchen timers |
 
 Demo PINs: Owner `1234` · Manager `2222` · Cashier `1111` · Kitchen `3333` · Attendant `4444`.

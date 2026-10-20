@@ -1,4 +1,5 @@
-import type { AppState, ChangeOwed, Order } from '../domain/types';
+import type { AppState, CreditEntry, Customer, Order } from '../domain/types';
+import { CREDIT_METHOD } from '../domain/types';
 import { fmt } from '../domain/money';
 
 /**
@@ -47,7 +48,7 @@ export function customerSlipHTML(order: Order, s: AppState): string {
   const pays = order.payments
     .map((p) => {
       const cur = s.currencies.find((c) => c.code === p.currency);
-      const m = s.paymentMethods.find((x) => x.id === p.methodId);
+      const m = p.methodId === CREDIT_METHOD ? { name: 'Your change' } : s.paymentMethods.find((x) => x.id === p.methodId);
       return `<tr><td>${esc(m?.name ?? '')}</td><td class="r">${fmt(p.amount, cur)}</td></tr>`;
     })
     .join('');
@@ -70,20 +71,23 @@ export function customerSlipHTML(order: Order, s: AppState): string {
     </div>`;
 }
 
-export function changeVoucherHTML(c: ChangeOwed, s: AppState): string {
+/** Slip for the customer when change is kept for them: shows this change and their total balance. */
+export function changeVoucherHTML(entry: CreditEntry, customer: Customer, balance: number, s: AppState): string {
   const base = s.currencies.find((x) => x.code === s.settings.baseCurrency)!;
   return `
     <div class="ticket">
       <div class="name">${esc(s.settings.restaurantName)}</div>
-      <div class="label">CHANGE OWED TO YOU</div>
-      <div class="num">${fmt(c.amount, base)}</div>
-      <div class="type">Code: ${c.code}</div>
+      <div class="label">CHANGE KEPT FOR YOU</div>
+      <div class="num">${fmt(entry.amount, base)}</div>
+      <div class="type">Code: ${entry.code ?? ''}</div>
       <hr/>
-      <div>Name: <b>${esc(c.customerName)}</b></div>
-      ${c.phone ? `<div>Phone: ${esc(c.phone)}</div>` : ''}
-      <div>Order #${c.orderNumber} · ${date(c.createdAt)} ${time(c.createdAt)}</div>
+      <div>Name: <b>${esc(customer.name)}</b></div>
+      ${customer.phone ? `<div>Phone: ${esc(customer.phone)}</div>` : ''}
+      ${customer.note ? `<div>Note: ${esc(customer.note)}</div>` : ''}
+      <div>Order #${entry.orderNumber ?? ''} · ${date(entry.at)} ${time(entry.at)}</div>
       <hr/>
-      <div class="small">Collect any day, or use it to pay for food. Show this slip or give your name.</div>
+      <div class="line"><b>Your total change: ${fmt(balance, base)}</b></div>
+      <div class="small">Collect it any day, or use it to pay for food. Just give your name.</div>
     </div>`;
 }
 

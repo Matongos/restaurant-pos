@@ -80,6 +80,14 @@ export default function CustomerDisplay() {
             <div className="v chg">{fmt(fromBase(cart.change, changeCur), changeCur)}</div>
           </div>
         )}
+        {cart.kept !== undefined && cart.kept > 0 && (
+          <div>
+            <div className="k">Kept for {cart.customerName ?? 'you'}</div>
+            <div className="v" style={{ fontSize: 44 }}>
+              {fmt(cart.kept, base)}
+            </div>
+          </div>
+        )}
         {cart.message && <div style={{ fontSize: 30, fontWeight: 800 }}>{cart.message}</div>}
       </div>
     </div>

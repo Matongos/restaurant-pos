@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { getState, useStore } from '../store/store';
-import type { ChangeOwed, Order } from '../domain/types';
+import { getState, useStore, type PlaceOrderSuccess } from '../store/store';
 import { changeVoucherHTML, customerSlipHTML, kitchenTicketHTML, printTickets, TICKET_CSS } from '../print/tickets';
 import { fmt } from '../domain/money';
 import { Dialog } from '../components/ui';
@@ -17,19 +16,21 @@ export function TicketPaper({ title, html }: { title: string; html: string }) {
   );
 }
 
-export default function OrderDoneDialog({ order, changeOwed, onNew }: { order: Order; changeOwed?: ChangeOwed; onNew: () => void }) {
+export default function OrderDoneDialog({ result, onNew }: { result: PlaceOrderSuccess; onNew: () => void }) {
+  const { order, kept, customer, used, balanceAfter } = result;
   const settings = useStore((s) => s.settings);
   const currencies = useStore((s) => s.currencies);
   const changeCur = currencies.find((c) => c.code === order.changeCurrency)!;
+  const base = currencies.find((c) => c.code === settings.baseCurrency)!;
 
   const parts = useMemo(() => {
     const s = getState();
     const list: { title: string; html: string }[] = [{ title: 'Kitchen printer', html: kitchenTicketHTML(order, s) }];
     if (!order.parentOrderId && (order.numberMode === 'slip' || order.numberMode === 'both'))
       list.push({ title: 'Customer slip', html: customerSlipHTML(order, s) });
-    if (changeOwed) list.push({ title: 'Change voucher', html: changeVoucherHTML(changeOwed, s) });
+    if (kept && customer) list.push({ title: 'Change slip', html: changeVoucherHTML(kept, customer, balanceAfter ?? kept.amount, s) });
     return list;
-  }, [order, changeOwed]);
+  }, [order, kept, customer, balanceAfter]);
 
   useEffect(() => {
     if (settings.autoPrintKitchen) printTickets(parts.map((p) => p.html));
@@ -41,8 +42,7 @@ export default function OrderDoneDialog({ order, changeOwed, onNew }: { order: O
     return () => window.removeEventListener('keydown', onKey);
   }, [onNew]);
 
-  const handOver =
-    order.parentOrderId ? 'Added to the same number' : order.numberMode === 'slip' ? 'Hand over the printed slip' : 'Hand over card';
+  const handOver = order.parentOrderId ? 'Added to the same number' : order.numberMode === 'slip' ? 'Hand over the printed slip' : 'Hand over card';
 
   return (
     <Dialog
@@ -68,9 +68,11 @@ export default function OrderDoneDialog({ order, changeOwed, onNew }: { order: O
             Give change: {fmt(order.changeGiven * changeCur.rate, changeCur)}
           </div>
         )}
-        {changeOwed && (
+        {customer && (used > 0 || kept) && (
           <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--warn)' }}>
-            Owed to {changeOwed.customerName}: voucher {changeOwed.code}
+            {used > 0 && `${fmt(used, base)} taken from ${customer.name}'s change. `}
+            {kept && `${fmt(kept.amount, base)} kept for ${customer.name} (code ${kept.code}). `}
+            Balance now {fmt(balanceAfter ?? 0, base)}.
           </div>
         )}
       </div>

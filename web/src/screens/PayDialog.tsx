@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { placeOrder, setLiveCart, useStore } from '../store/store';
+import { placeOrder, setLiveCart, useStore, type CustomerRef, type PlaceOrderSuccess } from '../store/store';
 import { fmt, fromBase, round2, toBase } from '../domain/money';
-import { cardsInUse, nextFreeCard } from '../domain/rules';
-import type { ChangeOwed, Order, OrderLine, Payment } from '../domain/types';
+import { cardsInUse, customerBalance, nextFreeCard, tidyName } from '../domain/rules';
+import { CREDIT_METHOD, type OrderLine, type Payment } from '../domain/types';
 import { Dialog, toast } from '../components/ui';
+import CustomerPicker, { selectionReady, type CustomerSelection } from '../components/CustomerPicker';
 
 interface Props {
   tillId: string;
@@ -13,7 +14,7 @@ interface Props {
   parentOrderId?: string;
   cashierId: string;
   onCancel: () => void;
-  onDone: (r: { order: Order; changeOwed?: ChangeOwed }) => void;
+  onDone: (r: PlaceOrderSuccess) => void;
 }
 
 export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrderId, cashierId, onCancel, onDone }: Props) {
@@ -21,6 +22,8 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
   const methods = useStore((s) => s.paymentMethods);
   const settings = useStore((s) => s.settings);
   const orders = useStore((s) => s.orders);
+  const customers = useStore((s) => s.customers);
+  const credit = useStore((s) => s.credit);
 
   const enabledCur = useMemo(() => currencies.filter((c) => c.enabled), [currencies]);
   const enabledMethods = useMemo(() => methods.filter((m) => m.enabled), [methods]);
@@ -34,8 +37,8 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
 
   const [changeCode, setChangeCode] = useState(base.code);
   const [changeGivenStr, setChangeGivenStr] = useState<string | null>(null);
-  const [oweName, setOweName] = useState('');
-  const [owePhone, setOwePhone] = useState('');
+  const [cust, setCust] = useState<CustomerSelection>({ kind: 'none' });
+  const [showCustomer, setShowCustomer] = useState(false);
 
   const needsCard = !parentOrderId && settings.numberMode !== 'slip';
   const suggested = useMemo(() => nextFreeCard(orders, settings.cardFrom, settings.cardTo), [orders, settings.cardFrom, settings.cardTo]);
@@ -61,9 +64,18 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
   const changeDueBase = round2(Math.max(0, paidBase - total));
   const changeDueInCur = fromBase(changeDueBase, changeCur);
 
-  const changeGiven = changeGivenStr === null ? changeDueInCur : Math.max(0, Number(changeGivenStr) || 0);
-  const owedInCur = round2(Math.max(0, changeDueInCur - changeGiven));
-  const owedBase = toBase(owedInCur, changeCur);
+  const changeGiven = changeGivenStr === null ? changeDueInCur : Math.min(changeDueInCur, Math.max(0, Number(changeGivenStr) || 0));
+  const keptInCur = round2(Math.max(0, changeDueInCur - changeGiven));
+  const keptBase = toBase(keptInCur, changeCur);
+
+  // Customer and their change balance.
+  const existing = cust.kind === 'existing' ? customers.find((c) => c.id === cust.id) : undefined;
+  const balance = existing ? customerBalance(credit, existing.id) : 0;
+  const creditUsed = round2(payments.filter((p) => p.methodId === CREDIT_METHOD).reduce((s, p) => s + p.baseAmount, 0));
+  const balanceLeft = round2(balance - creditUsed);
+  const custName = existing?.name ?? (cust.kind === 'new' ? tidyName(cust.name) : '');
+  const needCustomer = keptBase > 0 || creditUsed > 0;
+  const custReady = selectionReady(cust, customers);
 
   // Keep the customer display in step with the payment.
   useEffect(() => {
@@ -72,11 +84,13 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
       lines,
       total,
       paid: paidBase,
-      change: changeDueBase,
+      change: toBase(changeGiven, changeCur),
       changeCurrency: changeCur.code,
+      kept: keptBase || undefined,
+      customerName: custName || undefined,
       message: remainingBase > 0 && paidBase > 0 ? `Still to pay ${fmt(remainingBase, base)}` : undefined,
     });
-  }, [paidBase, changeDueBase, changeCur.code, remainingBase]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [paidBase, changeGiven, changeCur.code, keptBase, custName, remainingBase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addPayment = (amount: number) => {
     if (!(amount > 0)) return;
@@ -93,11 +107,21 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
     setChangeGivenStr(null);
   };
 
+  const useChange = () => {
+    const amt = round2(Math.min(balanceLeft, remainingBase));
+    if (!(amt > 0)) return;
+    setPayments((p) => [...p, { methodId: CREDIT_METHOD, currency: base.code, amount: amt, baseAmount: amt }]);
+    setChangeGivenStr(null);
+  };
+
   const exact = () => addPayment(fromBase(remainingBase, cur));
 
-  const canConfirm = remainingBase <= 0.004 && !cardProblem && (owedInCur <= 0 || oweName.trim().length > 0);
+  const canConfirm = remainingBase <= 0.004 && !cardProblem && (!needCustomer || custReady);
 
   const confirm = () => {
+    let customerRef: CustomerRef | undefined;
+    if (cust.kind === 'existing') customerRef = { id: cust.id };
+    else if (cust.kind === 'new') customerRef = { name: cust.name, phone: cust.phone, note: cust.note };
     const r = placeOrder({
       tillId,
       orderTypeId,
@@ -106,7 +130,8 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
       changeGiven: toBase(changeGiven, changeCur),
       changeCurrency: changeCur.code,
       cardNumber: needsCard ? card : undefined,
-      owe: owedInCur > 0 ? { customerName: oweName, phone: owePhone, amount: owedBase, currency: changeCur.code } : undefined,
+      customer: needCustomer ? customerRef : undefined,
+      keep: keptBase > 0 ? { amount: keptBase, currency: changeCur.code } : undefined,
       parentOrderId,
       cashierId,
     });
@@ -121,16 +146,21 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
       paid: paidBase,
       change: toBase(changeGiven, changeCur),
       changeCurrency: changeCur.code,
+      kept: keptBase || undefined,
+      customerName: r.customer?.name,
       message: `Your number is ${r.order.number}. Thank you!`,
     });
     onDone(r);
   };
 
+  const methodName = (id: string) => (id === CREDIT_METHOD ? 'Change used' : methods.find((m) => m.id === id)?.name ?? id);
+  const pickerOpen = showCustomer || cust.kind !== 'none' || keptBase > 0;
+
   return (
     <Dialog
       title={`Payment — ${fmt(total, base)}`}
       onClose={onCancel}
-      width={880}
+      width={900}
       footer={
         <>
           <button className="btn big" onClick={onCancel}>
@@ -144,9 +174,32 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
     >
       <div className="pay-grid">
         <div>
-          <div className="section-title" style={{ marginTop: 0 }}>
-            Method
-          </div>
+          {/* Customer: optional, needed only when change is used or kept. */}
+          {!pickerOpen ? (
+            <button className="btn" style={{ width: '100%', marginBottom: 6 }} onClick={() => setShowCustomer(true)}>
+              👤 Customer has change with us?
+            </button>
+          ) : (
+            <div className="cust-box">
+              <CustomerPicker
+                value={cust}
+                autoFocus={showCustomer && cust.kind === 'none'}
+                label={keptBase > 0 ? 'Who is the change for?' : 'Customer'}
+                onChange={(v) => {
+                  // Switching customer removes change used from the previous one.
+                  setPayments((ps) => ps.filter((p) => p.methodId !== CREDIT_METHOD));
+                  setCust(v);
+                }}
+              />
+              {existing && balanceLeft > 0 && remainingBase > 0 && (
+                <button className="btn primary" style={{ width: '100%', marginTop: 8 }} onClick={useChange}>
+                  Pay {fmt(Math.min(balanceLeft, remainingBase), base)} from {existing.name.split(' ')[0]}'s change
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="section-title">Method</div>
           <div className="seg">
             {enabledMethods.map((m) => (
               <button key={m.id} className={methodId === m.id ? 'on' : ''} onClick={() => setMethodId(m.id)}>
@@ -165,12 +218,13 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
           {method?.requiresReference && (
             <label className="field">
               {method.name} reference
-              <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. transaction ID" />
+              <input id="pay-ref" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. transaction ID" />
             </label>
           )}
           <div className="section-title">Amount received</div>
           <div className="row">
             <input
+              id="pay-amount"
               className="amount-input"
               inputMode="decimal"
               placeholder={fmt(fromBase(remainingBase, cur), cur)}
@@ -200,7 +254,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
                 return (
                   <div key={i}>
                     <span>
-                      {methods.find((m) => m.id === p.methodId)?.name} {p.reference ? `· ${p.reference}` : ''}
+                      {methodName(p.methodId)} {p.reference ? `· ${p.reference}` : ''}
                     </span>
                     <span>
                       {fmt(p.amount, c)}{' '}
@@ -247,6 +301,12 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
                 <span>{fmt(changeDueInCur, changeCur)}</span>
               </div>
             )}
+            {existing && (creditUsed > 0 || keptBase > 0 || balance > 0) && (
+              <div className="r" style={{ borderTop: '1px dashed var(--line)', marginTop: 4, paddingTop: 8 }}>
+                <span>{existing.name.split(' ')[0]}'s change after this</span>
+                <b>{fmt(round2(balanceLeft + keptBase), base)}</b>
+              </div>
+            )}
           </div>
 
           {changeDueBase > 0 && (
@@ -267,27 +327,33 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
                 ))}
               </div>
               <label className="field">
-                Change actually given (lower it if you are short of change)
-                <input
-                  inputMode="decimal"
-                  value={changeGivenStr ?? String(changeDueInCur)}
-                  onChange={(e) => setChangeGivenStr(e.target.value.replace(/[^\d.]/g, ''))}
-                />
+                Change handed over now (lower it if you are short of change)
+                <div className="row">
+                  <input
+                    id="change-given"
+                    className="grow"
+                    inputMode="decimal"
+                    value={changeGivenStr ?? String(changeDueInCur)}
+                    onChange={(e) => setChangeGivenStr(e.target.value.replace(/[^\d.]/g, ''))}
+                  />
+                  <button className="btn" onClick={() => setChangeGivenStr('0')}>
+                    Keep all
+                  </button>
+                </div>
               </label>
-              {owedInCur > 0 && (
+              {keptInCur > 0 && (
                 <div className="owe-box">
-                  <b>Owe {fmt(owedInCur, changeCur)} to the customer</b>
+                  <b>
+                    Keep {fmt(keptInCur, changeCur)} for {custName || 'the customer'}
+                  </b>
                   <div className="muted" style={{ fontSize: 13 }}>
-                    A voucher with a code prints. They can collect it any day.
+                    It goes on their change balance. They can collect it or spend it any day.
                   </div>
-                  <label className="field">
-                    Customer name *
-                    <input value={oweName} onChange={(e) => setOweName(e.target.value)} />
-                  </label>
-                  <label className="field">
-                    Phone (optional)
-                    <input inputMode="tel" value={owePhone} onChange={(e) => setOwePhone(e.target.value)} />
-                  </label>
+                  {!custReady && (
+                    <div style={{ color: 'var(--warn)', fontWeight: 700, fontSize: 13, marginTop: 4 }}>
+                      {cust.kind === 'none' ? 'Choose or add the customer on the left.' : 'Add a phone or note to tell them apart.'}
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -302,6 +368,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
                 </div>
               </div>
               <input
+                id="card-number"
                 inputMode="numeric"
                 value={cardStr}
                 onChange={(e) => setCardStr(e.target.value.replace(/\D/g, ''))}
