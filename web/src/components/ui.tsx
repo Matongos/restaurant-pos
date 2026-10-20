@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { IconType } from 'react-icons';
 import {
   LuBookOpenText,
+  LuChevronDown,
   LuChartColumn,
   LuCookingPot,
   LuGraduationCap,
@@ -67,7 +68,6 @@ function NavRail() {
   const credit = useStore((s) => s.credit);
   const settings = useStore((s) => s.settings);
   const [more, setMore] = useState(false);
-  const [userMenu, setUserMenu] = useState(false);
   if (!user) return null;
 
   const openOrders = orders.filter((o) => !o.parentOrderId && !o.example && (o.status === 'in_kitchen' || o.status === 'ready')).length;
@@ -134,40 +134,6 @@ function NavRail() {
           </button>
         )}
         <div className="rail-spacer" />
-        <div className="rail-user">
-          <button className="user-btn" onClick={() => setUserMenu((u) => !u)} aria-haspopup="menu" aria-expanded={userMenu} title={`${user.name} · ${ROLE_LABEL[user.role]}`}>
-            <span className="avatar">{user.name.slice(0, 1).toUpperCase()}</span>
-            {ROLE_LABEL[user.role]}
-          </button>
-          {userMenu && (
-            <>
-              <div className="more-scrim" style={{ background: 'transparent' }} onClick={() => setUserMenu(false)} />
-              <div className="user-pop" role="menu">
-                <div className="who-line">
-                  <b>{user.name}</b>
-                  <span className="muted">{ROLE_LABEL[user.role]}</span>
-                </div>
-                {showDisplay && (
-                  <button role="menuitem" onClick={() => { setUserMenu(false); openDisplay(); }}>
-                    <LuMonitor aria-hidden="true" />
-                    Open customer screen
-                  </button>
-                )}
-                {showTraining && (
-                  <button role="menuitemcheckbox" aria-checked={settings.trainingMode} onClick={() => updateSettings({ trainingMode: !settings.trainingMode })}>
-                    <LuGraduationCap aria-hidden="true" />
-                    Training mode
-                    <span className="state">{settings.trainingMode ? 'On' : 'Off'}</span>
-                  </button>
-                )}
-                <button role="menuitem" onClick={signOut}>
-                  <LuLogOut aria-hidden="true" />
-                  Log out
-                </button>
-              </div>
-            </>
-          )}
-        </div>
       </nav>
       {more && (
         <>
@@ -197,6 +163,62 @@ function NavRail() {
   );
 }
 
+/** Who is signed in, top-right of every screen: tap to log out (or open the customer screen). */
+function UserMenu() {
+  const user = useCurrentUser();
+  const settings = useStore((s) => s.settings);
+  const [open, setOpen] = useState(false);
+  if (!user) return null;
+  const showDisplay = can(user.role, 'take_orders') || can(user.role, 'screens');
+  const showTraining = can(user.role, 'reports');
+  const openDisplay = () => {
+    setOpen(false);
+    const w = window.open('#/display?till=till-1', 'customer-display', 'popup,width=1024,height=640');
+    if (w) toast('Customer screen opened — drag it to the second monitor and press F11.');
+    else go('/display?till=till-1');
+  };
+  return (
+    <div className="user-wrap">
+      <button className="user-btn" onClick={() => setOpen((u) => !u)} aria-haspopup="menu" aria-expanded={open} aria-label={`${user.name}, ${ROLE_LABEL[user.role]} — account menu`}>
+        <span className="avatar">{user.name.slice(0, 1).toUpperCase()}</span>
+        <span className="who">
+          <b>{user.name.split(' ')[0]}</b>
+          <small>{ROLE_LABEL[user.role]}</small>
+        </span>
+        <LuChevronDown aria-hidden="true" className="chev" />
+      </button>
+      {open && (
+        <>
+          <div className="more-scrim" style={{ background: 'transparent' }} onClick={() => setOpen(false)} />
+          <div className="user-pop" role="menu">
+            <div className="who-line">
+              <b>{user.name}</b>
+              <span className="muted">{ROLE_LABEL[user.role]}</span>
+            </div>
+            {showDisplay && (
+              <button role="menuitem" onClick={openDisplay}>
+                <LuMonitor aria-hidden="true" />
+                Open customer screen
+              </button>
+            )}
+            {showTraining && (
+              <button role="menuitemcheckbox" aria-checked={settings.trainingMode} onClick={() => updateSettings({ trainingMode: !settings.trainingMode })}>
+                <LuGraduationCap aria-hidden="true" />
+                Training mode
+                <span className="state">{settings.trainingMode ? 'On' : 'Off'}</span>
+              </button>
+            )}
+            <button role="menuitem" className="danger" onClick={() => { logout(); go('/'); }}>
+              <LuLogOut aria-hidden="true" />
+              Log out
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** Screen header plus the navigation. Every signed-in screen starts with this. */
 export function TopBar({ title, children }: { title?: string; children?: ReactNode }) {
   const training = useStore((s) => s.settings.trainingMode);
@@ -209,6 +231,7 @@ export function TopBar({ title, children }: { title?: string; children?: ReactNo
         <div className="spacer" />
         {children}
         <Clock />
+        <UserMenu />
       </header>
     </>
   );
