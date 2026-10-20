@@ -65,7 +65,7 @@ function baseState(): AppState {
   });
 
   return {
-    version: 5,
+    version: 6,
     settings: {
       branchId: 'main',
       restaurantName: 'Training Restaurant',
@@ -155,6 +155,7 @@ function baseState(): AppState {
     purchases: [],
     expenses: [],
     cancellations: [],
+    staffLog: [],
     // Example customers (to show how same names are told apart). Remove with Settings → Demo data.
     customers: [
       { id: 'cu-anashe-1', branchId: 'main', name: 'Anashe Moyo', phone: '0772 111 222', note: 'Mbare', createdAt: daysAgo(3), lastSeenAt: daysAgo(1) },

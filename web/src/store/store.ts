@@ -18,11 +18,13 @@ import type {
   Payment,
   PaymentMethod,
   Settings,
+  Role,
   Staff,
+  StaffAction,
 } from '../domain/types';
 import { DEFAULT_MEAL_PERIODS, seedState, STOCK_ITEMS } from '../data/seed';
 import { exampleBooks, exampleCancellations, exampleHistory } from '../data/exampleHistory';
-import { nextFreeCard, cardsInUse, customerBalance, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
+import { nextFreeCard, cardsInUse, customerBalance, pinProblem, ROLE_LABEL, staffRights, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
 import { CREDIT_METHOD } from '../domain/types';
 import { round2 } from '../domain/money';
 
@@ -43,16 +45,19 @@ const listeners = new Set<() => void>();
 /** Bring data saved by an older version of the app up to date. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): AppState | null {
+  if (raw?.version === 6) return raw as AppState;
   if (raw?.version === 5) {
+    // v6: staff management (history of staff changes).
     const st = raw as AppState;
     // The old default green becomes the new default teal (a colour the owner chose is kept).
-    return st.settings.brandColor?.toLowerCase() === '#1f6f43' ? { ...st, settings: { ...st.settings, brandColor: '#0f766e' } } : st;
+    const settings = st.settings.brandColor?.toLowerCase() === '#1f6f43' ? { ...st.settings, brandColor: '#0f766e' } : st.settings;
+    return { ...st, version: 6, settings, staffLog: [] };
   }
   if (raw?.version === 4) {
     // v5: accounting (purchases, expenses, cancellations) and cost per plate.
     const st = raw as AppState;
     const seedMenu = seedState().menu;
-    return {
+    return migrate({
       ...st,
       version: 5,
       stockItems: STOCK_ITEMS,
@@ -60,7 +65,7 @@ function migrate(raw: any): AppState | null {
       expenses: [],
       cancellations: [],
       menu: st.menu.map((m) => (m.costPerPlate === undefined ? { ...m, costPerPlate: seedMenu.find((x) => x.id === m.id)?.costPerPlate } : m)),
-    };
+    });
   }
   if (raw?.version === 3 || raw?.version === 2) {
     // v4: example history is generated at load instead of saved; analytics settings added.
@@ -168,6 +173,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
     if (e.key === KEY) {
       state = load();
+      dropEndedSession();
       emit();
     }
   });
@@ -213,19 +219,33 @@ function writeSession(id: string | null) {
   }
 }
 
+/**
+ * If the signed-in person was suspended or removed (on any till), forget their session
+ * here, so reactivating them later doesn't silently sign them back in.
+ */
+function dropEndedSession() {
+  const id = readSession();
+  if (!id) return;
+  const s = state.staff.find((x) => x.id === id);
+  if (!s || !canSignIn(s)) writeSession(null);
+}
+
 export function currentUser(): Staff | null {
   const id = readSession();
-  return state.staff.find((s) => s.id === id) ?? null;
+  return state.staff.find((s) => s.id === id && canSignIn(s)) ?? null;
 }
+
+/** Suspended or removed staff are signed out everywhere straight away. */
+const canSignIn = (s: Staff) => s.active && !s.deletedAt;
 
 export function useCurrentUser(): Staff | null {
   const id = useSyncExternalStore(subscribe, readSession);
   const staff = useStore((s) => s.staff);
-  return staff.find((s) => s.id === id) ?? null;
+  return staff.find((s) => s.id === id && canSignIn(s)) ?? null;
 }
 
 export function login(pin: string): Staff | null {
-  const user = state.staff.find((s) => s.active && s.pin === pin) ?? null;
+  const user = state.staff.find((s) => canSignIn(s) && s.pin === pin) ?? null;
   if (user) writeSession(user.id);
   emit();
   return user;
@@ -484,7 +504,7 @@ export function resetDemo() {
 
 /** A manager or owner PIN, used to approve cancellations. */
 export function verifyManagerPin(pin: string): Staff | null {
-  return state.staff.find((s) => s.active && s.pin === pin && (s.role === 'manager' || s.role === 'super_admin')) ?? null;
+  return state.staff.find((s) => canSignIn(s) && s.pin === pin && (s.role === 'manager' || s.role === 'super_admin')) ?? null;
 }
 
 export interface CancelInput {
@@ -664,4 +684,97 @@ export function reverseExpense(id: string, reason: string, by: string): { ok: bo
     expenses: [...st.expenses, { ...e, id: uid('e-'), amount: -e.amount, baseAmount: -e.baseAmount, at: new Date().toISOString(), by, reversesId: e.id, reason: reason.trim(), example: undefined }],
   }));
   return { ok: true };
+}
+
+/* ------------------------------------------------------------------- staff */
+
+export type StaffResult = { ok: true; staff: Staff } | { ok: false; error: string };
+
+function actorAndTarget(byId: string, targetId: string) {
+  const actor = state.staff.find((s) => s.id === byId && canSignIn(s));
+  const target = state.staff.find((s) => s.id === targetId);
+  return { actor, target, rights: actor && target ? staffRights(actor, target) : null };
+}
+
+function logStaff(st: AppState, by: string, staffId: string, action: StaffAction, detail?: string): AppState {
+  return { ...st, staffLog: [...st.staffLog, { id: uid('se-'), at: new Date().toISOString(), by, staffId, action, detail }] };
+}
+
+const activeOwners = (staff: Staff[]) => staff.filter((s) => s.role === 'super_admin' && canSignIn(s));
+
+export interface NewStaff {
+  name: string;
+  role: Role;
+  pin: string;
+  phone?: string;
+}
+
+export function addStaff(input: NewStaff, byId: string): StaffResult {
+  const actor = state.staff.find((s) => s.id === byId && canSignIn(s));
+  if (!actor) return { ok: false, error: 'Please log in again' };
+  const allowed = staffRights(actor, { id: '', name: '', pin: '', role: input.role, active: true });
+  if (!allowed.role) return { ok: false, error: `${ROLE_LABEL[actor.role]}s can't add a ${ROLE_LABEL[input.role]}` };
+  const name = tidyName(input.name);
+  if (!name) return { ok: false, error: 'Type their name' };
+  const bad = pinProblem(input.pin, state.staff);
+  if (bad) return { ok: false, error: bad };
+  const now = new Date().toISOString();
+  const staff: Staff = { id: uid('u-'), name, role: input.role, pin: input.pin, phone: input.phone?.trim() || undefined, active: true, createdAt: now, pinChangedAt: now };
+  set((st) => logStaff({ ...st, staff: [...st.staff, staff] }, byId, staff.id, 'added', ROLE_LABEL[staff.role]));
+  return { ok: true, staff };
+}
+
+export function updateStaff(id: string, patch: { name?: string; phone?: string; role?: Role }, byId: string): StaffResult {
+  const { actor, target, rights } = actorAndTarget(byId, id);
+  if (!actor || !target || !rights?.edit) return { ok: false, error: "You can't change this person" };
+  const name = patch.name !== undefined ? tidyName(patch.name) : target.name;
+  if (!name) return { ok: false, error: 'Type their name' };
+  let role = target.role;
+  if (patch.role && patch.role !== target.role) {
+    if (!rights.role) return { ok: false, error: "You can't change your own role" };
+    const newRights = staffRights(actor, { ...target, role: patch.role });
+    if (!newRights.role) return { ok: false, error: `${ROLE_LABEL[actor.role]}s can't make someone a ${ROLE_LABEL[patch.role]}` };
+    if (target.role === 'super_admin' && activeOwners(state.staff).length <= 1) return { ok: false, error: 'There must always be at least one owner' };
+    role = patch.role;
+  }
+  const phone = patch.phone !== undefined ? patch.phone.trim() || undefined : target.phone;
+  const changes = [
+    name !== target.name && `name ${target.name} → ${name}`,
+    role !== target.role && `role ${ROLE_LABEL[target.role]} → ${ROLE_LABEL[role]}`,
+    phone !== target.phone && 'phone',
+  ].filter(Boolean);
+  if (!changes.length) return { ok: true, staff: target };
+  const updated = { ...target, name, role, phone };
+  set((st) => logStaff({ ...st, staff: st.staff.map((s) => (s.id === id ? updated : s)) }, byId, id, 'edited', changes.join(', ')));
+  return { ok: true, staff: updated };
+}
+
+export function setStaffPin(id: string, pin: string, byId: string): StaffResult {
+  const { actor, target, rights } = actorAndTarget(byId, id);
+  if (!actor || !target || !rights?.pin) return { ok: false, error: "You can't change this person's PIN" };
+  const bad = pinProblem(pin, state.staff, id);
+  if (bad) return { ok: false, error: bad };
+  const updated = { ...target, pin, pinChangedAt: new Date().toISOString() };
+  set((st) => logStaff({ ...st, staff: st.staff.map((s) => (s.id === id ? updated : s)) }, byId, id, 'pin_changed'));
+  return { ok: true, staff: updated };
+}
+
+export function setStaffSuspended(id: string, suspended: boolean, byId: string, reason = ''): StaffResult {
+  const { actor, target, rights } = actorAndTarget(byId, id);
+  if (!actor || !target || !rights?.suspend) return { ok: false, error: actor?.id === id ? "You can't suspend yourself" : "You can't suspend this person" };
+  if (suspended && target.role === 'super_admin' && activeOwners(state.staff).length <= 1) return { ok: false, error: 'There must always be at least one owner' };
+  if (suspended === !target.active) return { ok: true, staff: target };
+  const updated = { ...target, active: !suspended };
+  set((st) => logStaff({ ...st, staff: st.staff.map((s) => (s.id === id ? updated : s)) }, byId, id, suspended ? 'suspended' : 'reactivated', reason.trim() || undefined));
+  return { ok: true, staff: updated };
+}
+
+/** Removes someone from the staff list for good. Their name stays on everything they did. */
+export function removeStaff(id: string, byId: string, reason = ''): StaffResult {
+  const { actor, target, rights } = actorAndTarget(byId, id);
+  if (!actor || !target || !rights?.remove) return { ok: false, error: actor?.id === id ? "You can't remove yourself" : "You can't remove this person" };
+  if (target.role === 'super_admin' && activeOwners(state.staff).filter((s) => s.id !== id).length < 1) return { ok: false, error: 'There must always be at least one owner' };
+  const updated = { ...target, active: false, deletedAt: new Date().toISOString() };
+  set((st) => logStaff({ ...st, staff: st.staff.map((s) => (s.id === id ? updated : s)) }, byId, id, 'deleted', reason.trim() || undefined));
+  return { ok: true, staff: updated };
 }

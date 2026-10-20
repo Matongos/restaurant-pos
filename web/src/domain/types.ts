@@ -18,7 +18,28 @@ export interface Staff {
   name: string;
   pin: string;
   role: Role;
+  /** false = suspended: cannot log in until reactivated. */
   active: boolean;
+  phone?: string;
+  createdAt?: string;
+  pinChangedAt?: string;
+  /**
+   * Removed staff are never erased: past sales, cancellations and purchases still
+   * show their name. They disappear from the staff list and can never log in.
+   */
+  deletedAt?: string;
+}
+
+export type StaffAction = 'added' | 'edited' | 'pin_changed' | 'suspended' | 'reactivated' | 'deleted';
+
+/** Who changed which staff account, and when. Append-only. */
+export interface StaffEvent {
+  id: ID;
+  at: string;
+  by: ID;
+  staffId: ID;
+  action: StaffAction;
+  detail?: string;
 }
 
 export interface Currency {
@@ -336,6 +357,7 @@ export interface AppState {
   purchases: Purchase[];
   expenses: Expense[];
   cancellations: Cancellation[];
+  staffLog: StaffEvent[];
   liveCarts: Record<ID, LiveCart>;
   dayCounter: DayCounter;
 }

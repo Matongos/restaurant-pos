@@ -1,4 +1,4 @@
-import type { AppState, CreditEntry, Customer, MenuItem, Order, Role } from './types';
+import type { AppState, CreditEntry, Customer, MenuItem, Order, Role, Staff } from './types';
 
 /** A meal can be sold only if it is switched on AND every component it uses is available. */
 export function isSellable(item: MenuItem, state: Pick<AppState, 'components'>): boolean {
@@ -106,11 +106,12 @@ export type Permission =
   | 'settings'
   | 'reports'
   | 'accounts'
+  | 'staff'
   | 'screens';
 
 const PERMS: Record<Role, Permission[]> = {
-  super_admin: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'menu_edit', 'settings', 'reports', 'accounts', 'screens'],
-  manager: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'menu_edit', 'reports', 'accounts', 'screens'],
+  super_admin: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'menu_edit', 'settings', 'reports', 'accounts', 'staff', 'screens'],
+  manager: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'menu_edit', 'reports', 'accounts', 'staff', 'screens'],
   cashier: ['take_orders', 'active_orders', 'change_owed'],
   kitchen: ['todays_menu', 'kitchen', 'active_orders'],
   attendant: ['active_orders'],
@@ -178,3 +179,54 @@ export function mealInitials(name: string): string {
   const words = name.replace(/[^A-Za-z ]/g, ' ').split(/\s+/).filter((w) => w.length > 1 && !/^(and|with|the|of|ml|kg)$/i.test(w));
   return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? '?').slice(0, 2)).toUpperCase();
 }
+
+/* -------------------------------------------------------------- staff admin */
+
+/** What each role does, shown when choosing a role for someone. */
+export const ROLE_HELP: Record<Role, string> = {
+  super_admin: 'Everything, including settings and managing managers',
+  manager: 'Till, kitchen, reports, books, menu and staff',
+  cashier: 'Takes payments and orders, customer change',
+  kitchen: 'Kitchen screen and sold-out switches',
+  attendant: 'Calls numbers and marks orders served',
+};
+
+/** Roles a person may give to others. Managers look after the floor staff; the owner looks after everyone. */
+export function rolesAssignable(actor: Role): Role[] {
+  if (actor === 'super_admin') return ['cashier', 'kitchen', 'attendant', 'manager', 'super_admin'];
+  if (actor === 'manager') return ['cashier', 'kitchen', 'attendant'];
+  return [];
+}
+
+export interface StaffRights {
+  edit: boolean;
+  pin: boolean;
+  role: boolean;
+  suspend: boolean;
+  remove: boolean;
+}
+
+/**
+ * What `actor` may do to `target`.
+ * - Owner: anyone. Manager: cashiers, kitchen and attendants.
+ * - Anyone with staff rights may change their own name, phone and PIN,
+ *   but never their own role, and can't suspend or remove themselves.
+ */
+export function staffRights(actor: Staff, target: Staff): StaffRights {
+  const none = { edit: false, pin: false, role: false, suspend: false, remove: false };
+  if (!can(actor.role, 'staff') || target.deletedAt) return none;
+  if (actor.id === target.id) return { edit: true, pin: true, role: false, suspend: false, remove: false };
+  const manages = rolesAssignable(actor.role).includes(target.role);
+  return manages ? { edit: true, pin: true, role: true, suspend: true, remove: true } : none;
+}
+
+/** Returns a problem with the PIN, or null if it can be used. PINs must be unique: they are how people log in. */
+export function pinProblem(pin: string, staff: Staff[], forId?: string): string | null {
+  if (!/^\d{4}$/.test(pin)) return 'PIN must be 4 digits';
+  if (/^(\d)\1{3}$/.test(pin)) return 'Too easy to guess — avoid four of the same digit';
+  if (staff.some((s) => !s.deletedAt && s.id !== forId && s.pin === pin)) return 'Someone else already uses this PIN';
+  return null;
+}
+
+/** The staff who can still log in or be reactivated (removed people are hidden). */
+export const currentStaff = (staff: Staff[]) => staff.filter((s) => !s.deletedAt);

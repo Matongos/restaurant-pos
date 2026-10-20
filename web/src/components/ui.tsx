@@ -14,6 +14,7 @@ import {
   LuSettings,
   LuShoppingBasket,
   LuSquarePen,
+  LuUsers,
   LuUtensilsCrossed,
   LuX,
   LuEllipsis,
@@ -81,6 +82,7 @@ function NavRail() {
     { to: '/todays-menu', label: 'Sold out', perm: 'todays_menu', Icon: LuUtensilsCrossed },
     { to: '/reports', label: 'Reports', perm: 'reports', Icon: LuChartColumn },
     { to: '/accounts', label: 'Books', perm: 'accounts', Icon: LuBookOpenText },
+    { to: '/staff', label: 'Staff', perm: 'staff', Icon: LuUsers },
     { to: '/menu', label: 'Menu', perm: 'menu_edit', Icon: LuSquarePen },
     { to: '/settings', label: 'Settings', perm: 'settings', Icon: LuSettings },
   ];
