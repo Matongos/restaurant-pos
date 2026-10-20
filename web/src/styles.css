@@ -743,3 +743,24 @@ tr.struck td b { text-decoration: line-through; }
   .pay-summary .kept b { font-size: 14px; }
   .pay-dialog footer { padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* Sell: list header, add button on tiles, bigger area for real photos */
+.items-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 16px 6px; font-weight: 700; font-size: 15px; }
+.items-head .link-btn { padding: 4px 0; min-height: 32px; }
+.item .pr-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; }
+.item .pr-row .pr { margin-top: 0; }
+.item .add-dot { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--brand); color: #fff; display: grid; place-items: center; }
+.item .add-dot svg { width: 18px; height: 18px; }
+.item:active .add-dot { background: var(--brand-strong); }
+.item.has-photo .ph { aspect-ratio: 4 / 3; }
+.ticket-panel .actions .btn.primary svg { width: 22px; height: 22px; }
+@media (max-width: 899px) {
+  .items-head { padding: 0 12px 4px; font-size: 14px; }
+  .item .add-dot { width: 26px; height: 26px; }
+  .item .add-dot svg { width: 16px; height: 16px; }
+  .item.has-photo .ph { aspect-ratio: 4 / 3; height: auto; }
+}
+.item .ph { flex: none; }
+@media (min-width: 900px) { .cat-bar .search-open { display: none; } }
+@media (max-width: 899px) { .item.has-photo .ph { aspect-ratio: auto; height: 72px; } }
+.items { grid-auto-rows: max-content; }

@@ -8,11 +8,12 @@ import { Dialog, TopBar } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
 import CollectChangeDialog from '../components/CollectChangeDialog';
-import { LuHandCoins, LuMinus, LuPlus, LuSearch, LuStar, LuTrash2, LuX } from 'react-icons/lu';
+import { LuCreditCard, LuHandCoins, LuMinus, LuPlus, LuSearch, LuStar, LuTrash2, LuX } from 'react-icons/lu';
 
 
 const TILL_ID = 'till-1';
 const FAV = '__fav';
+const ALL = '__all';
 
 export default function Till() {
   const { query } = useRoute();
@@ -40,7 +41,7 @@ export default function Till() {
   };
   const [cat, setCat] = useState<string>(firstCat);
   // If the chosen button is switched off in Settings, fall back to the first one still shown.
-  const catGone = cat === FAV ? !showFav : !visibleCats.some((c) => c.id === cat);
+  const catGone = cat === ALL ? false : cat === FAV ? !showFav : !visibleCats.some((c) => c.id === cat);
   useEffect(() => {
     if (catGone) setCat(firstCat());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -62,6 +63,7 @@ export default function Till() {
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (q) return sellable.filter((m) => m.name.toLowerCase().includes(q));
+    if (cat === ALL) return sellable;
     if (cat === FAV) return showFav ? sellable.filter((m) => m.favourite) : [];
     return sellable.filter((m) => m.categoryId === cat);
   }, [sellable, cat, search, showFav]);
@@ -171,13 +173,24 @@ export default function Till() {
               </button>
             ))}
           </div>
+          <div className="items-head">
+            <span>
+              {search ? `Results for “${search}”` : cat === ALL ? 'All meals' : cat === FAV ? 'Favourites' : categories.find((c) => c.id === cat)?.name}
+              <span className="muted"> · {shown.length}</span>
+            </span>
+            {!search && cat !== ALL && (
+              <button className="link-btn" onClick={() => pickCat(ALL)}>
+                View all
+              </button>
+            )}
+          </div>
           <div className="items">
             {shown.map((m) => {
               const q = qtyOf(m.id);
               return (
                 <button
                   key={m.id}
-                  className="item"
+                  className={`item ${m.photo ? 'has-photo' : ''}`}
                   onClick={() => add(m)}
                   style={{ '--cat': catColor(m.categoryId) } as CSSProperties}
                   aria-label={`${m.name}, ${fmt(m.price, base)}${q ? `, ${q} in order` : ''}`}
@@ -194,7 +207,12 @@ export default function Till() {
                   {q > 0 && <span className="qty-badge">{q}</span>}
                   <div className="meta">
                     <div className="nm">{m.name}</div>
-                    <div className="pr">{fmt(m.price, base)}</div>
+                    <div className="pr-row">
+                      <span className="pr">{fmt(m.price, base)}</span>
+                      <span className="add-dot" aria-hidden="true">
+                        <LuPlus />
+                      </span>
+                    </div>
                   </div>
                 </button>
               );
@@ -275,6 +293,7 @@ export default function Till() {
                 <LuTrash2 aria-hidden="true" />
               </button>
               <button className="btn big primary" onClick={() => setPaying(true)} disabled={!lines.length}>
+                <LuCreditCard aria-hidden="true" />
                 Pay {fmt(total, base)}
               </button>
             </div>
