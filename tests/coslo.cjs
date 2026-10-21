@@ -17,6 +17,8 @@ await page.click('.item:has-text("Rice & Beef")'); await page.click('.item:has-t
 const line=()=>page.locator('.line-row').first();
 check('chip shows coslo', (await line().locator('.opt-chip').textContent()).trim()==='Coslo');
 await line().locator('.opt-chip').click();
+check('asks how many', (await page.textContent('.dialog h2'))==='No coslo on how many?');
+await page.click('.split-pick button.all');
 check('toggled no coslo', (await line().locator('.opt-chip').textContent()).trim()==='No coslo');
 await page.click('.item:has-text("Rice & Beef")');
 check('new plain line', (await page.locator('.line-row').count())===2 && (await page.locator('.line-row').nth(1).locator('.opt-chip').textContent()).trim()==='Coslo');

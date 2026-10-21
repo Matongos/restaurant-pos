@@ -102,15 +102,37 @@ export default function Till() {
     return () => clearTimeout(t);
   }, [lastLine, lines]);
   /** One tap: "Coslo" ⇄ "No coslo" for this line. */
-  const toggleWithout = (id: string, part: string) =>
-    setLines((ls) =>
-      ls.map((l) => {
-        if (l.id !== id) return l;
-        const has = l.without?.includes(part);
-        const without = has ? l.without!.filter((w) => w !== part) : [...(l.without ?? []), part];
-        return { ...l, without: without.length ? without : undefined };
-      }),
-    );
+  /**
+   * Coslo ⇄ No coslo for `count` plates of a line. If that is fewer than the whole line, the line splits:
+   * 5 × Sadza & Beef  →  4 × Sadza & Beef  +  1 × Sadza & Beef (no greens).
+   */
+  const applyWithout = (id: string, part: string, count: number) =>
+    setLines((ls) => {
+      const line = ls.find((l) => l.id === id);
+      if (!line) return ls;
+      const has = line.without?.includes(part);
+      const flipped = has ? line.without!.filter((w) => w !== part) : [...(line.without ?? []), part];
+      const without = flipped.length ? flipped : undefined;
+      // An identical line already in the order (same meal, note and sides) is joined rather than repeated.
+      const twin = ls.find((l) => l.id !== id && l.itemId === line.itemId && l.note === line.note && sameWithout(l.without, without));
+      if (count >= line.qty) {
+        if (twin) return ls.filter((l) => l.id !== id).map((l) => (l.id === twin.id ? { ...l, qty: l.qty + line.qty } : l));
+        return ls.map((l) => (l.id === id ? { ...l, without } : l));
+      }
+      const rest = ls.map((l) => (l.id === id ? { ...l, qty: l.qty - count } : twin && l.id === twin.id ? { ...l, qty: l.qty + count } : l));
+      if (twin) return rest;
+      const i = rest.findIndex((l) => l.id === id);
+      const split: OrderLine = { ...line, id: crypto.randomUUID(), qty: count, without };
+      return [...rest.slice(0, i + 1), split, ...rest.slice(i + 1)];
+    });
+  const [splitAsk, setSplitAsk] = useState<{ lineId: string; part: string } | null>(null);
+  /** One plate: switch straight away. Several: ask how many. */
+  const toggleWithout = (id: string, part: string) => {
+    const line = lines.find((l) => l.id === id);
+    if (!line) return;
+    if (line.qty > 1) setSplitAsk({ lineId: id, part });
+    else applyWithout(id, part, 1);
+  };
 
   const changeQty = (id: string, d: number) =>
     setLines((ls) => ls.flatMap((l) => (l.id !== id ? [l] : l.qty + d <= 0 ? [] : [{ ...l, qty: l.qty + d }])));
@@ -475,6 +497,25 @@ export default function Till() {
       )}
       {done && <OrderDoneDialog result={done} onNew={newOrder} />}
       {collecting && <CollectChangeDialog onClose={() => setCollecting(false)} />}
+      {splitAsk &&
+        (() => {
+          const line = lines.find((l) => l.id === splitAsk.lineId);
+          if (!line) return null;
+          const removing = !line.without?.includes(splitAsk.part);
+          const label = removing ? `No ${splitAsk.part.toLowerCase()}` : `${splitAsk.part} back`;
+          return (
+            <SplitDialog
+              title={`${label} on how many?`}
+              subtitle={`${line.qty} × ${line.name}${line.without?.length ? ` (no ${line.without.join(', ').toLowerCase()})` : ''}`}
+              qty={line.qty}
+              onPick={(n) => {
+                applyWithout(line.id, splitAsk.part, n);
+                setSplitAsk(null);
+              }}
+              onClose={() => setSplitAsk(null)}
+            />
+          );
+        })()}
       {noteFor && (
         <NoteDialog
           line={noteFor}
@@ -486,6 +527,36 @@ export default function Till() {
         />
       )}
     </div>
+  );
+}
+
+/** "No greens on how many?" — big number buttons, then All. */
+function SplitDialog({ title, subtitle, qty, onPick, onClose }: { title: string; subtitle: string; qty: number; onPick: (n: number) => void; onClose: () => void }) {
+  const [custom, setCustom] = useState('');
+  const quick = Array.from({ length: Math.min(qty - 1, 9) }, (_, i) => i + 1);
+  const n = Number(custom);
+  return (
+    <Dialog title={title} onClose={onClose} width={460}>
+      <p className="muted" style={{ marginTop: 0 }}>{subtitle}</p>
+      <div className="split-pick">
+        {quick.map((k) => (
+          <button key={k} onClick={() => onPick(k)} autoFocus={k === 1}>
+            {k}
+          </button>
+        ))}
+        <button className="all" onClick={() => onPick(qty)}>
+          All {qty}
+        </button>
+      </div>
+      {qty > 10 && (
+        <div className="row" style={{ marginTop: 10 }}>
+          <input className="plain-input grow" style={{ marginTop: 0 }} inputMode="numeric" placeholder={`Another number (1–${qty})`} value={custom} onChange={(e) => setCustom(e.target.value.replace(/\D/g, ''))} />
+          <button className="btn primary" disabled={!(n >= 1 && n <= qty)} onClick={() => onPick(n)}>
+            OK
+          </button>
+        </div>
+      )}
+    </Dialog>
   );
 }
 

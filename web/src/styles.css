@@ -1043,3 +1043,8 @@ tr.struck td b { text-decoration: line-through; }
   .mini-card .mini-qty { position: absolute; top: 3px; right: 3px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; padding: 0 4px; z-index: 1; }
   .mini-card .mini-no { position: absolute; left: 4px; right: 4px; top: 20px; font-size: 9px; font-weight: 800; color: var(--bad); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
+
+.split-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
+.split-pick button { min-height: 60px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--panel); font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.split-pick button:hover { border-color: var(--brand); background: var(--brand-soft); }
+.split-pick .all { grid-column: span 2; font-size: 18px; background: var(--soft); }
