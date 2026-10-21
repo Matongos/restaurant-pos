@@ -8,7 +8,7 @@ import { Dialog, MoreMenu, TopBar } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
 import CollectChangeDialog from '../components/CollectChangeDialog';
-import { LuArrowRight, LuArrowRightLeft, LuCheck, LuChevronDown, LuChevronUp, LuCreditCard, LuHandCoins, LuMinus, LuPackage, LuPlus, LuSearch, LuStar, LuTrash2, LuUtensils, LuX } from 'react-icons/lu';
+import { LuArrowRight, LuArrowRightLeft, LuCheck, LuChevronDown, LuChevronUp, LuCreditCard, LuHandCoins, LuMessageSquarePlus, LuMinus, LuPackage, LuPlus, LuSearch, LuStar, LuTrash2, LuUtensils, LuX } from 'react-icons/lu';
 
 
 const TILL_ID = 'till-1';
@@ -160,9 +160,14 @@ export default function Till() {
             {m?.photo ? <img src={m.photo} alt="" /> : mealInitials(l.name)}
           </span>
           <div className="line-main">
-            <div className="nm">{l.name}</div>
-            <div className="pr">{fmt(l.qty * l.unitPrice, base)}</div>
+            <div className="nm-row">
+              <span className="nm">{l.name}</span>
+              <button className={`note-btn ${l.note ? 'has' : ''}`} onClick={() => setNoteFor(l)} aria-label={l.note ? `Note: ${l.note}. Tap to change` : `Add a note for ${l.name}`} title={l.note ? 'Change note' : 'Add note'}>
+                <LuMessageSquarePlus aria-hidden="true" />
+              </button>
+            </div>
             <div className="line-opts">
+              <span className="pr">{fmt(l.qty * l.unitPrice, base)}</span>
               {comesWith(m, components).map((c) => {
                 const off = l.without?.includes(c.name);
                 return (
@@ -180,9 +185,11 @@ export default function Till() {
                   </button>
                 );
               })}
-              <button className="note-btn" onClick={() => setNoteFor(l)}>
-                {l.note ? <span className="nt">{l.note}</span> : '+ Note'}
-              </button>
+              {l.note && (
+                <button className="nt" onClick={() => setNoteFor(l)}>
+                  {l.note}
+                </button>
+              )}
             </div>
           </div>
           <div className="qty">
@@ -317,6 +324,12 @@ export default function Till() {
               ]}
             />
           </div>
+          {lines.length > 0 && (
+            <button className="phone-summary" onClick={() => setSheet(true)} aria-label="Show order">
+              <span>{lines.map((l) => `${l.qty}× ${l.name}${l.without?.length ? ` (no ${l.without.join(', ').toLowerCase()})` : ''}`).join(' · ')}</span>
+              <LuChevronUp aria-hidden="true" />
+            </button>
+          )}
           {parent ? (
             <div className="addon-banner">
               <span>
@@ -345,10 +358,6 @@ export default function Till() {
           </div>
           <div className="totals">
             <div className="sum-rows">
-              <div>
-                <span>Items ({itemCount})</span>
-                <b>{fmt(total, base)}</b>
-              </div>
               {altCurrencies.length > 0 && (
                 <div>
                   <span>{altCurrencies.map((c) => c.code).join(' · ')}</span>
@@ -357,7 +366,9 @@ export default function Till() {
               )}
             </div>
             <div className="total-row">
-              <span>Total</span>
+              <span>
+                Total{itemCount > 0 && <small className="items-n"> · {itemCount} {itemCount === 1 ? 'item' : 'items'}</small>}
+              </span>
               <span>{fmt(total, base)}</span>
             </div>
             <div className="actions">
@@ -392,7 +403,7 @@ export default function Till() {
           <div className="order-sheet" role="dialog" aria-label="Order">
             <div className="sheet-head">
               <h2>
-                Order <span className="muted">· {itemCount} items</span>
+                Order <span className="muted">· {itemCount} {itemCount === 1 ? 'item' : 'items'}</span>
               </h2>
               <button className="btn ghost icon-only" onClick={() => setSheet(false)} aria-label="Close order">
                 <LuChevronDown aria-hidden="true" />
