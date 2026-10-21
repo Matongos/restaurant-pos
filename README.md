@@ -29,6 +29,14 @@ Point-of-sale system for a pay-first, counter-service restaurant: the customer p
 
 Demo PINs: Owner `1234` · Manager `2222` · Cashier `1111` · Kitchen `3333` · Attendant `4444`.
 
+## Put it online (Vercel)
+
+1. On [vercel.com](https://vercel.com) choose **Add New → Project** and import `Matongos/restaurant-pos`.
+2. Set **Root Directory** to `web` (everything else is read from `web/vercel.json`).
+3. Press **Deploy**. Every push to `main` updates the site by itself.
+
+Each phone or computer keeps its own demo data in its browser until the shared database is added.
+
 ## Run it on your computer
 
 You need [Node.js](https://nodejs.org) 20 or newer.
