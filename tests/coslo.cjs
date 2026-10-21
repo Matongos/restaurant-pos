@@ -30,7 +30,7 @@ await page.click('text=Next customer');
 await page.click('.nav-item:has-text("Kitchen")'); await page.waitForSelector('.ocard');
 check('kitchen shows', (await page.locator('.k-without').first().textContent()).includes('NO COSLO'));
 await page.screenshot({path:'look/d-50-kitchen-coslo.png'});
-await page.click('.nav-item:has-text("Orders")'); await page.waitForSelector('.ocard');
+await page.click('.nav-item:has-text("Orders")'); await page.waitForFunction(()=>location.hash==='#/orders'); await page.waitForSelector('.ocard');
 check('orders shows', (await page.locator('.ocard').first().textContent()).includes('No coslo'));
 // --- coslo finished: meal stays, line marked
 await page.click('.nav-item:has-text("Sold out")'); await page.click('.toggle:has-text("Coslo")');

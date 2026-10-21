@@ -3,7 +3,7 @@ const URL='http://localhost:8765/'; const out={}; const check=(n,c,d)=>out[n]=c?
 (async()=>{const b=await chromium.launch(); const page=await b.newPage({viewport:{width:1366,height:768}}); const errors=[];
 page.on('pageerror',e=>errors.push(e.message));
 const pin=async(c)=>{await page.waitForSelector('.keypad'); for(const d of c) await page.click(`.keypad button:text-is("${d}")`);};
-const chips=async()=>{await page.goto(URL+'#/till'); await page.waitForSelector('.items'); return (await page.locator('.cat-bar .chip').allTextContents()).map(t=>t.trim());};
+const chips=async()=>{await page.goto(URL+'#/till'); await page.waitForSelector('.items'); return (await page.locator('.chips .chip').allTextContents()).map(t=>t.trim());};
 const row=(n)=>page.locator('.cat-edit-row',{hasText:n});
 await page.goto(URL); await page.evaluate(()=>localStorage.clear()); await page.reload();
 await pin('2222'); await page.waitForSelector('.items');
@@ -13,7 +13,7 @@ await page.screenshot({path:'look/d-23-categories.png'});
 await row('Breakfast').locator('.switch').click();
 await row('Favourites').locator('.switch').click();
 const c1=await chips(); check('hidden chips', c1.join('|')==='Meals|Sides|Drinks', c1.join('|'));
-check('first visible selected', (await page.locator('.cat-bar .chip.on').textContent()).trim()==='Meals');
+check('first visible selected', (await page.locator('.chips .chip.on').textContent()).trim()==='Meals');
 await page.fill('#menu-search','porridge').catch(()=>{});
 await page.goto(URL+'#/menu'); await page.waitForSelector('.cat-list');
 await row('Drinks').locator('button[aria-label="Move Drinks up"]').click();

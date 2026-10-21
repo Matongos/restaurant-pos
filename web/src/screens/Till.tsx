@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRoute, go } from '../router';
 import { setLiveCart, useCurrentUser, useStore, type PlaceOrderSuccess } from '../store/store';
-import { comesWith, isSellable, mealInitials } from '../domain/rules';
+import { comesWith, isSellable, mealInitials, nextFreeCard, todayISO } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
 import type { MenuItem, OrderLine } from '../domain/types';
-import { Dialog, TopBar } from '../components/ui';
+import { Dialog, MoreMenu, TopBar } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
 import CollectChangeDialog from '../components/CollectChangeDialog';
-import { LuCheck, LuCreditCard, LuHandCoins, LuMinus, LuPlus, LuSearch, LuStar, LuTrash2, LuX } from 'react-icons/lu';
+import { LuArrowRight, LuArrowRightLeft, LuCheck, LuChevronDown, LuChevronUp, LuCreditCard, LuHandCoins, LuMinus, LuPackage, LuPlus, LuSearch, LuStar, LuTrash2, LuUtensils, LuX } from 'react-icons/lu';
 
 
 const TILL_ID = 'till-1';
@@ -46,7 +46,6 @@ export default function Till() {
     if (catGone) setCat(firstCat());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catGone]);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [lastLine, setLastLine] = useState<string | null>(null);
   const linesRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
@@ -137,66 +136,122 @@ export default function Till() {
   const pickCat = (id: string) => {
     setCat(id);
     setSearch('');
-    setSearchOpen(false);
   };
-  const closeSearch = () => {
-    setSearch('');
-    setSearchOpen(false);
-  };
+
+  // The number this customer will get (card or slip), shown on the order like a ticket number.
+  const settings = useStore((s) => s.settings);
+  const dayCounter = useStore((s) => s.dayCounter);
+  const nextNumber = parent
+    ? parent.number
+    : settings.numberMode === 'slip'
+      ? (dayCounter.date === todayISO() ? dayCounter.lastSlip : 0) + 1
+      : nextFreeCard(orders, settings.cardFrom, settings.cardTo);
+  const altCurrencies = currencies.filter((c) => c.enabled && c.code !== baseCode);
+  const listTitle = search ? `Results` : cat === ALL ? 'All meals' : cat === FAV ? 'Favourites' : categories.find((c) => c.id === cat)?.name ?? '';
+  const [sheet, setSheet] = useState(false);
+  const typeIcon = (id: string) => (id === 'take_away' ? <LuPackage aria-hidden="true" /> : <LuUtensils aria-hidden="true" />);
+
+  const lineRows = (inSheet: boolean) =>
+    lines.map((l) => {
+      const m = menu.find((x) => x.id === l.itemId);
+      return (
+        <div key={l.id} data-line={inSheet ? undefined : l.id} className={`line-row ${lastLine === l.id ? 'just' : ''}`}>
+          <span className="line-thumb" style={{ '--cat': catColor(m?.categoryId ?? '') } as CSSProperties} aria-hidden="true">
+            {m?.photo ? <img src={m.photo} alt="" /> : mealInitials(l.name)}
+          </span>
+          <div className="line-main">
+            <div className="nm">{l.name}</div>
+            <div className="pr">{fmt(l.qty * l.unitPrice, base)}</div>
+            <div className="line-opts">
+              {comesWith(m, components).map((c) => {
+                const off = l.without?.includes(c.name);
+                return (
+                  <button
+                    key={c.id}
+                    className={`opt-chip ${off ? 'off' : ''}`}
+                    onClick={() => c.available && toggleWithout(l.id, c.name)}
+                    aria-pressed={!off}
+                    aria-label={off ? `No ${c.name} — tap to include` : `With ${c.name} — tap for no ${c.name}`}
+                    disabled={!c.available}
+                  >
+                    {off ? <LuX aria-hidden="true" /> : <LuCheck aria-hidden="true" />}
+                    {off ? `No ${c.name.toLowerCase()}` : c.name}
+                    {!c.available && ' · finished'}
+                  </button>
+                );
+              })}
+              <button className="note-btn" onClick={() => setNoteFor(l)}>
+                {l.note ? <span className="nt">{l.note}</span> : '+ Note'}
+              </button>
+            </div>
+          </div>
+          <div className="qty">
+            <button onClick={() => changeQty(l.id, -1)} aria-label={`One less ${l.name}`}>
+              <LuMinus aria-hidden="true" />
+            </button>
+            <span>{l.qty}</span>
+            <button onClick={() => changeQty(l.id, 1)} aria-label={`One more ${l.name}`}>
+              <LuPlus aria-hidden="true" />
+            </button>
+          </div>
+          <button className="line-del" onClick={() => changeQty(l.id, -l.qty)} aria-label={`Remove ${l.name}`}>
+            <LuTrash2 aria-hidden="true" />
+          </button>
+        </div>
+      );
+    });
 
   return (
     <div className="app">
-      <TopBar title={addonFor ? `Add to order #${parent?.number ?? ''}` : 'Sell'}>
-        <button className="btn" onClick={() => setCollecting(true)}>
-          <LuHandCoins aria-hidden="true" />
-          Collect change
+      <TopBar title={addonFor ? `Add to #${parent?.number ?? ''}` : 'Sell'} bare={!addonFor}>
+        <button className="btn collect-btn" onClick={() => setCollecting(true)}>
+          <LuArrowRightLeft aria-hidden="true" />
+          <span>Collect change</span>
         </button>
       </TopBar>
       <div className="till">
-        {/* ---------------- menu (centre) */}
+        {/* ---------------- menu */}
         <section className="menu-panel" aria-label="Menu">
-          <div className={`cat-bar ${searchOpen ? 'searching' : ''}`}>
+          <div className="menu-tools">
             <label className="search">
               <LuSearch aria-hidden="true" />
               <input
                 id="menu-search"
-                placeholder="Search meals"
+                placeholder="Search meals, drinks…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
-                aria-label="Search meals"
-                autoFocus={searchOpen}
+                onKeyDown={(e) => e.key === 'Escape' && setSearch('')}
+                aria-label="Search meals and drinks"
               />
-              {searchOpen && (
-                <button className="search-close" onClick={closeSearch} aria-label="Close search">
+              {search && (
+                <button className="search-close" onClick={() => setSearch('')} aria-label="Clear search">
                   <LuX aria-hidden="true" />
                 </button>
               )}
             </label>
-            <button className="search-open" onClick={() => setSearchOpen(true)} aria-label="Search meals">
-              <LuSearch aria-hidden="true" />
-            </button>
-            {showFav && (
-              <button className={`chip ${cat === FAV && !search ? 'on' : ''}`} onClick={() => pickCat(FAV)}>
-                <LuStar aria-hidden="true" />
-                Favourites
-              </button>
-            )}
-            {visibleCats.map((c) => (
-              <button key={c.id} className={`chip ${cat === c.id && !search ? 'on' : ''}`} onClick={() => pickCat(c.id)}>
-                <span className="dot" style={{ background: c.color }} aria-hidden="true" />
-                {c.name}
-              </button>
-            ))}
+            <div className="chips" role="tablist" aria-label="Categories">
+              {showFav && (
+                <button role="tab" aria-selected={cat === FAV && !search} className={`chip ${cat === FAV && !search ? 'on' : ''}`} onClick={() => pickCat(FAV)}>
+                  <LuStar aria-hidden="true" />
+                  Favourites
+                </button>
+              )}
+              {visibleCats.map((c) => (
+                <button key={c.id} role="tab" aria-selected={cat === c.id && !search} className={`chip ${cat === c.id && !search ? 'on' : ''}`} onClick={() => pickCat(c.id)}>
+                  <span className="dot" style={{ background: c.color }} aria-hidden="true" />
+                  {c.name}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="items-head">
-            <span>
-              {search ? `Results for “${search}”` : cat === ALL ? 'All meals' : cat === FAV ? 'Favourites' : categories.find((c) => c.id === cat)?.name}
-              <span className="muted"> · {shown.length}</span>
-            </span>
+            <h2>
+              {listTitle} <span className="n-paren">({shown.length})</span>
+              <span className="n-dot">· {shown.length}</span>
+            </h2>
             {!search && cat !== ALL && (
-              <button className="link-btn" onClick={() => pickCat(ALL)}>
-                View all
+              <button className="view-all" onClick={() => pickCat(ALL)}>
+                View all <LuArrowRight aria-hidden="true" />
               </button>
             )}
           </div>
@@ -217,6 +272,11 @@ export default function Till() {
                     ) : (
                       <span className="mono" aria-hidden="true">
                         {mealInitials(m.name)}
+                      </span>
+                    )}
+                    {m.favourite && m.photo && (
+                      <span className="fav-star" aria-hidden="true">
+                        <LuStar />
                       </span>
                     )}
                   </div>
@@ -242,13 +302,20 @@ export default function Till() {
           {hiddenCount > 0 && <div className="hidden-note">{hiddenCount} meal(s) hidden because they are sold out.</div>}
         </section>
 
-        {/* ---------------- current order (right; docked under the meals on phones) */}
+        {/* ---------------- current order: a card on the right; docked at the bottom on phones */}
         <section className="ticket-panel" aria-label="Current order">
-          <div className="order-head">
-            <h2>
-              {parent ? `Adding to #${parent.number}` : 'Order'}
-              {itemCount > 0 && <span className="muted"> · {itemCount} {itemCount === 1 ? 'item' : 'items'}</span>}
-            </h2>
+          <div className="order-top">
+            <h2>{parent ? 'Add to order' : 'Order'}</h2>
+            {nextNumber !== null && nextNumber !== undefined && <span className="order-no">#{nextNumber}</span>}
+            <MoreMenu
+              down
+              vertical
+              label="Order options"
+              items={[
+                { label: 'Collect change', icon: <LuHandCoins aria-hidden="true" />, onClick: () => setCollecting(true) },
+                ...(lines.length ? [{ label: 'Clear order', icon: <LuTrash2 aria-hidden="true" />, danger: true, onClick: clear }] : []),
+              ]}
+            />
           </div>
           {parent ? (
             <div className="addon-banner">
@@ -263,78 +330,87 @@ export default function Till() {
             <div className="type-toggle" role="radiogroup" aria-label="Order type">
               {enabledTypes.map((t) => (
                 <button key={t.id} role="radio" aria-checked={typeId === t.id} className={`${t.id} ${typeId === t.id ? 'on' : ''}`} onClick={() => setTypeId(t.id)}>
-                  {t.name}
-                  <small>{t.packaging}</small>
+                  {typeIcon(t.id)}
+                  <span>
+                    {t.name}
+                    <small>{t.packaging}</small>
+                  </span>
                 </button>
               ))}
             </div>
           )}
           <div className="lines" ref={linesRef}>
             {lines.length === 0 && <div className="empty">Tap a meal to add it.</div>}
-            {lines.map((l) => (
-              <div key={l.id} data-line={l.id} className={`line-row ${lastLine === l.id ? 'just' : ''}`}>
-                <div className="qty">
-                  <button onClick={() => changeQty(l.id, -1)} aria-label={`One less ${l.name}`}>
-                    <LuMinus aria-hidden="true" />
-                  </button>
-                  <span>{l.qty}</span>
-                  <button onClick={() => changeQty(l.id, 1)} aria-label={`One more ${l.name}`}>
-                    <LuPlus aria-hidden="true" />
-                  </button>
-                </div>
-                <div>
-                  <div className="nm">{l.name}</div>
-                  <div className="line-opts">
-                    {comesWith(menu.find((m) => m.id === l.itemId), components).map((c) => {
-                      const off = l.without?.includes(c.name);
-                      return (
-                        <button
-                          key={c.id}
-                          className={`opt-chip ${off ? 'off' : ''}`}
-                          onClick={() => c.available && toggleWithout(l.id, c.name)}
-                          aria-pressed={!off}
-                          aria-label={off ? `No ${c.name} — tap to include` : `With ${c.name} — tap for no ${c.name}`}
-                          disabled={!c.available}
-                        >
-                          {off ? <LuX aria-hidden="true" /> : <LuCheck aria-hidden="true" />}
-                          {off ? `No ${c.name.toLowerCase()}` : c.name}
-                          {!c.available && ' · finished'}
-                        </button>
-                      );
-                    })}
-                    <button className="note-btn" onClick={() => setNoteFor(l)}>
-                      {l.note ? <span className="nt">{l.note}</span> : '+ Note'}
-                    </button>
-                  </div>
-                </div>
-                <div className="pr">{fmt(l.qty * l.unitPrice, base)}</div>
-              </div>
-            ))}
+            {lineRows(false)}
           </div>
           <div className="totals">
+            <div className="sum-rows">
+              <div>
+                <span>Items ({itemCount})</span>
+                <b>{fmt(total, base)}</b>
+              </div>
+              {altCurrencies.length > 0 && (
+                <div>
+                  <span>{altCurrencies.map((c) => c.code).join(' · ')}</span>
+                  <span>{altCurrencies.map((c) => fmt(fromBase(total, c), c)).join(' · ')}</span>
+                </div>
+              )}
+            </div>
             <div className="total-row">
-              <span>Total{itemCount > 0 && <span className="count"> · {itemCount} {itemCount === 1 ? 'item' : 'items'}</span>}</span>
+              <span>Total</span>
               <span>{fmt(total, base)}</span>
             </div>
-            <div className="alt">
-              {currencies
-                .filter((c) => c.enabled && c.code !== baseCode)
-                .map((c) => (
-                  <span key={c.code}>{fmt(fromBase(total, c), c)}</span>
-                ))}
-            </div>
             <div className="actions">
-              <button className="btn big icon-only" onClick={clear} disabled={!lines.length} aria-label="Clear order" title="Clear order">
+              <button className="phone-total" onClick={() => lines.length && setSheet(true)} aria-label={`Total ${fmt(total, base)}. ${itemCount} items. Show order`}>
+                <span className="lbl">
+                  Total
+                  {itemCount > 0 && (
+                    <span className="count">
+                      · {itemCount} <LuChevronUp aria-hidden="true" />
+                    </span>
+                  )}
+                </span>
+                <b>{fmt(total, base)}</b>
+              </button>
+              <button className="btn big icon-only clear-order" onClick={clear} disabled={!lines.length} aria-label="Clear order" title="Clear order">
                 <LuTrash2 aria-hidden="true" />
               </button>
-              <button className="btn big primary" onClick={() => setPaying(true)} disabled={!lines.length}>
+              <button className="btn big primary pay-btn" onClick={() => setPaying(true)} disabled={!lines.length}>
                 <LuCreditCard aria-hidden="true" />
                 Pay {fmt(total, base)}
+                <LuArrowRight aria-hidden="true" className="pay-arrow" />
               </button>
             </div>
           </div>
         </section>
       </div>
+
+      {/* Phone: the order list opens as a sheet from the total */}
+      {sheet && (
+        <>
+          <div className="sheet-scrim" onClick={() => setSheet(false)} />
+          <div className="order-sheet" role="dialog" aria-label="Order">
+            <div className="sheet-head">
+              <h2>
+                Order <span className="muted">· {itemCount} items</span>
+              </h2>
+              <button className="btn ghost icon-only" onClick={() => setSheet(false)} aria-label="Close order">
+                <LuChevronDown aria-hidden="true" />
+              </button>
+            </div>
+            <div className="lines">{lineRows(true)}</div>
+            <div className="sheet-foot">
+              <button className="btn big" onClick={() => setSheet(false)}>
+                Add more
+              </button>
+              <button className="btn big primary" onClick={() => { setSheet(false); setPaying(true); }} disabled={!lines.length}>
+                <LuCreditCard aria-hidden="true" />
+                Pay {fmt(total, base)}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {paying && (
         <PayDialog

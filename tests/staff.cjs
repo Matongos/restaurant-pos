@@ -4,7 +4,7 @@ const check=(n,c,d)=>out[n]=c?'ok':`FAIL ${d??''}`;
 (async()=>{
 const b=await chromium.launch(); const ctx=await b.newContext({viewport:{width:1366,height:768}});
 const page=await ctx.newPage(); const till2=await ctx.newPage(); const errors=[];
-for (const p of [page,till2]) { p.on('pageerror',e=>errors.push(e.message)); p.on('console',m=>m.type()==='error'&&errors.push(m.text())); }
+for (const p of [page,till2]) { p.on('pageerror',e=>errors.push(e.message)); p.on('console',m=>m.type()==='error'&&(!/ERR_TUNNEL|fonts\.g/.test(m.text()+m.location().url) && errors.push(m.text()))); }
 const pin=async(p,code)=>{await p.waitForSelector('.keypad'); for(const d of code) await p.click(`.keypad button:text-is("${d}")`);};
 const logout=async(p)=>{await p.click('.user-btn'); await p.click('.user-pop button:has-text("Log out")'); await p.waitForSelector('.keypad');};
 const footerBtn=()=>page.locator('.dialog footer button').last();

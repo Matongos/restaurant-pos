@@ -10,7 +10,7 @@ const check = (name, cond, detail) => (out[name] = cond ? 'ok' : `FAIL ${detail 
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  page.on('console', (m) => m.type() === 'error' && (!/ERR_TUNNEL|fonts\.g/.test(m.text()+m.location().url) && errors.push(m.text())));
   const pin = async (p) => { await page.waitForSelector('.keypad'); for (const d of p) await page.click(`.keypad button:text-is("${d}")`); };
   const logout = async () => { await page.click('.user-btn'); await page.click('.user-pop button:has-text("Log out")'); };
   const confirmBtn = () => page.locator('.dialog footer button').last();
@@ -130,15 +130,18 @@ const check = (name, cond, detail) => (out[name] = cond ? 'ok' : `FAIL ${detail 
 
   // 7. Phone layout: order bar, sheet, pay, More sheet.
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForSelector('.ticket-panel .line-row');
-  check('order docked on phone', await page.locator('.ticket-panel button:has-text("Pay $1.00")').isVisible());
-  await page.click('.ticket-panel button:has-text("Pay $1.00")');
+  await page.waitForSelector('.pay-btn');
+  check('pay visible on phone', await page.locator('.pay-btn:has-text("Pay $1.00")').isVisible());
+  await page.click('.phone-total');
+  check('order sheet lists items', (await page.locator('.order-sheet .line-row').count()) === 1);
+  await page.click('.order-sheet .sheet-head button');
+  await page.click('.pay-btn');
   await page.fill('#pay-amount', '1');
   await confirmBtn().click();
   await page.waitForSelector('.done-number');
   await page.click('text=Next customer');
-  await page.click('.rail-more');
-  check('more has logout', (await page.locator('.more-sheet button:has-text("Log out")').count()) === 1);
+  await page.click('.hamburger');
+  check('drawer has logout', (await page.locator('.drawer button:has-text("Log out")').count()) === 1);
   const overflowX = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
   check('no horizontal scroll (phone)', !overflowX);
 

@@ -4,20 +4,23 @@ import {
   LuBookOpenText,
   LuChevronDown,
   LuChartColumn,
+  LuClipboardList,
+  LuClock,
+  LuHouse,
+  LuUtensils,
   LuCookingPot,
   LuGraduationCap,
   LuHandCoins,
   LuLogOut,
   LuMenu,
   LuMonitor,
-  LuReceiptText,
   LuSettings,
-  LuShoppingBasket,
   LuSquarePen,
   LuUsers,
   LuUtensilsCrossed,
   LuX,
   LuEllipsis,
+  LuEllipsisVertical,
 } from 'react-icons/lu';
 import { go, useRoute } from '../router';
 import { logout, updateSettings, useCurrentUser, useStore } from '../store/store';
@@ -40,9 +43,75 @@ export function BrandMark({ withName = true }: { withName?: boolean }) {
   );
 }
 
+/** Product name shown in the sidebar (the restaurant's own name and logo go on receipts and the customer screen). */
+export const PRODUCT_NAME = 'TechPlug';
+
+function SideBrand() {
+  const logo = useStore((s) => s.settings.logo);
+  return (
+    <div className="side-brand">
+      <span className="side-logo" aria-hidden="true">
+        {logo ? <img src={logo} alt="" /> : <LuUtensils />}
+      </span>
+      <span className="side-name">
+        <b>{PRODUCT_NAME}</b>
+        <small>RESTAURANT POS</small>
+      </span>
+    </div>
+  );
+}
+
+/** Time and date, top right. */
 function Clock() {
-  const now = useNow(15000);
-  return <span className="clock-chip">{new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>;
+  const now = new Date(useNow(15000));
+  return (
+    <div className="clock-chip" aria-label={`Time ${now.toLocaleTimeString()}`}>
+      <LuClock aria-hidden="true" />
+      <span>
+        <b>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b>
+        <small>{now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</small>
+      </span>
+    </div>
+  );
+}
+
+/** Online / offline dot. Today the till saves on this device either way; later it tells the cashier sales are queued. */
+function useOnline() {
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
+  return online;
+}
+
+function OnlineStatus() {
+  const online = useOnline();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="status-wrap">
+      <button className={`online-chip ${online ? 'on' : 'off'}`} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog">
+        <span className="dot" aria-hidden="true" />
+        {online ? 'Online' : 'Offline'}
+        <LuChevronDown aria-hidden="true" />
+      </button>
+      {open && (
+        <>
+          <div className="more-scrim" style={{ background: 'transparent' }} onClick={() => setOpen(false)} />
+          <div className="status-pop" role="dialog" aria-label="Connection">
+            <b>{online ? 'Connected to the internet' : 'No internet connection'}</b>
+            <p>Sales are saved on this device{online ? '' : ' and you can keep selling'}.</p>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 /** Where each role lands after logging in. */
@@ -58,25 +127,17 @@ interface NavDef {
   badge?: number;
 }
 
-/**
- * Persistent navigation: a side rail on tablets and desktops, a bottom bar on phones
- * (first four items + More). Items depend on the person's role.
- */
-function NavRail() {
+/** The screens this person may open, their own landing screen first. */
+function useNavItems(): NavDef[] {
   const user = useCurrentUser();
-  const { path } = useRoute();
   const orders = useStore((s) => s.orders);
   const credit = useStore((s) => s.credit);
-  const settings = useStore((s) => s.settings);
-  const [more, setMore] = useState(false);
-  if (!user) return null;
-
+  if (!user) return [];
   const openOrders = orders.filter((o) => !o.parentOrderId && !o.example && (o.status === 'in_kitchen' || o.status === 'ready')).length;
   const owed = [...balances(credit).values()].filter((b) => b > 0).length;
-
   const all: NavDef[] = [
-    { to: '/till', label: 'Sell', perm: 'take_orders', Icon: LuShoppingBasket },
-    { to: '/orders', label: 'Orders', perm: 'active_orders', Icon: LuReceiptText, badge: openOrders },
+    { to: '/till', label: 'Sell', perm: 'take_orders', Icon: LuHouse },
+    { to: '/orders', label: 'Orders', perm: 'active_orders', Icon: LuClipboardList, badge: openOrders },
     { to: '/kitchen', label: 'Kitchen', perm: 'kitchen', Icon: LuCookingPot },
     { to: '/change-owed', label: 'Change', perm: 'change_owed', Icon: LuHandCoins, badge: owed },
     { to: '/todays-menu', label: 'Sold out', perm: 'todays_menu', Icon: LuUtensilsCrossed },
@@ -86,79 +147,122 @@ function NavRail() {
     { to: '/menu', label: 'Menu', perm: 'menu_edit', Icon: LuSquarePen },
     { to: '/settings', label: 'Settings', perm: 'till_settings', Icon: LuSettings },
   ];
-  // The person's own landing screen comes first on the phone bar.
   const home = homeFor(user.role);
-  const items = all.filter((n) => can(user.role, n.perm)).sort((a, b) => (a.to === home ? -1 : b.to === home ? 1 : 0));
-  const PHONE_SLOTS = 4;
-  const overflow = items.length > PHONE_SLOTS + 1 ? items.slice(PHONE_SLOTS) : [];
+  return all.filter((n) => can(user.role, n.perm)).sort((a, b) => (a.to === home ? -1 : b.to === home ? 1 : 0));
+}
 
-  const openDisplay = () => {
-    setMore(false);
-    const w = window.open('#/display?till=till-1', 'customer-display', 'popup,width=1024,height=640');
-    if (w) toast('Customer screen opened — drag it to the second monitor and press F11.');
-    else go('/display?till=till-1');
-  };
-  const signOut = () => {
-    logout();
-    go('/');
-  };
+function openCustomerScreen() {
+  const w = window.open('#/display?till=till-1', 'customer-display', 'popup,width=1024,height=640');
+  if (w) toast('Customer screen opened — drag it to the second monitor and press F11.');
+  else go('/display?till=till-1');
+}
 
-  const item = (n: NavDef, extraClass = '') => (
+function NavButton({ n, onGo }: { n: NavDef; onGo?: () => void }) {
+  const { path } = useRoute();
+  return (
     <button
-      key={n.to}
-      className={`nav-item ${path === n.to ? 'on' : ''} ${extraClass}`}
+      className={`nav-item ${path === n.to ? 'on' : ''}`}
       onClick={() => {
-        setMore(false);
+        onGo?.();
         go(n.to);
       }}
       aria-current={path === n.to ? 'page' : undefined}
     >
-      <n.Icon aria-hidden="true" />
-      {n.label}
-      {!!n.badge && <span className="nav-badge">{n.badge}</span>}
+      <span className="nav-ic">
+        <n.Icon aria-hidden="true" />
+        {!!n.badge && <span className="nav-badge">{n.badge}</span>}
+      </span>
+      <span className="nav-lbl">{n.label}</span>
+      {!!n.badge && <span className="nav-badge-inline">{n.badge}</span>}
     </button>
   );
+}
 
-  const showDisplay = can(user.role, 'take_orders') || can(user.role, 'screens');
-  const showTraining = can(user.role, 'reports');
+/**
+ * Navigation.
+ * - Desktop: navy sidebar with names. Tablets: the same, icons only (narrow).
+ * - Phones: a bottom bar with the first screens, and the full sidebar as a drawer (☰).
+ */
+function Navigation({ drawer, setDrawer }: { drawer: boolean; setDrawer: (v: boolean) => void }) {
+  const user = useCurrentUser();
+  const tagline = useStore((s) => s.settings.tagline);
+  const training = useStore((s) => s.settings.trainingMode);
+  const items = useNavItems();
+  useEffect(() => {
+    if (!drawer) return;
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setDrawer(false);
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [drawer, setDrawer]);
+  if (!user) return null;
+  const PHONE_SLOTS = 4;
+  const phoneItems = items.length > PHONE_SLOTS + 1 ? items.slice(0, PHONE_SLOTS) : items;
+  const close = () => setDrawer(false);
+  const canTraining = can(user.role, 'reports');
+  const canDisplay = can(user.role, 'take_orders') || can(user.role, 'screens');
+
+  const sideContent = (inDrawer: boolean) => (
+    <>
+      <div className="side-top">
+        <SideBrand />
+        {inDrawer && (
+          <button className="side-close" onClick={close} aria-label="Close menu">
+            <LuX aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      <div className="side-items">
+        {items.map((n) => (
+          <NavButton key={n.to} n={n} onGo={inDrawer ? close : undefined} />
+        ))}
+      </div>
+      {inDrawer && (
+        <div className="side-items side-extra">
+          {canDisplay && (
+            <button className="nav-item" onClick={() => { close(); openCustomerScreen(); }}>
+              <span className="nav-ic"><LuMonitor aria-hidden="true" /></span>
+              <span className="nav-lbl">Customer screen</span>
+            </button>
+          )}
+          {canTraining && (
+            <button className="nav-item" onClick={() => updateSettings({ trainingMode: !training })}>
+              <span className="nav-ic"><LuGraduationCap aria-hidden="true" /></span>
+              <span className="nav-lbl">Training mode: {training ? 'on' : 'off'}</span>
+            </button>
+          )}
+          <button className="nav-item" onClick={() => { close(); logout(); go('/'); }}>
+            <span className="nav-ic"><LuLogOut aria-hidden="true" /></span>
+            <span className="nav-lbl">Log out ({user.name.split(' ')[0]})</span>
+          </button>
+        </div>
+      )}
+      <div className="side-spacer" />
+      {tagline && <div className="side-tagline">{tagline}</div>}
+    </>
+  );
 
   return (
     <>
-      <nav className="rail" aria-label="Main">
-        <button className="rail-brand" onClick={() => go(home)} aria-label="Home">
-          <BrandMark withName={false} />
-        </button>
-        {items.map((n, i) => item(n, overflow.length && i >= PHONE_SLOTS ? 'overflow' : ''))}
-        {overflow.length > 0 && (
-          <button className="nav-item rail-more" onClick={() => setMore((m) => !m)} aria-expanded={more}>
-            <LuMenu aria-hidden="true" />
-            More
+      <nav className="side" aria-label="Main">
+        {sideContent(false)}
+      </nav>
+      <nav className="bottom-nav" aria-label="Main (phone)">
+        {phoneItems.map((n) => (
+          <NavButton key={n.to} n={n} />
+        ))}
+        {phoneItems.length < items.length && (
+          <button className="nav-item rail-more" onClick={() => setDrawer(true)} aria-expanded={drawer}>
+            <span className="nav-ic"><LuMenu aria-hidden="true" /></span>
+            <span className="nav-lbl">More</span>
           </button>
         )}
-        <div className="rail-spacer" />
       </nav>
-      {more && (
+      {drawer && (
         <>
-          <div className="more-scrim" onClick={() => setMore(false)} />
-          <div className="more-sheet" role="menu">
-            {overflow.map((n) => item(n))}
-            {showDisplay && (
-              <button className="nav-item" onClick={openDisplay}>
-                <LuMonitor aria-hidden="true" />
-                Customer screen
-              </button>
-            )}
-            {showTraining && (
-              <button className={`nav-item ${settings.trainingMode ? 'on' : ''}`} onClick={() => updateSettings({ trainingMode: !settings.trainingMode })}>
-                <LuGraduationCap aria-hidden="true" />
-                Training {settings.trainingMode ? 'on' : 'off'}
-              </button>
-            )}
-            <button className="nav-item" onClick={signOut}>
-              <LuLogOut aria-hidden="true" />
-              Log out ({user.name.split(' ')[0]})
-            </button>
-          </div>
+          <div className="drawer-scrim" onClick={close} />
+          <nav className="side drawer" aria-label="Menu" role="dialog">
+            {sideContent(true)}
+          </nav>
         </>
       )}
     </>
@@ -173,12 +277,6 @@ function UserMenu() {
   if (!user) return null;
   const showDisplay = can(user.role, 'take_orders') || can(user.role, 'screens');
   const showTraining = can(user.role, 'reports');
-  const openDisplay = () => {
-    setOpen(false);
-    const w = window.open('#/display?till=till-1', 'customer-display', 'popup,width=1024,height=640');
-    if (w) toast('Customer screen opened — drag it to the second monitor and press F11.');
-    else go('/display?till=till-1');
-  };
   return (
     <div className="user-wrap">
       <button className="user-btn" onClick={() => setOpen((u) => !u)} aria-haspopup="menu" aria-expanded={open} aria-label={`${user.name}, ${ROLE_LABEL[user.role]} — account menu`}>
@@ -198,7 +296,7 @@ function UserMenu() {
               <span className="muted">{ROLE_LABEL[user.role]}</span>
             </div>
             {showDisplay && (
-              <button role="menuitem" onClick={openDisplay}>
+              <button role="menuitem" onClick={() => { setOpen(false); openCustomerScreen(); }}>
                 <LuMonitor aria-hidden="true" />
                 Open customer screen
               </button>
@@ -221,18 +319,26 @@ function UserMenu() {
   );
 }
 
-/** Screen header plus the navigation. Every signed-in screen starts with this. */
-export function TopBar({ title, children }: { title?: string; children?: ReactNode }) {
+/**
+ * Header plus navigation. Every signed-in screen starts with this.
+ * `bare` hides the title on wide screens (the Sell screen: the sidebar already says where you are).
+ */
+export function TopBar({ title, children, bare = false }: { title?: string; children?: ReactNode; bare?: boolean }) {
   const training = useStore((s) => s.settings.trainingMode);
+  const [drawer, setDrawer] = useState(false);
   return (
     <>
-      <NavRail />
+      <Navigation drawer={drawer} setDrawer={setDrawer} />
       <header className="topbar">
-        {title && <h1 className="title">{title}</h1>}
-        {training && <span className="training-pill">TRAINING</span>}
+        <button className="hamburger" onClick={() => setDrawer(true)} aria-label="Open menu">
+          <LuMenu aria-hidden="true" />
+        </button>
+        {title && <h1 className={`title ${bare ? 'bare' : ''}`}>{title}</h1>}
+        <OnlineStatus />
+        {training && <span className="training-pill">Training Mode</span>}
         <div className="spacer" />
-        {children}
         <Clock />
+        {children && <div className="top-actions">{children}</div>}
         <UserMenu />
       </header>
     </>
@@ -315,7 +421,19 @@ export function useTick(ms = 10000) {
 }
 
 /** "More" button with a small menu: keeps rare or risky actions away from the main ones. */
-export function MoreMenu({ items, label = 'More' }: { items: { label: string; icon?: ReactNode; danger?: boolean; onClick: () => void }[]; label?: string }) {
+export function MoreMenu({
+  items,
+  label = 'More',
+  down = false,
+  vertical = false,
+}: {
+  items: { label: string; icon?: ReactNode; danger?: boolean; onClick: () => void }[];
+  label?: string;
+  /** Open below the button (for menus near the top of the screen). */
+  down?: boolean;
+  /** ⋮ instead of … */
+  vertical?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
@@ -332,10 +450,10 @@ export function MoreMenu({ items, label = 'More' }: { items: { label: string; ic
   return (
     <div className="menu-wrap">
       <button className="btn icon-only" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <LuEllipsis aria-hidden="true" />
+        {vertical ? <LuEllipsisVertical aria-hidden="true" /> : <LuEllipsis aria-hidden="true" />}
       </button>
       {open && (
-        <div className="menu-pop" role="menu">
+        <div className={`menu-pop ${down ? 'down' : ''}`} role="menu">
           {items.map((it) => (
             <button key={it.label} role="menuitem" className={it.danger ? 'danger' : ''} onClick={it.onClick}>
               {it.icon}
