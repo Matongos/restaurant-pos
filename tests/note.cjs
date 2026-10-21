@@ -9,6 +9,6 @@ if(n==='p') await page.click('.phone-total');
 const scope = n==='p' ? '.order-sheet' : '.ticket-panel';
 await page.click(`${scope} .note-btn`); await page.click('.dialog .seg button:has-text("Extra gravy")'); await page.click('.dialog footer button:has-text("Save note")');
 r[n]=(await page.locator(`${scope} .line-opts .nt`).textContent())==='Extra gravy' && await page.locator(`${scope} .note-btn.has`).count()===1;
-if(n==='p'){ await page.screenshot({path:'look/c-ph-sheet.png'}); await page.click('.sheet-head button'); r.summary=(await page.textContent('.phone-summary')).includes('1× Rice & Beef'); }
+if(n==='p'){ await page.screenshot({path:'look/c-ph-sheet.png'}); await page.click('.sheet-head button'); r.summary=(await page.textContent('.mini-head')).includes('1 item') && (await page.locator('.mini-card').count())===1; }
 await page.close();}
 console.log(JSON.stringify(r)); await b.close();})();

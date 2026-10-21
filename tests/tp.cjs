@@ -1,5 +1,5 @@
 const { chromium } = require('/opt/npm-tools/node_modules/playwright');
-const sizes=[['xl',1866,843],['lg',1366,768],['md',1024,768],['tab',820,1180],['ph',390,844],['xs',320,640]];
+const sizes=[['lap',1536,730],['lg',1366,768],['md',1024,768],['tab',820,1180],['ph',390,844],['xs',320,640]];
 const photos = process.argv[2]==='photos';
 (async()=>{const b=await chromium.launch(); const errors=[]; const out={};
 for (const [n,w,h] of sizes){
@@ -13,7 +13,7 @@ if(photos){ await page.evaluate(()=>{const k='restaurant-pos.state.v1';const st=
  st.menu.forEach(m=>{if(ph[m.name])m.photo=ph[m.name];});localStorage.setItem(k,JSON.stringify(st));}); }
 if(photos){ await page.reload(); await page.waitForSelector('.items'); }
 await page.screenshot({path:`look/tp-${n}-empty${photos?'-ph':''}.png`});
-await page.click('.item:has-text("Sadza & Beef")'); await page.click('.item:has-text("Soft Drink")');
+for (const m of ['Rice & Chicken','Chips & Chicken','Water 500ml','Soft Drink']) await page.click(`.item:has-text("${m}")`);
 await page.waitForTimeout(700);
 await page.screenshot({path:`look/tp-${n}-order${photos?'-ph':''}.png`});
 out[n]={hscroll: await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth), payVisible: await page.locator('.pay-btn').isVisible(), clipped: await page.evaluate(()=>[...document.querySelectorAll('.item')].filter(e=>e.scrollHeight>e.clientHeight+1).length)};

@@ -971,3 +971,75 @@ tr.struck td b { text-decoration: line-through; }
   .ticket-panel .line-thumb { display: none; }
   .ticket-panel .line-row { grid-template-columns: minmax(0, 1fr) auto auto; }
 }
+
+/* =================================================================== TechPlug v2 refinements */
+/* Header: title + TRAINING tag left; online, clock, actions, user right */
+.training-pill { background: #fff1e6; color: #c2410c; border: 1px solid #fbd3b4; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.status-pop { left: auto; right: 0; }
+.clock-chip { border-right: 0; border-left: 1px solid var(--line); padding: 0 16px; }
+@media (max-width: 899px) { .clock-chip { display: none; } }
+
+/* Meal cards: initials small at top-left, photo beside them (compact) */
+.items { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.item { padding: 10px 10px 10px 12px; }
+.item-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; min-height: 24px; }
+.item-top .mono { font-size: 17px; font-weight: 800; color: var(--cat, var(--muted)); letter-spacing: 0.01em; line-height: 1.2; }
+.item-photo { width: 62%; max-width: 104px; height: 60px; object-fit: cover; border-radius: 10px; margin: -2px -2px 0 0; }
+.item .meta { padding: 6px 0 0; gap: 8px; }
+.item .qty-badge { top: auto; bottom: 46px; right: 8px; }
+.item.has-photo .qty-badge { bottom: auto; top: 6px; right: 6px; }
+@media (max-width: 1199px) { .item-photo { height: 50px; } }
+@media (max-width: 899px) {
+  .item { padding: 8px 8px 8px 10px; }
+  .item-top .mono { font-size: 15px; }
+  .item-photo { height: 44px; }
+}
+
+/* Order panel: flush to the right edge like a till receipt */
+.ticket-panel { margin: 0; border-radius: 0; border: 0; border-left: 1px solid var(--line); box-shadow: none; }
+@media (max-width: 1199px) { .ticket-panel { margin: 0; } }
+.total-amt { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.05; }
+.total-amt small { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0; margin-top: 4px; }
+.sum-rows > div b { font-weight: 700; }
+.mini-order { display: none; }
+.chips-wrap { position: relative; min-width: 0; flex: 1 1 auto; }
+.chips-next { display: none; }
+
+/* Phones */
+@media (max-width: 599px) {
+  .topbar .training-pill { display: none; }
+  /* categories on one line, slide with › */
+  .menu-tools { flex-wrap: nowrap; flex-direction: column; align-items: stretch; }
+  .chips-wrap { width: 100%; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; padding-right: 36px; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { scroll-snap-align: start; }
+  .chips-next { display: grid; place-items: center; position: absolute; right: 0; top: 0; bottom: 0; width: 40px; border: 0; color: var(--ink); background: linear-gradient(90deg, rgba(244,246,249,0), var(--bg) 45%); }
+  .chips-next svg { width: 20px; height: 20px; }
+  /* 2 compact cards per row */
+  .items { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .item { padding: 8px 8px 8px 10px; }
+  .item-photo { height: 46px; width: 56%; }
+  .item .meta { gap: 6px; }
+  .item .nm { font-size: 13px; }
+  .item .pr { font-size: 14px; }
+  .item .add-dot { width: 28px; height: 28px; }
+  .item .qty-badge { bottom: 40px; }
+  /* order: header + strip of mini cards */
+  .mini-order { display: block; border-bottom: 1px solid var(--line); }
+  .mini-head { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; padding: 8px 12px 6px; text-align: left; color: var(--ink); }
+  .mini-head > span { flex: 1; display: flex; flex-direction: column; line-height: 1.15; }
+  .mini-head b { font-size: 14px; }
+  .mini-head small { font-size: 12px; color: var(--muted); }
+  .mini-head .mini-total { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .mini-head svg { width: 18px; height: 18px; color: var(--muted); }
+  .mini-strip { display: flex; gap: 8px; overflow-x: auto; padding: 0 12px 8px; scrollbar-width: none; }
+  .mini-strip::-webkit-scrollbar { display: none; }
+  .mini-card { position: relative; flex: none; width: 76px; height: 58px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 4px 6px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; transition: background 0.3s; }
+  .mini-card.just { background: var(--brand-soft); border-color: var(--brand-line); }
+  .mini-card .mono { font-size: 11px; font-weight: 800; color: var(--cat, var(--muted)); align-self: flex-start; }
+  .mini-card img { position: absolute; top: 4px; right: 4px; width: 36px; height: 26px; object-fit: cover; border-radius: 6px; }
+  .mini-card .mini-pr { font-size: 11px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+  .mini-card .mini-qty { position: absolute; top: 3px; right: 3px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; padding: 0 4px; z-index: 1; }
+  .mini-card .mini-no { position: absolute; left: 4px; right: 4px; top: 20px; font-size: 9px; font-weight: 800; color: var(--bad); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}

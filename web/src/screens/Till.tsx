@@ -8,7 +8,7 @@ import { Dialog, MoreMenu, TopBar } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
 import CollectChangeDialog from '../components/CollectChangeDialog';
-import { LuArrowRight, LuArrowRightLeft, LuCheck, LuChevronDown, LuChevronUp, LuCreditCard, LuHandCoins, LuMessageSquarePlus, LuMinus, LuPackage, LuPlus, LuSearch, LuStar, LuTrash2, LuUtensils, LuX } from 'react-icons/lu';
+import { LuArrowRight, LuArrowRightLeft, LuCheck, LuChevronDown, LuChevronRight, LuChevronUp, LuCreditCard, LuHandCoins, LuMessageSquarePlus, LuMinus, LuPackage, LuPlus, LuSearch, LuStar, LuTrash2, LuUtensils, LuX } from 'react-icons/lu';
 
 
 const TILL_ID = 'till-1';
@@ -149,6 +149,19 @@ export default function Till() {
   const altCurrencies = currencies.filter((c) => c.enabled && c.code !== baseCode);
   const listTitle = search ? `Results` : cat === ALL ? 'All meals' : cat === FAV ? 'Favourites' : categories.find((c) => c.id === cat)?.name ?? '';
   const [sheet, setSheet] = useState(false);
+  const orderNo = nextNumber ? `#${String(nextNumber).padStart(4, '0')}` : '';
+  // Phones: categories stay on one line; a › button appears while more are hidden to the right.
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const [chipsMore, setChipsMore] = useState(false);
+  const checkChips = () => {
+    const el = chipsRef.current;
+    setChipsMore(!!el && el.scrollWidth - el.scrollLeft - el.clientWidth > 4);
+  };
+  useEffect(() => {
+    checkChips();
+    window.addEventListener('resize', checkChips);
+    return () => window.removeEventListener('resize', checkChips);
+  }, [visibleCats.length, showFav]);
   const typeIcon = (id: string) => (id === 'take_away' ? <LuPackage aria-hidden="true" /> : <LuUtensils aria-hidden="true" />);
 
   const lineRows = (inSheet: boolean) =>
@@ -210,7 +223,7 @@ export default function Till() {
 
   return (
     <div className="app">
-      <TopBar title={addonFor ? `Add to #${parent?.number ?? ''}` : 'Sell'} bare={!addonFor}>
+      <TopBar title={addonFor ? `Add to #${parent?.number ?? ''}` : 'Sell'}>
         <button className="btn collect-btn" onClick={() => setCollecting(true)}>
           <LuArrowRightLeft aria-hidden="true" />
           <span>Collect change</span>
@@ -236,7 +249,8 @@ export default function Till() {
                 </button>
               )}
             </label>
-            <div className="chips" role="tablist" aria-label="Categories">
+            <div className="chips-wrap">
+            <div className="chips" role="tablist" aria-label="Categories" ref={chipsRef} onScroll={checkChips}>
               {showFav && (
                 <button role="tab" aria-selected={cat === FAV && !search} className={`chip ${cat === FAV && !search ? 'on' : ''}`} onClick={() => pickCat(FAV)}>
                   <LuStar aria-hidden="true" />
@@ -249,6 +263,12 @@ export default function Till() {
                   {c.name}
                 </button>
               ))}
+            </div>
+            {chipsMore && (
+              <button className="chips-next" onClick={() => chipsRef.current?.scrollBy({ left: 160, behavior: 'smooth' })} aria-label="More categories">
+                <LuChevronRight aria-hidden="true" />
+              </button>
+            )}
             </div>
           </div>
           <div className="items-head">
@@ -273,19 +293,11 @@ export default function Till() {
                   style={{ '--cat': catColor(m.categoryId) } as CSSProperties}
                   aria-label={`${m.name}, ${fmt(m.price, base)}${q ? `, ${q} in order` : ''}`}
                 >
-                  <div className="ph">
-                    {m.photo ? (
-                      <img src={m.photo} alt="" />
-                    ) : (
-                      <span className="mono" aria-hidden="true">
-                        {mealInitials(m.name)}
-                      </span>
-                    )}
-                    {m.favourite && m.photo && (
-                      <span className="fav-star" aria-hidden="true">
-                        <LuStar />
-                      </span>
-                    )}
+                  <div className="item-top">
+                    <span className="mono" aria-hidden="true">
+                      {mealInitials(m.name)}
+                    </span>
+                    {m.photo && <img className="item-photo" src={m.photo} alt="" />}
                   </div>
                   {q > 0 && <span className="qty-badge">{q}</span>}
                   <div className="meta">
@@ -313,7 +325,7 @@ export default function Till() {
         <section className="ticket-panel" aria-label="Current order">
           <div className="order-top">
             <h2>{parent ? 'Add to order' : 'Order'}</h2>
-            {nextNumber !== null && nextNumber !== undefined && <span className="order-no">#{nextNumber}</span>}
+            {orderNo && <span className="order-no">{orderNo}</span>}
             <MoreMenu
               down
               vertical
@@ -325,10 +337,32 @@ export default function Till() {
             />
           </div>
           {lines.length > 0 && (
-            <button className="phone-summary" onClick={() => setSheet(true)} aria-label="Show order">
-              <span>{lines.map((l) => `${l.qty}× ${l.name}${l.without?.length ? ` (no ${l.without.join(', ').toLowerCase()})` : ''}`).join(' · ')}</span>
-              <LuChevronUp aria-hidden="true" />
-            </button>
+            <div className="mini-order">
+              <button className="mini-head" onClick={() => setSheet(true)} aria-label="Show the order">
+                <span>
+                  <b>Order {orderNo}</b>
+                  <small>
+                    {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                  </small>
+                </span>
+                <b className="mini-total">{fmt(total, base)}</b>
+                <LuChevronUp aria-hidden="true" />
+              </button>
+              <div className="mini-strip">
+                {lines.map((l) => {
+                  const m = menu.find((x) => x.id === l.itemId);
+                  return (
+                    <button key={l.id} className={`mini-card ${lastLine === l.id ? 'just' : ''}`} onClick={() => setSheet(true)} style={{ '--cat': catColor(m?.categoryId ?? '') } as CSSProperties} aria-label={`${l.qty} ${l.name}`}>
+                      <span className="mono">{mealInitials(l.name)}</span>
+                      {m?.photo && <img src={m.photo} alt="" />}
+                      {l.qty > 1 && <span className="mini-qty">{l.qty}</span>}
+                      {!!l.without?.length && <span className="mini-no">no {l.without.join(', ').toLowerCase()}</span>}
+                      <span className="mini-pr">{fmt(l.qty * l.unitPrice, base)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
           {parent ? (
             <div className="addon-banner">
@@ -358,18 +392,19 @@ export default function Till() {
           </div>
           <div className="totals">
             <div className="sum-rows">
-              {altCurrencies.length > 0 && (
-                <div>
-                  <span>{altCurrencies.map((c) => c.code).join(' · ')}</span>
-                  <span>{altCurrencies.map((c) => fmt(fromBase(total, c), c)).join(' · ')}</span>
-                </div>
-              )}
+              <div>
+                <span>
+                  Subtotal ({itemCount} {itemCount === 1 ? 'item' : 'items'})
+                </span>
+                <b>{fmt(total, base)}</b>
+              </div>
             </div>
             <div className="total-row">
-              <span>
-                Total{itemCount > 0 && <small className="items-n"> · {itemCount} {itemCount === 1 ? 'item' : 'items'}</small>}
+              <span>Total</span>
+              <span className="total-amt">
+                {fmt(total, base)}
+                {altCurrencies.length > 0 && total > 0 && <small>{altCurrencies.map((c) => fmt(fromBase(total, c), c)).join(' · ')}</small>}
               </span>
-              <span>{fmt(total, base)}</span>
             </div>
             <div className="actions">
               <button className="phone-total" onClick={() => lines.length && setSheet(true)} aria-label={`Total ${fmt(total, base)}. ${itemCount} items. Show order`}>

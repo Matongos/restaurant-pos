@@ -334,9 +334,9 @@ export function TopBar({ title, children, bare = false }: { title?: string; chil
           <LuMenu aria-hidden="true" />
         </button>
         {title && <h1 className={`title ${bare ? 'bare' : ''}`}>{title}</h1>}
-        <OnlineStatus />
-        {training && <span className="training-pill">Training Mode</span>}
+        {training && <span className="training-pill">Training</span>}
         <div className="spacer" />
+        <OnlineStatus />
         <Clock />
         {children && <div className="top-actions">{children}</div>}
         <UserMenu />
