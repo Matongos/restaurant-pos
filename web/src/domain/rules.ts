@@ -148,14 +148,15 @@ export type Permission =
   | 'staff'
   | 'till_settings'
   | 'stock'
+  | 'tables'
   | 'screens';
 
 const PERMS: Record<Role, Permission[]> = {
-  super_admin: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'stock', 'menu_edit', 'settings', 'reports', 'accounts', 'staff', 'till_settings', 'screens'],
-  manager: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'stock', 'menu_edit', 'reports', 'accounts', 'staff', 'till_settings', 'screens'],
-  cashier: ['take_orders', 'active_orders', 'change_owed'],
+  super_admin: ['tables', 'take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'stock', 'menu_edit', 'settings', 'reports', 'accounts', 'staff', 'till_settings', 'screens'],
+  manager: ['tables', 'take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'stock', 'menu_edit', 'reports', 'accounts', 'staff', 'till_settings', 'screens'],
+  cashier: ['tables', 'take_orders', 'active_orders', 'change_owed'],
   kitchen: ['todays_menu', 'kitchen', 'stock', 'active_orders'],
-  attendant: ['active_orders'],
+  attendant: ['tables', 'active_orders'],
 };
 
 export const can = (role: Role, p: Permission) => PERMS[role].includes(p);

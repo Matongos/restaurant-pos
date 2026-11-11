@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { placeOrder, setLiveCart, useStore, type CustomerRef, type PlaceOrderSuccess } from '../store/store';
+import { payTabShare, placeOrder, setLiveCart, useStore, type CustomerRef, type PlaceOrderSuccess } from '../store/store';
 import { fmt, fromBase, round2, toBase } from '../domain/money';
 import { cardsInUse, customerBalance, nextFreeCard, tidyName } from '../domain/rules';
 import { CREDIT_METHOD, type DeliveryInfo, type OrderLine, type Payment } from '../domain/types';
@@ -17,6 +17,9 @@ interface Props {
   cashierId: string;
   /** Delivery orders: the details and fee (total already includes the fee). */
   delivery?: DeliveryInfo;
+  /** Paying (part of) a table bill instead of a new counter sale: `total` is this share. */
+  tabPay?: { tabId: string; label: string };
+  onTabPaid?: (r: Extract<ReturnType<typeof payTabShare>, { ok: true }>) => void;
   onCancel: () => void;
   onDone: (r: PlaceOrderSuccess) => void;
 }
@@ -29,7 +32,7 @@ interface Props {
  *      Keeping change for the customer, and their name, happen right there.
  *   4. The confirm button always says what it will do, or what is missing.
  */
-export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrderId, cashierId, delivery, onCancel, onDone }: Props) {
+export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrderId, cashierId, delivery, tabPay, onTabPaid, onCancel, onDone }: Props) {
   const currencies = useStore((s) => s.currencies);
   const methods = useStore((s) => s.paymentMethods);
   const settings = useStore((s) => s.settings);
@@ -57,7 +60,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
   const [keepFor, setKeepFor] = useState<CustomerSelection>({ kind: 'none' });
 
   // ---- order number
-  const needsCard = !parentOrderId && settings.numberMode !== 'slip';
+  const needsCard = !parentOrderId && !tabPay && settings.numberMode !== 'slip';
   const suggested = useMemo(() => nextFreeCard(orders, settings.cardFrom, settings.cardTo), [orders, settings.cardFrom, settings.cardTo]);
   const [cardStr, setCardStr] = useState(suggested ? String(suggested) : '');
   const inUse = useMemo(() => cardsInUse(orders), [orders]);
@@ -111,7 +114,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
   else if (method?.requiresReference && entered > 0 && !reference.trim()) blocker = `Enter ${method.name} reference`;
   else if (!keepReady) blocker = keepSelection.kind === 'none' ? 'Type name for kept change' : 'Same person? Tap them or add phone';
   else if (cardProblem) blocker = cardProblem;
-  const confirmLabel = blocker || (hand > 0 ? `Confirm · give ${fmt(hand, changeCur)} change` : 'Confirm & send to kitchen');
+  const confirmLabel = blocker || (hand > 0 ? `Confirm · give ${fmt(hand, changeCur)} change` : tabPay ? 'Confirm payment' : 'Confirm & send to kitchen');
 
   // Customer display follows every keystroke.
   useEffect(() => {
@@ -169,6 +172,23 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
     else if (keepBase > 0 && keepFor.kind === 'existing') customer = { id: keepFor.id };
     else if (keepBase > 0 && keepFor.kind === 'new') customer = { name: keepFor.name, phone: keepFor.phone, note: keepFor.note };
 
+    if (tabPay) {
+      const t = payTabShare({
+        tabId: tabPay.tabId,
+        label: tabPay.label,
+        amount: total,
+        payments,
+        changeGiven: toBase(hand, changeCur),
+        changeCurrency: changeCur.code,
+        customer,
+        keep: keepBase > 0 ? { amount: keepBase, currency: changeCur.code } : undefined,
+        cashierId,
+      });
+      if (!t.ok) return toast(t.error);
+      setLiveCart(tillId, { orderTypeId, lines, total, paid: paidBase, change: toBase(hand, changeCur), changeCurrency: changeCur.code, kept: keepBase || undefined, customerName: t.customer?.name, message: 'Thank you!' });
+      onTabPaid?.(t);
+      return;
+    }
     const r = placeOrder({
       tillId,
       orderTypeId,
@@ -218,7 +238,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
 
   return (
     <Dialog
-      title="Payment"
+      title={tabPay ? `Payment · ${tabPay.label}` : 'Payment'}
       onClose={onCancel}
       width={980}
       className="pay-dialog"

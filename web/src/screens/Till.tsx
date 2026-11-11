@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRoute, go } from '../router';
-import { deliveryProblem, setLiveCart, useCurrentUser, useStockLevels, useStore, type PlaceOrderSuccess } from '../store/store';
+import { deliveryProblem, getState, sendTableRound, serveTable, setLiveCart, useCurrentUser, useStockLevels, useStore, type PlaceOrderSuccess } from '../store/store';
+import { openTab, tabRounds, tabTotal } from '../domain/tables';
+import { changeVoucherHTML, kitchenTicketHTML, printTickets } from '../print/tickets';
+import TableBill from '../components/TableBill';
+import CancelSaleDialog from '../components/CancelSaleDialog';
 import { outOfStockIds } from '../domain/stock';
 import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, nextFreeCard, sameExtras, tidyName, todayISO } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
 import type { AddOn, DeliveryInfo, MenuItem, OrderLine } from '../domain/types';
-import { Dialog, MoreMenu, TopBar } from '../components/ui';
+import { Dialog, MoreMenu, TopBar, toast, useNow } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
 import CollectChangeDialog from '../components/CollectChangeDialog';
-import { LuArrowRight, LuArrowRightLeft, LuBike, LuCheck, LuChevronDown, LuChevronRight, LuChevronUp, LuCreditCard, LuHandCoins, LuMessageSquarePlus, LuMapPin, LuMinus, LuPackage, LuPencil, LuPlus, LuSearch, LuStar, LuTrash2, LuUtensils, LuX } from 'react-icons/lu';
+import { LuArrowRight, LuArrowRightLeft, LuBan, LuBike, LuCheck, LuCircleCheck, LuLayoutGrid, LuReceipt, LuSend, LuChevronDown, LuChevronRight, LuChevronUp, LuCreditCard, LuHandCoins, LuMessageSquarePlus, LuMapPin, LuMinus, LuPackage, LuPencil, LuPlus, LuSearch, LuStar, LuTrash2, LuUtensils, LuX } from 'react-icons/lu';
 
 
 const TILL_ID = 'till-1';
@@ -28,13 +32,35 @@ export default function Till() {
   const currencies = useStore((s) => s.currencies);
   const baseCode = useStore((s) => s.settings.baseCurrency);
   const orders = useStore((s) => s.orders);
+  const staffList = useStore((s) => s.staff);
   const showFav = useStore((s) => s.settings.showFavourites !== false);
 
   const parent = addonFor ? orders.find((o) => o.id === addonFor) : undefined;
   const enabledTypes = useMemo(() => orderTypes.filter((t) => t.enabled), [orderTypes]);
   const base = currencies.find((c) => c.code === baseCode)!;
 
-  const [typeId, setTypeId] = useState<string>(parent?.orderTypeId ?? enabledTypes[0]?.id ?? 'eat_in');
+  // ---- table service: #/till?table=tb-4 takes the order for that table (sent in rounds, paid at the end)
+  const mode = useStore((s) => s.settings.serviceMode ?? 'counter');
+  const tableId = mode === 'counter' ? undefined : query.get('table') ?? undefined;
+  const diningTable = useStore((s) => (tableId ? (s.settings.tables ?? []).find((t) => t.id === tableId) : undefined));
+  const atTable = !!diningTable;
+  const tab = tableId ? openTab(orders, tableId) : undefined;
+  const rounds = tab ? tabRounds(orders, tab) : [];
+  const sentTotal = tab ? tabTotal(orders, tab) : 0;
+  const guestsParam = Number(query.get('guests')) || undefined;
+  const nowMs = useNow(30000);
+  const [billOpen, setBillOpen] = useState(false);
+  const [tabPaying, setTabPaying] = useState<{ label: string; amount: number } | null>(null);
+  const [cancelTab, setCancelTab] = useState(false);
+  // Moving to another table (or back to the counter) starts with an empty list of new items.
+  useEffect(() => {
+    setLines([]);
+    setBillOpen(false);
+  }, [tableId]);
+
+  // With "Both", eating in happens at a table: the counter starts on Take Away.
+  const counterTypes = mode === 'both' ? enabledTypes.filter((t) => t.id !== 'eat_in') : enabledTypes;
+  const [typeId, setTypeId] = useState<string>(parent?.orderTypeId ?? counterTypes[0]?.id ?? enabledTypes[0]?.id ?? 'eat_in');
   const [lines, setLines] = useState<OrderLine[]>([]);
   const visibleCats = useMemo(() => categories.filter((c) => !c.hidden).sort((a, b) => a.sort - b.sort), [categories]);
   const firstCat = () => {
@@ -298,9 +324,94 @@ export default function Till() {
       );
     });
 
+  // ---- table service pieces
+  const shownTotal = atTable ? round2(sentTotal + itemsTotal) : total;
+  const sendRound = () => {
+    if (!tableId || !lines.length) return;
+    const r = sendTableRound({ tableId, guests: guestsParam, lines, cashierId: user.id });
+    if (!r.ok) return toast(r.error);
+    const st = getState();
+    if (st.settings.printKitchenTicket !== false && (st.settings.printWhen ?? 'on_pay') !== 'button') printTickets([kitchenTicketHTML(r.order, st)]);
+    setLines([]);
+    setSheet(false);
+    setLiveCart(TILL_ID, null);
+    toast(`Round ${r.order.table!.round} for ${diningTable!.name} sent to the kitchen`);
+  };
+  const tableButtons = (inSheet: boolean) => (
+    <>
+      <button className={`btn big bill-btn ${inSheet ? '' : 'icon-phone'}`} onClick={() => { setSheet(false); setBillOpen(true); }} disabled={!tab || lines.length > 0} title={lines.length ? 'Send the new items first' : 'Bill and pay'}>
+        <LuReceipt aria-hidden="true" />
+        <span>Bill</span>
+      </button>
+      <button className="btn big primary pay-btn send-btn" onClick={sendRound} disabled={!lines.length}>
+        <LuSend aria-hidden="true" />
+        Send to kitchen{itemCount ? ` (${itemCount})` : ''}
+      </button>
+    </>
+  );
+  const readyRounds = rounds.filter((o) => o.status === 'ready');
+  const waiterName = staffList.find((u) => u.id === tab?.table?.waiterId)?.name.replace(/\s*\(.*\)\s*/g, '');
+  const TableBar = () => (
+    <div className="table-bar">
+      <span className="big">{diningTable!.name}</span>
+      <span className="grow">
+        <b>
+          {tab ? 'Open bill' : 'New table'}
+          {(tab?.table?.guests ?? guestsParam) ? ` · ${tab?.table?.guests ?? guestsParam} guests` : ''}
+        </b>
+        <small>
+          {tab
+            ? `${waiterName ?? ''} · seated ${new Date(tab.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${Math.max(1, Math.round((nowMs - Date.parse(tab.createdAt)) / 60000))} min${tab.table?.status === 'billed' ? ' · bill printed' : ''}`
+            : 'Nothing sent to the kitchen yet'}
+        </small>
+      </span>
+      {readyRounds.length > 0 && (
+        <button className="btn tb-served" onClick={() => { serveTable(tab!.id, user.id); toast(`Food taken to ${diningTable!.name}`); }}>
+          <LuCircleCheck aria-hidden="true" />
+          Served
+        </button>
+      )}
+      <button className="btn tb-back" onClick={() => go('/tables')}>
+        <LuLayoutGrid aria-hidden="true" />
+        Tables
+      </button>
+    </div>
+  );
+  const ROUND_STATUS: Record<string, string> = { in_kitchen: 'in the kitchen', ready: 'ready — take it out', served: 'served' };
+  const sentRounds =
+    atTable && rounds.length > 0 ? (
+      <div className="sent-rounds">
+        {rounds.map((o) => (
+          <div key={o.id} className="sent-round">
+            <div className={`sr-head st-${o.status}`}>
+              <LuCircleCheck aria-hidden="true" />
+              Round {o.table?.round} · {new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {ROUND_STATUS[o.status] ?? o.status}
+            </div>
+            {o.lines.map((l) => (
+              <div key={l.id} className="sent-line">
+                <span>
+                  <b>{l.qty} ×</b> {lineLabel(l)}
+                  {l.without?.length ? <small> · no {l.without.join(', ').toLowerCase()}</small> : null}
+                  {l.note ? <small> · {l.note}</small> : null}
+                </span>
+                <span className="tnum">{fmt(l.qty * l.unitPrice, base)}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+        {!!tab?.table?.serviceCharge && (
+          <div className="sent-line">
+            <span>Service charge</span>
+            <span className="tnum">{fmt(tab.table.serviceCharge, base)}</span>
+          </div>
+        )}
+        {lines.length > 0 && <div className="new-head">New — not sent yet ({itemCount} item{itemCount === 1 ? '' : 's'})</div>}
+      </div>
+    ) : null;
+
   return (
     <div className="app">
-      <TopBar title={addonFor ? `Add to #${parent?.number ?? ''}` : 'Sell'}>
+      <TopBar title={atTable ? `Table ${diningTable!.name}` : addonFor ? `Add to #${parent?.number ?? ''}` : 'Sell'}>
         <button className="btn collect-btn" onClick={() => setCollecting(true)}>
           <LuArrowRightLeft aria-hidden="true" />
           <span>Collect change</span>
@@ -401,15 +512,16 @@ export default function Till() {
         {/* ---------------- current order: a card on the right; docked at the bottom on phones */}
         <section className="ticket-panel" aria-label="Current order">
           <div className="order-top">
-            <h2>{parent ? 'Add to order' : 'Order'}</h2>
-            {orderNo && <span className="order-no">{orderNo}</span>}
+            <h2>{atTable ? diningTable!.name : parent ? 'Add to order' : 'Order'}</h2>
+            {!atTable && orderNo && <span className="order-no">{orderNo}</span>}
             <MoreMenu
               down
               vertical
               label="Order options"
               items={[
                 { label: 'Collect change', icon: <LuHandCoins aria-hidden="true" />, onClick: () => setCollecting(true) },
-                ...(lines.length ? [{ label: 'Clear order', icon: <LuTrash2 aria-hidden="true" />, danger: true, onClick: clear }] : []),
+                ...(lines.length ? [{ label: atTable ? 'Clear new items' : 'Clear order', icon: <LuTrash2 aria-hidden="true" />, danger: true, onClick: clear }] : []),
+                ...(tab ? [{ label: 'Cancel this table', icon: <LuBan aria-hidden="true" />, danger: true, onClick: () => setCancelTab(true) }] : []),
               ]}
             />
           </div>
@@ -445,7 +557,9 @@ export default function Till() {
               </div>
             </div>
           )}
-          {parent ? (
+          {atTable ? (
+            TableBar()
+          ) : parent ? (
             <div className="addon-banner">
               <span>
                 Drinks or extras for card <b>#{parent.number}</b> ({orderTypes.find((t) => t.id === parent.orderTypeId)?.name})
@@ -456,7 +570,17 @@ export default function Till() {
             </div>
           ) : (
             <div className={`type-toggle n${enabledTypes.length}`} role="radiogroup" aria-label="Order type">
-              {enabledTypes.map((t) => (
+              {enabledTypes.map((t) =>
+                mode === 'both' && t.id === 'eat_in' ? (
+                  // Eating in is ordered from a table: this button opens the Tables screen.
+                  <button key={t.id} className="eat_in to-tables" onClick={() => go('/tables')}>
+                    <LuLayoutGrid aria-hidden="true" />
+                    <span>
+                      Table
+                      <small>Pay at the end</small>
+                    </span>
+                  </button>
+                ) : (
                 <button key={t.id} role="radio" aria-checked={typeId === t.id} className={`${t.id} ${typeId === t.id ? 'on' : ''}`} onClick={() => pickType(t.id)}>
                   {typeIcon(t.id)}
                   <span>
@@ -464,7 +588,8 @@ export default function Till() {
                     <small>{t.packaging}</small>
                   </span>
                 </button>
-              ))}
+                ),
+              )}
             </div>
           )}
           {isDelivery && (
@@ -490,14 +615,21 @@ export default function Till() {
             </button>
           )}
           <div className="lines" ref={linesRef}>
-            {lines.length === 0 && <div className="empty">Tap a meal to add it.</div>}
+            {sentRounds}
+            {lines.length === 0 && !rounds.length && <div className="empty">{atTable ? `Tap a meal to add it to ${diningTable!.name}.` : 'Tap a meal to add it.'}</div>}
             {lineRows(false)}
           </div>
           <div className="totals">
             <div className="sum-rows">
-              <div>
+              {atTable && tab && (
+                <div>
+                  <span>Already sent ({rounds.length} round{rounds.length === 1 ? '' : 's'})</span>
+                  <b>{fmt(sentTotal, base)}</b>
+                </div>
+              )}
+              <div className={atTable ? 'new-sum' : ''}>
                 <span>
-                  Subtotal ({itemCount} {itemCount === 1 ? 'item' : 'items'})
+                  {atTable ? 'New items' : 'Subtotal'} ({itemCount} {itemCount === 1 ? 'item' : 'items'})
                 </span>
                 <b>{fmt(itemsTotal, base)}</b>
               </div>
@@ -509,10 +641,10 @@ export default function Till() {
               )}
             </div>
             <div className="total-row">
-              <span>Total</span>
+              <span>{atTable ? 'Table total' : 'Total'}</span>
               <span className="total-amt">
-                {fmt(total, base)}
-                {altCurrencies.length > 0 && total > 0 && <small>{altCurrencies.map((c) => fmt(fromBase(total, c), c)).join(' · ')}</small>}
+                {fmt(shownTotal, base)}
+                {altCurrencies.length > 0 && shownTotal > 0 && <small>{altCurrencies.map((c) => fmt(fromBase(shownTotal, c), c)).join(' · ')}</small>}
               </span>
             </div>
             <div className="actions">
@@ -525,16 +657,22 @@ export default function Till() {
                     </span>
                   )}
                 </span>
-                <b>{fmt(total, base)}</b>
+                <b>{fmt(shownTotal, base)}</b>
               </button>
-              <button className="btn big icon-only clear-order" onClick={clear} disabled={!lines.length} aria-label="Clear order" title="Clear order">
-                <LuTrash2 aria-hidden="true" />
-              </button>
-              <button className="btn big primary pay-btn" onClick={startPay} disabled={!lines.length}>
-                <LuCreditCard aria-hidden="true" />
-                Pay {fmt(total, base)}
-                <LuArrowRight aria-hidden="true" className="pay-arrow" />
-              </button>
+              {atTable ? (
+                tableButtons(false)
+              ) : (
+                <>
+                  <button className="btn big icon-only clear-order" onClick={clear} disabled={!lines.length} aria-label="Clear order" title="Clear order">
+                    <LuTrash2 aria-hidden="true" />
+                  </button>
+                  <button className="btn big primary pay-btn" onClick={startPay} disabled={!lines.length}>
+                    <LuCreditCard aria-hidden="true" />
+                    Pay {fmt(total, base)}
+                    <LuArrowRight aria-hidden="true" className="pay-arrow" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </section>
@@ -547,21 +685,31 @@ export default function Till() {
           <div className="order-sheet" role="dialog" aria-label="Order">
             <div className="sheet-head">
               <h2>
-                Order <span className="muted">· {itemCount} {itemCount === 1 ? 'item' : 'items'}</span>
+                {atTable ? diningTable!.name : 'Order'} <span className="muted">· {itemCount} {atTable ? 'new ' : ''}{itemCount === 1 ? 'item' : 'items'}</span>
               </h2>
               <button className="btn ghost icon-only" onClick={() => setSheet(false)} aria-label="Close order">
                 <LuChevronDown aria-hidden="true" />
               </button>
             </div>
-            <div className="lines">{lineRows(true)}</div>
+            {atTable && TableBar()}
+            <div className="lines">
+              {sentRounds}
+              {lineRows(true)}
+            </div>
             <div className="sheet-foot">
-              <button className="btn big" onClick={() => setSheet(false)}>
-                Add more
-              </button>
-              <button className="btn big primary" onClick={() => { setSheet(false); startPay(); }} disabled={!lines.length}>
-                <LuCreditCard aria-hidden="true" />
-                Pay {fmt(total, base)}
-              </button>
+              {atTable ? (
+                tableButtons(true)
+              ) : (
+                <>
+                  <button className="btn big" onClick={() => setSheet(false)}>
+                    Add more
+                  </button>
+                  <button className="btn big primary" onClick={() => { setSheet(false); startPay(); }} disabled={!lines.length}>
+                    <LuCreditCard aria-hidden="true" />
+                    Pay {fmt(total, base)}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </>
@@ -584,6 +732,40 @@ export default function Till() {
         />
       )}
       {done && <OrderDoneDialog result={done} onNew={newOrder} />}
+      {billOpen && tab && !tabPaying && <TableBill tabId={tab.id} onClose={() => setBillOpen(false)} onPay={(label, amount) => setTabPaying({ label, amount })} />}
+      {tabPaying && tab && (
+        <PayDialog
+          tillId={TILL_ID}
+          total={tabPaying.amount}
+          orderTypeId="eat_in"
+          lines={rounds.flatMap((o) => o.lines)}
+          cashierId={user.id}
+          tabPay={{ tabId: tab.id, label: tabPaying.label }}
+          onCancel={() => setTabPaying(null)}
+          onDone={() => setTabPaying(null)}
+          onTabPaid={(r) => {
+            const label = tabPaying.label;
+            setTabPaying(null);
+            const st = getState();
+            if (r.kept && r.customer && st.settings.printChangeSlip !== false) printTickets([changeVoucherHTML(r.kept, r.customer, r.balanceAfter ?? r.kept.amount, st)]);
+            if (r.closed) {
+              setBillOpen(false);
+              setLiveCart(TILL_ID, null);
+              toast(`${diningTable!.name} is paid in full — the table is free`);
+              go('/tables');
+            } else toast(`${label} paid. Still to pay ${fmt(r.due, base)}`);
+          }}
+        />
+      )}
+      {cancelTab && tab && (
+        <CancelSaleDialog
+          order={tab}
+          onClose={() => {
+            setCancelTab(false);
+            if (getState().orders.find((o) => o.id === tab.id)?.status === 'cancelled') go('/tables');
+          }}
+        />
+      )}
       {collecting && <CollectChangeDialog onClose={() => setCollecting(false)} />}
       {splitAsk &&
         (() => {

@@ -843,7 +843,7 @@ function Journal({ p }: { p: Period }) {
     const term = q.trim().toLowerCase();
     return orders
       .filter((o) => inTime(o.createdAt, p))
-      .filter((o) => !term || String(o.number) === term || o.lines.some((l) => lineLabel(l).toLowerCase().includes(term)))
+      .filter((o) => !term || String(o.number) === term || o.table?.name.toLowerCase() === term || o.lines.some((l) => lineLabel(l).toLowerCase().includes(term)))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [orders, p, q]);
   const paid = round2(list.filter((o) => o.status !== 'cancelled').reduce((s, o) => s + o.total, 0));
@@ -881,7 +881,7 @@ function Journal({ p }: { p: Period }) {
                     {new Date(o.createdAt).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td>
-                    <b>{o.number}</b>
+                    <b>{o.table ? o.table.name : o.number}</b>
                     {o.parentOrderId && <div className="muted" style={{ fontSize: 12 }}>add-on</div>}
                   </td>
                   <td style={{ fontSize: 13 }}>{o.lines.map((l) => `${l.qty}× ${lineLabel(l)}`).join(', ')}</td>

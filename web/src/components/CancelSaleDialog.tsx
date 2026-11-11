@@ -24,7 +24,10 @@ export default function CancelSaleDialog({ order, onClose }: { order: Order; onC
   const group = useMemo(() => orders.filter((o) => (o.id === order.id || o.parentOrderId === order.id) && o.status !== 'cancelled'), [orders, order.id]);
   const total = round2(group.reduce((s, o) => s + o.total, 0));
   const changeUsed = round2(group.flatMap((o) => o.payments).filter((p) => p.methodId === CREDIT_METHOD).reduce((s, p) => s + p.baseAmount, 0));
-  const refundable = round2(Math.max(0, total - changeUsed));
+  // A table bill may be unpaid or partly paid: only what was paid can be given back.
+  const paidFor = order.table ? round2((order.table.shares ?? []).reduce((s, x) => s + x.amount, 0)) : total;
+  const refundable = round2(Math.max(0, paidFor - changeUsed));
+  const label = order.table ? `table ${order.table.name}` : `sale #${order.number}`;
 
   const [reason, setReason] = useState('');
   const [refund, setRefund] = useState<RefundMethod>(refundable > 0 ? 'cash' : 'none');
@@ -43,7 +46,7 @@ export default function CancelSaleDialog({ order, onClose }: { order: Order; onC
       setPin('');
       return;
     }
-    toast(`Sale #${order.number} cancelled${r.cancellation.refundAmount > 0 ? ` — refund ${fmt(r.cancellation.refundAmount, base)}` : ''}`);
+    toast(`${label[0].toUpperCase()}${label.slice(1)} cancelled${r.cancellation.refundAmount > 0 ? ` — refund ${fmt(r.cancellation.refundAmount, base)}` : ''}`);
     onClose();
   };
 
@@ -51,7 +54,7 @@ export default function CancelSaleDialog({ order, onClose }: { order: Order; onC
 
   return (
     <Dialog
-      title={`Cancel sale #${order.number}`}
+      title={`Cancel ${label}`}
       onClose={onClose}
       width={600}
       footer={

@@ -25,7 +25,8 @@ export default function ActiveOrders() {
 
   const today = todayISO();
   const mains = useMemo(
-    () => orders.filter((o) => !o.parentOrderId && !o.example && todayISO(new Date(o.createdAt)) === today),
+    // Table orders live on the Tables screen.
+    () => orders.filter((o) => !o.parentOrderId && !o.table && !o.example && todayISO(new Date(o.createdAt)) === today),
     [orders, today],
   );
   const addonsOf = (id: string) => orders.filter((o) => o.parentOrderId === id);

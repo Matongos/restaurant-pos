@@ -1,5 +1,8 @@
 import { useMemo, useSyncExternalStore } from 'react';
 import type {
+  DiningTable,
+  TableInfo,
+  TabShare,
   AddOn,
   StockItem,
   StockMove,
@@ -29,12 +32,13 @@ import type {
   Staff,
   StaffAction,
 } from '../domain/types';
-import { DEFAULT_ADD_ONS, DEFAULT_ADDON_RECIPES, DEFAULT_DELIVERY_AREAS, DEFAULT_MEAL_ADD_ONS, DEFAULT_RECIPES, demoOpeningMoves, STOCK_SETUP, DEFAULT_MEAL_PERIODS, seedState, STOCK_ITEMS } from '../data/seed';
+import { DEFAULT_TABLES, DEFAULT_ADD_ONS, DEFAULT_ADDON_RECIPES, DEFAULT_DELIVERY_AREAS, DEFAULT_MEAL_ADD_ONS, DEFAULT_RECIPES, demoOpeningMoves, STOCK_SETUP, DEFAULT_MEAL_PERIODS, seedState, STOCK_ITEMS } from '../data/seed';
 import { exampleBooks, exampleCancellations, exampleHistory } from '../data/exampleHistory';
 import { nextFreeCard, cardsInUse, customerBalance, pinProblem, ROLE_LABEL, staffRights, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
 import { CREDIT_METHOD } from '../domain/types';
 import { round2 } from '../domain/money';
 import { purchaseToStock, stockLevels, usageFor, type StockLevel } from '../domain/stock';
+import { openTab, openTabs, tabDue, tabItemsTotal, tabRounds } from '../domain/tables';
 
 /**
  * Prototype store.
@@ -53,12 +57,17 @@ const listeners = new Set<() => void>();
 /** Bring data saved by an older version of the app up to date. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): AppState | null {
-  if (raw?.version === 10) return raw as AppState;
+  if (raw?.version === 11) return raw as AppState;
+  if (raw?.version === 10) {
+    // v11: table service (off by default) with example tables.
+    const st = raw as AppState;
+    return { ...st, version: 11, settings: { serviceMode: 'counter', tables: DEFAULT_TABLES, askGuests: true, serviceChargePct: 0, ...st.settings } };
+  }
   if (raw?.version === 9) {
     // v10: stock counted down with every sale (recipes per meal, counts, waste).
     const st = raw as AppState;
     const known = new Set(st.stockItems.map((i) => i.id));
-    return {
+    return migrate({
       ...st,
       version: 10,
       stockItems: st.stockItems.map((i) => (i.track === undefined && STOCK_SETUP[i.id] ? { ...i, ...STOCK_SETUP[i.id] } : i)),
@@ -66,7 +75,7 @@ function migrate(raw: any): AppState | null {
       addOns: st.addOns.map((a) => (a.recipe || !DEFAULT_ADDON_RECIPES[a.id] ? a : { ...a, recipe: DEFAULT_ADDON_RECIPES[a.id] })),
       // Practice data only: give the demo an opening stock take. A real (non-training) set-up starts uncounted.
       stockMoves: st.settings.trainingMode ? demoOpeningMoves(new Date().toISOString()).filter((m) => known.has(m.stockItemId)) : [],
-    };
+    });
   }
   if (raw?.version === 8) {
     // v9: delivery orders (areas with fees; customer, address and rider on the order).
@@ -351,6 +360,39 @@ export interface PlaceOrderSuccess {
 }
 export type PlaceOrderResult = PlaceOrderSuccess | { ok: false; error: string };
 
+/**
+ * Customer change on a payment: change used to pay (taken off their balance) and change kept for
+ * them (added). Shared by counter sales and table bill shares.
+ */
+function customerChange(
+  s: AppState,
+  x: { payments: Payment[]; customer?: CustomerRef; keep?: { amount: number; currency: string }; cashierId: string; orderId: string; orderNumber: number; branchId: string; now: string },
+): { ok: true; customer?: Customer; newCustomer?: Customer; entries: CreditEntry[]; used: number } | { ok: false; error: string } {
+  const used = round2(x.payments.filter((p) => p.methodId === CREDIT_METHOD).reduce((a, p) => a + p.baseAmount, 0));
+  const keepAmount = round2(x.keep?.amount ?? 0);
+  const entries: CreditEntry[] = [];
+  if (!(used > 0 || keepAmount > 0)) return { ok: true, entries, used };
+  if (!x.customer) return { ok: false, error: 'Choose the customer first.' };
+  const ref = x.customer;
+  let customer: Customer | undefined;
+  let newCustomer: Customer | undefined;
+  if (!('name' in ref)) {
+    customer = s.customers.find((c) => c.id === ref.id);
+    if (!customer) return { ok: false, error: 'Customer not found.' };
+  } else {
+    const name = tidyName(ref.name);
+    if (!name) return { ok: false, error: 'Enter the customer name.' };
+    newCustomer = customer = { id: uid('cu-'), branchId: s.settings.branchId, name, phone: ref.phone?.trim() || undefined, note: ref.note?.trim() || undefined, createdAt: x.now, lastSeenAt: x.now };
+  }
+  const balance = customerBalance(s.credit, customer.id);
+  if (used > balance + 0.004) return { ok: false, error: `${customer.name} only has ${balance.toFixed(2)} change.` };
+  if (used > 0)
+    entries.push({ id: uid('cr-'), branchId: x.branchId, customerId: customer.id, kind: 'used_for_food', amount: -used, orderId: x.orderId, orderNumber: x.orderNumber, at: x.now, by: x.cashierId });
+  if (keepAmount > 0)
+    entries.push({ id: uid('cr-'), branchId: x.branchId, customerId: customer.id, kind: 'change_left', amount: keepAmount, code: voucherCode(), currency: x.keep!.currency, orderId: x.orderId, orderNumber: x.orderNumber, at: x.now, by: x.cashierId });
+  return { ok: true, customer, newCustomer, entries, used };
+}
+
 export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
   const s = state;
   const now = new Date().toISOString();
@@ -421,39 +463,10 @@ export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
   if (stockUsed) order.stockUsed = stockUsed;
 
   // ---- customer change balance
-  const used = round2(input.payments.filter((p) => p.methodId === CREDIT_METHOD).reduce((a, p) => a + p.baseAmount, 0));
-  const keepAmount = round2(input.keep?.amount ?? 0);
-  let customer: Customer | undefined;
-  let newCustomer: Customer | undefined;
-  const entries: CreditEntry[] = [];
-
-  if (used > 0 || keepAmount > 0) {
-    if (!input.customer) return { ok: false, error: 'Choose the customer first.' };
-    const ref = input.customer;
-    if (!('name' in ref)) {
-      customer = s.customers.find((c) => c.id === ref.id);
-      if (!customer) return { ok: false, error: 'Customer not found.' };
-    } else {
-      const name = tidyName(ref.name);
-      if (!name) return { ok: false, error: 'Enter the customer name.' };
-      newCustomer = customer = {
-        id: uid('cu-'),
-        branchId: s.settings.branchId,
-        name,
-        phone: ref.phone?.trim() || undefined,
-        note: ref.note?.trim() || undefined,
-        createdAt: now,
-        lastSeenAt: now,
-      };
-    }
-    const balance = customerBalance(s.credit, customer.id);
-    if (used > balance + 0.004) return { ok: false, error: `${customer.name} only has ${balance.toFixed(2)} change.` };
-    order.customerId = customer.id;
-    if (used > 0)
-      entries.push({ id: uid('cr-'), branchId: order.branchId, customerId: customer.id, kind: 'used_for_food', amount: -used, orderId: order.id, orderNumber: number, at: now, by: input.cashierId });
-    if (keepAmount > 0)
-      entries.push({ id: uid('cr-'), branchId: order.branchId, customerId: customer.id, kind: 'change_left', amount: keepAmount, code: voucherCode(), currency: input.keep!.currency, orderId: order.id, orderNumber: number, at: now, by: input.cashierId });
-  }
+  const cc = customerChange(s, { payments: input.payments, customer: input.customer, keep: input.keep, cashierId: input.cashierId, orderId: order.id, orderNumber: number, branchId: order.branchId, now });
+  if (!cc.ok) return cc;
+  const { customer, newCustomer, entries, used } = cc;
+  if (customer) order.customerId = customer.id;
 
   const custId = customer?.id;
   // A card handed over again is evidently back: close the order still holding it.
@@ -535,6 +548,163 @@ export function upsertDeliveryArea(a: DeliveryArea): { ok: true } | { ok: false;
 
 export function deleteDeliveryArea(id: string) {
   set((st) => ({ ...st, settings: { ...st.settings, deliveryAreas: (st.settings.deliveryAreas ?? []).filter((a) => a.id !== id) } }));
+}
+
+/* ------------------------------------------------------------------ tables */
+
+/**
+ * Send what was just entered for a table to the kitchen, without payment. The first round opens
+ * the table's bill (who serves it, how many guests); later rounds are added to it.
+ */
+export function sendTableRound(input: { tableId: string; guests?: number; lines: OrderLine[]; cashierId: string }): { ok: true; order: Order } | { ok: false; error: string } {
+  const s = state;
+  const table = (s.settings.tables ?? []).find((t) => t.id === input.tableId);
+  if (!table) return { ok: false, error: 'Table not found.' };
+  const lines = input.lines.filter((l) => l.qty > 0);
+  if (!lines.length) return { ok: false, error: 'Add something first.' };
+  const tab = openTab(s.orders, table.id);
+  const now = new Date().toISOString();
+  const round = tab ? tabRounds(s.orders, tab).length + 1 : 1;
+  const order: Order = {
+    id: uid('o-'),
+    branchId: s.settings.branchId,
+    tillId: 'tables',
+    number: 0,
+    numberMode: 'slip',
+    orderTypeId: 'eat_in',
+    lines,
+    total: round2(lines.reduce((a, l) => a + l.qty * l.unitPrice, 0)),
+    payments: [],
+    changeGiven: 0,
+    changeCurrency: s.settings.baseCurrency,
+    status: 'in_kitchen',
+    history: [
+      { status: 'placed', at: now, by: input.cashierId },
+      { status: 'in_kitchen', at: now, by: input.cashierId },
+    ],
+    cashierId: input.cashierId,
+    createdAt: now,
+    parentOrderId: tab?.id,
+    training: s.settings.trainingMode,
+    table: tab
+      ? { tableId: table.id, name: table.name, round }
+      : { tableId: table.id, name: table.name, round: 1, guests: input.guests && input.guests > 0 ? input.guests : undefined, waiterId: input.cashierId, status: 'open', shares: [] },
+  };
+  const stockUsed = usageFor(lines, 'eat_in', s);
+  if (stockUsed) order.stockUsed = stockUsed;
+  set((st) => ({
+    ...st,
+    // New food on a bill that was already printed: the bill is out of date again.
+    orders: [...st.orders.map((o) => (tab && o.id === tab.id && o.table?.status === 'billed' ? { ...o, table: { ...o.table, status: 'open' as const } } : o)), order],
+  }));
+  return { ok: true, order };
+}
+
+/** Food taken to the table: rounds that are ready (or still in the kitchen) are marked served. */
+export function serveTable(tabId: string, by: string) {
+  const at = new Date().toISOString();
+  set((st) => ({
+    ...st,
+    orders: st.orders.map((o) =>
+      (o.id === tabId || o.parentOrderId === tabId) && o.table && o.status === 'ready' ? { ...o, status: 'served', history: [...o.history, { status: 'served', at, by }] } : o,
+    ),
+  }));
+}
+
+/** Print the bill: adds the service charge (if set) to round 1 and marks the table as waiting to pay. */
+export function billTable(tabId: string, by: string): { ok: true } | { ok: false; error: string } {
+  const tab = state.orders.find((o) => o.id === tabId);
+  if (!tab?.table) return { ok: false, error: 'Bill not found.' };
+  const pct = state.settings.serviceChargePct ?? 0;
+  const items = tabItemsTotal(state.orders, tab);
+  const sc = pct > 0 ? round2((items * pct) / 100) : 0;
+  const own = round2(tab.lines.reduce((a, l) => a + l.qty * l.unitPrice, 0));
+  const at = new Date().toISOString();
+  void by;
+  set((st) => ({
+    ...st,
+    orders: st.orders.map((o) => (o.id === tabId ? { ...o, total: round2(own + sc), table: { ...o.table!, status: 'billed', billedAt: at, serviceCharge: sc || undefined } } : o)),
+  }));
+  return { ok: true };
+}
+
+/** Remember how the bill is being split (so it survives closing the screen half-way). */
+export function setTabSplit(tabId: string, split: NonNullable<TableInfo['split']>) {
+  set((st) => ({ ...st, orders: st.orders.map((o) => (o.id === tabId && o.table ? { ...o, table: { ...o.table, split } } : o)) }));
+}
+
+export interface TabPayInput {
+  tabId: string;
+  label: string;
+  /** What this share settles (base currency). */
+  amount: number;
+  payments: Payment[];
+  changeGiven: number;
+  changeCurrency: string;
+  customer?: CustomerRef;
+  keep?: { amount: number; currency: string };
+  cashierId: string;
+}
+
+/**
+ * Pay one share of a table bill (or the whole bill). The money goes on round 1, so the books and the
+ * cash drawer see it like any sale. When nothing is left to pay the table is free again.
+ */
+export function payTabShare(input: TabPayInput): { ok: true; closed: boolean; due: number; kept?: CreditEntry; customer?: Customer; balanceAfter?: number } | { ok: false; error: string } {
+  const s = state;
+  const tab = s.orders.find((o) => o.id === input.tabId);
+  if (!tab?.table || tab.status === 'cancelled') return { ok: false, error: 'This bill is closed.' };
+  const due = tabDue(s.orders, tab);
+  const amount = round2(input.amount);
+  if (!(amount > 0)) return { ok: false, error: 'Nothing to pay.' };
+  if (amount > due + 0.004) return { ok: false, error: `Only ${due.toFixed(2)} is left to pay.` };
+  const now = new Date().toISOString();
+  const cc = customerChange(s, { payments: input.payments, customer: input.customer, keep: input.keep, cashierId: input.cashierId, orderId: tab.id, orderNumber: 0, branchId: tab.branchId, now });
+  if (!cc.ok) return cc;
+  const share: TabShare = { id: uid('sh-'), label: input.label.trim() || 'Payment', amount, at: now, by: input.cashierId };
+  const closed = due - amount <= 0.004;
+  const roundIds = new Set(tabRounds(s.orders, tab).map((o) => o.id));
+  set((st) => ({
+    ...st,
+    orders: st.orders.map((o) => {
+      if (o.id === tab.id) {
+        const t = { ...o.table!, shares: [...(o.table!.shares ?? []), share], ...(closed ? { status: 'paid' as const, paidAt: now } : {}) };
+        const served = closed && (o.status === 'in_kitchen' || o.status === 'ready');
+        return {
+          ...o,
+          payments: [...o.payments, ...input.payments],
+          changeGiven: round2(o.changeGiven + input.changeGiven),
+          changeCurrency: input.changeCurrency,
+          customerId: cc.customer?.id ?? o.customerId,
+          table: t,
+          ...(served ? { status: 'served' as const, history: [...o.history, { status: 'served' as const, at: now, by: input.cashierId, auto: true }] } : {}),
+        };
+      }
+      // Paid in full: the table is done, so any round not marked served is closed (not counted in serving speed).
+      if (closed && roundIds.has(o.id) && (o.status === 'in_kitchen' || o.status === 'ready'))
+        return { ...o, status: 'served' as const, history: [...o.history, { status: 'served' as const, at: now, by: input.cashierId, auto: true }] };
+      return o;
+    }),
+    customers: cc.newCustomer ? [...st.customers, cc.newCustomer] : cc.customer ? st.customers.map((c) => (c.id === cc.customer!.id ? { ...c, lastSeenAt: now } : c)) : st.customers,
+    credit: cc.entries.length ? [...st.credit, ...cc.entries] : st.credit,
+  }));
+  const kept = cc.entries.find((e) => e.kind === 'change_left');
+  return { ok: true, closed, due: round2(Math.max(0, due - amount)), kept, customer: cc.customer, balanceAfter: cc.customer ? customerBalance(state.credit, cc.customer.id) : undefined };
+}
+
+/** Add, change or remove tables (Settings → How you serve). A table with an open bill cannot be removed. */
+export function saveTables(tables: DiningTable[]): { ok: true } | { ok: false; error: string } {
+  const names = new Set<string>();
+  for (const t of tables) {
+    const n = t.name.trim().toLowerCase();
+    if (!n) return { ok: false, error: 'Every table needs a name.' };
+    if (names.has(n)) return { ok: false, error: `Two tables are called ${t.name.trim()}.` };
+    names.add(n);
+  }
+  const busy = openTabs(state.orders).find((o) => !tables.some((t) => t.id === o.table!.tableId));
+  if (busy) return { ok: false, error: `${busy.table!.name} has an open bill. Close it before removing the table.` };
+  set((st) => ({ ...st, settings: { ...st.settings, tables: tables.map((t) => ({ ...t, name: t.name.trim(), area: t.area?.trim() || undefined })) } }));
+  return { ok: true };
 }
 
 /* ------------------------------------------------------------- live display */
@@ -744,7 +914,9 @@ export function cancelOrder(input: CancelInput): { ok: true; cancellation: Cance
       entries.push({ id: uid('cr-'), branchId: e.branchId, customerId: e.customerId, kind: 'cancel_adjust', amount: -e.amount, orderId: e.orderId, orderNumber: e.orderNumber, at: now, by: approver.id });
   }
   const changeUsed = round2(group.flatMap((o) => o.payments).filter((p) => p.methodId === CREDIT_METHOD).reduce((s, p) => s + p.baseAmount, 0));
-  const refundAmount = input.refund === 'none' ? 0 : round2(Math.max(0, total - changeUsed));
+  // A table bill may be partly paid (or not at all): only what was paid can be given back.
+  const paidFor = order.table ? round2((order.table.shares ?? []).reduce((a, x) => a + x.amount, 0)) : total;
+  const refundAmount = input.refund === 'none' ? 0 : round2(Math.max(0, paidFor - changeUsed));
   if (input.refund === 'to_change') {
     if (!order.customerId) return { ok: false, error: 'This sale has no customer to give the change to.' };
     if (refundAmount > 0)

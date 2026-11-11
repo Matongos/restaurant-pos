@@ -564,7 +564,7 @@ function Service({ customers, base, lateMs, hours, r }: Ctx) {
             {slowest.map(({ o, t }) => (
               <tr key={o.id}>
                 <td>
-                  <b>{o.number}</b>
+                  <b>{o.table ? o.table.name : o.number}</b>
                 </td>
                 <td>{new Date(t.placed).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
                 <td>{o.lines.map((l) => `${l.qty}× ${lineLabel(l)}`).join(', ')}</td>

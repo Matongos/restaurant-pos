@@ -211,6 +211,47 @@ export interface Order {
   delivery?: DeliveryInfo;
   /** Stock this order used, worked out when it was sold (count units by stock item). */
   stockUsed?: Record<ID, number>;
+  /**
+   * Table service: this order is one round sent to the kitchen for a table. Round 1 holds the bill
+   * (tab); later rounds point to it with parentOrderId. Money paid for the table is kept on round 1.
+   */
+  table?: TableInfo;
+}
+
+/** A dining table set up in Settings → How you serve. */
+export interface DiningTable {
+  id: ID;
+  name: string; // "T4", "Veranda 2"
+  area?: string;
+  seats?: number;
+}
+
+export type ServiceMode = 'counter' | 'tables' | 'both';
+
+/** One person's (or one group's) part of a table bill, once paid. */
+export interface TabShare {
+  id: ID;
+  label: string; // "Person 2", "Tendai"
+  amount: number; // base currency, what this share settled
+  at: string;
+  by: ID;
+}
+
+export interface TableInfo {
+  tableId: ID;
+  name: string;
+  round: number;
+  /** The rest is only on round 1 (the bill). */
+  guests?: number;
+  waiterId?: ID;
+  status?: 'open' | 'billed' | 'paid';
+  billedAt?: string;
+  paidAt?: string;
+  /** Service charge added to the bill (base currency), included in round 1's total. */
+  serviceCharge?: number;
+  shares?: TabShare[];
+  /** How the bill is being split, so a half-paid split survives closing the screen. */
+  split?: { mode: 'one' | 'equal' | 'item' | 'amount'; people: number; names?: string[]; assign?: Record<string, number> };
 }
 
 /** Where a delivery goes. The fee is in base currency and is part of the order total. */
@@ -325,6 +366,13 @@ export interface Settings {
   customersPerStaffHour: number;
   /** Delivery areas with their fee. The cashier can still type a different fee for an address. */
   deliveryAreas?: DeliveryArea[];
+  /** Counter (pay first, the default), tables (pay at the end) or both. */
+  serviceMode?: ServiceMode;
+  tables?: DiningTable[];
+  /** Ask how many guests when a table is opened. Default on. */
+  askGuests?: boolean;
+  /** Service charge on table bills, percent (0 = none). */
+  serviceChargePct?: number;
 }
 
 export interface MealPeriod {

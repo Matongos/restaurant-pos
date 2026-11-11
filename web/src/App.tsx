@@ -15,6 +15,7 @@ import Analytics from './screens/Analytics';
 import Accounts from './screens/Accounts';
 import StaffScreen from './screens/StaffScreen';
 import StockScreen from './screens/Stock';
+import TablesScreen from './screens/Tables';
 
 const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/till': { perm: 'take_orders', el: Till },
@@ -28,22 +29,33 @@ const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/accounts': { perm: 'accounts', el: Accounts },
   '/staff': { perm: 'staff', el: StaffScreen },
   '/stock': { perm: 'stock', el: StockScreen },
+  '/tables': { perm: 'tables', el: TablesScreen },
 };
 
 export default function App() {
-  const { path } = useRoute();
+  const { path, query } = useRoute();
   const user = useCurrentUser();
+  const mode = useStore((s) => s.settings.serviceMode ?? 'counter');
   const brand = useStore((s) => s.settings.brandColor);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--brand', brand);
   }, [brand]);
 
+  // Which permission an address needs. Selling at a table only needs 'tables' (waiters can do it).
+  const permFor = (p: string): Permission | undefined => {
+    if (p === '/tables' && mode === 'counter') return undefined; // table service switched off
+    if (p === '/till' && query.get('table')) return mode === 'counter' ? undefined : 'tables';
+    if (p === '/till' && mode === 'tables') return undefined; // tables only: no counter till
+    return ROUTES[p]?.perm;
+  };
+  const perm = permFor(path);
+
   // After login (or on an unknown address) each role goes straight to its own screen.
-  const needsLanding = !!user && path !== '/display' && (!ROUTES[path] || !can(user.role, ROUTES[path].perm));
+  const needsLanding = !!user && path !== '/display' && (!perm || !can(user.role, perm));
   useEffect(() => {
-    if (needsLanding && user) window.location.replace(`#${homeFor(user.role)}`);
-  }, [needsLanding, user]);
+    if (needsLanding && user) window.location.replace(`#${homeFor(user.role, mode)}`);
+  }, [needsLanding, user, mode]);
 
   // The customer display is view-only and needs no login.
   if (path === '/display') return <CustomerDisplay />;
@@ -52,8 +64,8 @@ export default function App() {
   if (!user) body = <Login />;
   else {
     const r = ROUTES[path];
-    if (!r) body = <div className="app solo" />;
-    else if (!can(user.role, r.perm))
+    if (!r || !perm) body = <div className="app solo" />;
+    else if (!can(user.role, perm))
       body = (
         <div className="app">
           <TopBar />

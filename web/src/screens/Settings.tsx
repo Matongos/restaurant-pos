@@ -9,9 +9,10 @@ import { LuCamera, LuStore } from 'react-icons/lu';
 import CategoryEditor from '../components/CategoryEditor';
 import AddOnEditor from '../components/AddOnEditor';
 import DeliverySettings from '../components/DeliverySettings';
+import ServiceSettings from '../components/ServiceSettings';
 import RecipeEditor from '../components/RecipeEditor';
 
-type Tab = 'general' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'delivery' | 'kitchen' | 'demo';
+type Tab = 'general' | 'service' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'delivery' | 'kitchen' | 'demo';
 
 /** Tabs a manager may change: how the till runs day to day. Everything else is the owner's. */
 const MANAGER_TABS: Tab[] = ['numbers', 'delivery', 'kitchen'];
@@ -22,6 +23,7 @@ export default function SettingsScreen() {
   const [tab, setTab] = useState<Tab>(owner ? 'general' : 'numbers');
   const allTabs: [Tab, string][] = [
     ['general', 'Restaurant & branding'],
+    ['service', 'How you serve'],
     ['numbers', 'Numbers & printing'],
     ['payments', 'Payment methods'],
     ['currencies', 'Currencies'],
@@ -45,6 +47,7 @@ export default function SettingsScreen() {
           </div>
           <div className="card" style={{ padding: 20 }}>
             {tab === 'general' && <General />}
+            {tab === 'service' && <ServiceSettings />}
             {tab === 'numbers' && <Numbers />}
             {tab === 'payments' && <PaymentMethods />}
             {tab === 'currencies' && <Currencies />}

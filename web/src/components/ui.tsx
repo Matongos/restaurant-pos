@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { IconType } from 'react-icons';
 import {
   LuBoxes,
+  LuLayoutGrid,
   LuBookOpenText,
   LuChevronDown,
   LuChartColumn,
@@ -26,7 +27,7 @@ import {
 import { go, useRoute } from '../router';
 import { logout, updateSettings, useCurrentUser, useStockLevels, useStore } from '../store/store';
 import { balances, can, ROLE_LABEL, type Permission } from '../domain/rules';
-import type { Role } from '../domain/types';
+import type { Role, ServiceMode } from '../domain/types';
 
 export function BrandMark({ withName = true }: { withName?: boolean }) {
   const settings = useStore((s) => s.settings);
@@ -116,8 +117,12 @@ function OnlineStatus() {
 }
 
 /** Where each role lands after logging in. */
-export function homeFor(role: Role): string {
-  return role === 'kitchen' ? '/kitchen' : role === 'attendant' ? '/orders' : role === 'super_admin' ? '/reports' : '/till';
+export function homeFor(role: Role, mode: ServiceMode = 'counter'): string {
+  if (role === 'kitchen') return '/kitchen';
+  if (role === 'super_admin') return '/reports';
+  // With table service waiters start on Tables; with tables only, so does everyone who sells.
+  if (mode !== 'counter' && (role === 'attendant' || mode === 'tables')) return '/tables';
+  return role === 'attendant' ? '/orders' : '/till';
 }
 
 interface NavDef {
@@ -134,13 +139,17 @@ function useNavItems(): NavDef[] {
   const orders = useStore((s) => s.orders);
   const credit = useStore((s) => s.credit);
   const levels = useStockLevels();
+  const mode = useStore((s) => s.settings.serviceMode ?? 'counter');
   if (!user) return [];
+  const busyTables = orders.filter((o) => o.table?.round === 1 && o.status !== 'cancelled' && o.table.status !== 'paid' && !o.example).length;
   // Stock badge: items running low or out (needs buying or counting).
   const stockAlerts = [...levels.values()].filter((l) => l.status === 'low' || l.status === 'out').length;
-  const openOrders = orders.filter((o) => !o.parentOrderId && !o.example && (o.status === 'in_kitchen' || o.status === 'ready')).length;
+  const openOrders = orders.filter((o) => !o.parentOrderId && !o.table && !o.example && (o.status === 'in_kitchen' || o.status === 'ready')).length;
   const owed = [...balances(credit).values()].filter((b) => b > 0).length;
   const all: NavDef[] = [
-    { to: '/till', label: 'Sell', perm: 'take_orders', Icon: LuHouse },
+    ...(mode !== 'counter' ? [{ to: '/tables', label: 'Tables', perm: 'tables' as Permission, Icon: LuLayoutGrid, badge: busyTables }] : []),
+    // Tables only: there is no counter till; food is ordered from a table.
+    ...(mode === 'tables' ? [] : [{ to: '/till', label: 'Sell', perm: 'take_orders' as Permission, Icon: LuHouse }]),
     { to: '/orders', label: 'Orders', perm: 'active_orders', Icon: LuClipboardList, badge: openOrders },
     { to: '/kitchen', label: 'Kitchen', perm: 'kitchen', Icon: LuCookingPot },
     { to: '/change-owed', label: 'Change', perm: 'change_owed', Icon: LuHandCoins, badge: owed },
@@ -152,7 +161,7 @@ function useNavItems(): NavDef[] {
     { to: '/menu', label: 'Menu', perm: 'menu_edit', Icon: LuSquarePen },
     { to: '/settings', label: 'Settings', perm: 'till_settings', Icon: LuSettings },
   ];
-  const home = homeFor(user.role);
+  const home = homeFor(user.role, mode);
   return all.filter((n) => can(user.role, n.perm)).sort((a, b) => (a.to === home ? -1 : b.to === home ? 1 : 0));
 }
 

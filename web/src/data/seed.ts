@@ -109,6 +109,13 @@ export const DEMO_OPENING_COUNT: Record<string, number> = {
 export const demoOpeningMoves = (at: string) =>
   Object.entries(DEMO_OPENING_COUNT).map(([stockItemId, qty]) => ({ id: `sm-open-${stockItemId}`, stockItemId, kind: 'count' as const, qty, reason: 'Opening stock (demo)', at, by: 'u-manager' }));
 
+/** Example tables, used when table service is switched on (Settings → How you serve). */
+export const DEFAULT_TABLES = [
+  ...Array.from({ length: 8 }, (_, i) => ({ id: `tb-${i + 1}`, name: `T${i + 1}`, area: 'Inside', seats: i % 3 === 2 ? 2 : 4 })),
+  { id: 'tb-v1', name: 'V1', area: 'Veranda', seats: 4 },
+  { id: 'tb-v2', name: 'V2', area: 'Veranda', seats: 4 },
+];
+
 export const DEFAULT_MEAL_PERIODS = [
   { id: 'breakfast', name: 'Breakfast', from: 6, to: 11 },
   { id: 'lunch', name: 'Lunch', from: 11, to: 16 },
@@ -151,7 +158,7 @@ function baseState(): AppState {
   });
 
   return {
-    version: 10,
+    version: 11,
     settings: {
       branchId: 'main',
       restaurantName: 'Training Restaurant',
@@ -176,6 +183,10 @@ function baseState(): AppState {
       mealPeriods: DEFAULT_MEAL_PERIODS,
       customersPerStaffHour: 12,
       deliveryAreas: DEFAULT_DELIVERY_AREAS,
+      serviceMode: 'counter',
+      tables: DEFAULT_TABLES,
+      askGuests: true,
+      serviceChargePct: 0,
     },
     staff: [
       { id: 'u-owner', name: 'Owner', pin: '1234', role: 'super_admin', active: true },

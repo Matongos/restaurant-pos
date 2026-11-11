@@ -13,6 +13,13 @@ export default function Kitchen() {
   const now = useNow(1000);
   const user = useCurrentUser()!;
   const orders = useStore((s) => s.orders);
+  const staff = useStore((s) => s.staff);
+  // "Farai · 5 guests": who to give a table's food to.
+  const tableWaiter = (o: (typeof orders)[number]) => {
+    const tab = o.table?.round === 1 ? o : orders.find((x) => x.id === o.parentOrderId);
+    const w = staff.find((u) => u.id === tab?.table?.waiterId)?.name.replace(/\s*\(.*\)\s*/g, '');
+    return [w, tab?.table?.guests ? `${tab.table.guests} guests` : ''].filter(Boolean).join(' · ');
+  };
   const orderTypes = useStore((s) => s.orderTypes);
   const settings = useStore((s) => s.settings);
   const [recallOpen, setRecallOpen] = useState(false);
@@ -49,18 +56,19 @@ export default function Kitchen() {
             return (
               <div key={o.id} className="ocard">
                 <div className={`oh ${TIMER_CLASS[state]}`}>
-                  <span className="n">{o.number}</span>
+                  <span className="n">{o.table ? o.table.name : o.number}</span>
                   <span className="t">
-                    {type?.ticketLabel}
+                    {o.table ? `TABLE · ROUND ${o.table.round}` : type?.ticketLabel}
                     <br />
                     <span className="clock">{fmtDuration(waited)}</span>
                     {state === 'late' && <span className="late-pill">LATE</span>}
                     <small>{type?.packaging}</small>
                     {o.delivery && <small>for {o.delivery.name}</small>}
+                    {o.table && <small>{tableWaiter(o)}</small>}
                   </span>
                 </div>
                 <div className="ob">
-                  {o.parentOrderId && <div className="addon">ADD-ON to #{o.number}</div>}
+                  {o.parentOrderId && !o.table && <div className="addon">ADD-ON to #{o.number}</div>}
                   {o.lines.map((l) => (
                     <div key={l.id}>
                       <b>{l.qty} ×</b> {l.name}
@@ -88,8 +96,8 @@ export default function Kitchen() {
           {recent.length === 0 && <div className="empty">Nothing ticked yet.</div>}
           {recent.map((o) => (
             <div key={o.id} className="row" style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
-              <b style={{ fontSize: 24, width: 60 }}>{o.number}</b>
-              <span className="grow">{o.lines.map((l) => `${l.qty}× ${lineLabel(l)}`).join(', ')}</span>
+              <b style={{ fontSize: 24, width: 60 }}>{o.table ? o.table.name : o.number}</b>
+              <span className="grow">{o.table ? `${o.table.name}: ` : ''}{o.lines.map((l) => `${l.qty}× ${lineLabel(l)}`).join(', ')}</span>
               <button
                 className="btn"
                 onClick={() => {

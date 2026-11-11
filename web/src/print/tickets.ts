@@ -32,10 +32,10 @@ export function kitchenTicketHTML(order: Order, s: AppState): string {
   return `
     <div class="ticket">
       ${order.training ? '<div class="training">TRAINING — NOT A REAL ORDER</div>' : ''}
-      ${isAddOn ? '<div class="addon">ADD-ON TO ORDER</div>' : ''}
-      <div class="num">${order.number}</div>
-      <div class="type">${esc(type?.ticketLabel ?? '')}</div>
-      <div class="pack">${esc(type?.packaging ?? '')}</div>
+      ${isAddOn && !order.table ? '<div class="addon">ADD-ON TO ORDER</div>' : ''}
+      <div class="num">${order.table ? esc(order.table.name) : order.number}</div>
+      <div class="type">${order.table ? `TABLE · ROUND ${order.table.round}` : esc(type?.ticketLabel ?? '')}</div>
+      <div class="pack">${esc(type?.packaging ?? '')}${order.table ? ` · ${esc(cashier?.name ?? '')}` : ''}</div>
       ${order.delivery ? `<div class="pack"><b>for ${esc(order.delivery.name)}${order.delivery.areaName ? ` · ${esc(order.delivery.areaName)}` : ''}</b></div>` : ''}
       <hr/>
       ${lines}
@@ -107,6 +107,50 @@ export function deliverySlipHTML(order: Order, s: AppState): string {
       <hr/>
       <div class="meta">${date(order.createdAt)} ${time(order.createdAt)} · ${esc(cashier?.name ?? '')}</div>
       <div class="small">${esc(s.settings.restaurantName)} · ${esc(s.settings.phone)}</div>
+    </div>`;
+}
+
+/**
+ * A table's bill, printed for the guests to check before paying: everything ordered in every round,
+ * the service charge, what is already paid and what is left, and an equal split if one was chosen.
+ */
+export function tableBillHTML(tab: Order, rounds: Order[], s: AppState): string {
+  const base = s.currencies.find((c) => c.code === s.settings.baseCurrency)!;
+  const waiter = s.staff.find((u) => u.id === tab.table?.waiterId);
+  // Same item from different rounds is printed once: 2 × Coke + 1 × Coke = 3 × Coke.
+  const merged = new Map<string, { qty: number; amount: number }>();
+  for (const o of rounds)
+    for (const l of o.lines) {
+      const k = lineLabel(l) + (l.without?.length ? ` (no ${l.without.join(', ').toLowerCase()})` : '');
+      const cur = merged.get(k) ?? { qty: 0, amount: 0 };
+      merged.set(k, { qty: cur.qty + l.qty, amount: cur.amount + l.qty * l.unitPrice });
+    }
+  const rows = [...merged.entries()].map(([k, v]) => `<tr><td>${v.qty} × ${esc(k)}</td><td class="r">${fmt(v.amount, base)}</td></tr>`).join('');
+  const total = rounds.reduce((a, o) => a + o.total, 0);
+  const sc = tab.table?.serviceCharge ?? 0;
+  const paid = (tab.table?.shares ?? []).reduce((a, x) => a + x.amount, 0);
+  const split = tab.table?.split;
+  const others = s.currencies.filter((c) => c.enabled && c.code !== base.code);
+  return `
+    <div class="ticket">
+      ${s.settings.logo ? `<img class="logo" src="${s.settings.logo}"/>` : ''}
+      <div class="name">${esc(s.settings.restaurantName)}</div>
+      <div class="small">${esc(s.settings.address)} · ${esc(s.settings.phone)}</div>
+      ${tab.training ? '<div class="training">TRAINING</div>' : ''}
+      <div class="label">BILL</div>
+      <div class="num" style="font-size:44px">${esc(tab.table?.name ?? '')}</div>
+      <div class="small">${tab.table?.guests ? `${tab.table.guests} guests · ` : ''}${esc(waiter?.name ?? '')}</div>
+      <hr/>
+      <table>${rows}
+      ${sc ? `<tr><td>Service charge (${s.settings.serviceChargePct ?? 0}%)</td><td class="r">${fmt(sc, base)}</td></tr>` : ''}
+      <tr class="tot"><td>Total</td><td class="r">${fmt(total, base)}</td></tr>
+      ${others.map((c) => `<tr><td class="small" style="text-align:left">in ${c.code}</td><td class="r small">${fmt(total * c.rate, c)}</td></tr>`).join('')}
+      ${paid > 0.004 ? `<tr><td>Already paid</td><td class="r">${fmt(paid, base)}</td></tr><tr class="tot"><td>Still to pay</td><td class="r">${fmt(total - paid, base)}</td></tr>` : ''}
+      </table>
+      ${split?.mode === 'equal' && split.people > 1 ? `<div class="small" style="margin-top:4px">Split ${split.people} ways: about ${fmt(total / split.people, base)} each</div>` : ''}
+      <hr/>
+      <div class="small">${date(new Date().toISOString())} ${time(new Date().toISOString())}</div>
+      <div class="small">${esc(s.settings.receiptFooter)}</div>
     </div>`;
 }
 
