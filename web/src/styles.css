@@ -410,6 +410,7 @@ tr.struck td b { text-decoration: line-through; }
 .cdisplay .right { background: var(--brand); color: #fff; padding: 48px 40px; display: flex; flex-direction: column; justify-content: center; gap: 24px; }
 .cdisplay h1 { font-size: 34px; }
 .cdisplay .clines { flex: 1; margin-top: 24px; font-size: 26px; overflow: auto; }
+.cdisplay .clines .cx-extra { display: block; font-size: 18px; color: var(--muted); margin-top: 2px; }
 .cdisplay .clines div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .cdisplay .k { opacity: 0.85; font-size: 20px; font-weight: 600; }
 .cdisplay .v { font-size: 68px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
@@ -592,6 +593,8 @@ tr.struck td b { text-decoration: line-through; }
 .cat-edit-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .cat-edit-row.off { background: var(--soft); }
 .cat-edit-row.off b { color: var(--muted); }
+.addon-price { margin-left: 6px; font-size: 13px; font-weight: 700; color: var(--brand-strong); font-variant-numeric: tabular-nums; }
+.addon-row .cat-sub { overflow-wrap: anywhere; }
 .cat-dot { width: 16px; height: 16px; border-radius: 50%; flex: none; }
 .cat-star { width: 18px; height: 18px; color: var(--warn); flex: none; }
 .cat-sub { font-size: 13px; }
@@ -783,6 +786,21 @@ tr.struck td b { text-decoration: line-through; }
 .opt-chip svg { width: 12px; height: 12px; }
 .opt-chip.off { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
 .opt-chip:disabled { cursor: default; }
+/* Add-ons on an order line: dashed "+ Extra meat +$1.50" until chosen, then filled in the brand colour. */
+.addon-chip { display: inline-flex; align-items: center; gap: 3px; min-height: 24px; padding: 0 8px; border-radius: 12px; border: 1px dashed var(--line-strong); background: var(--panel); color: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.addon-chip svg { width: 12px; height: 12px; }
+.addon-chip small { font-size: 11px; font-weight: 600; opacity: .85; }
+.addon-chip.on { border-style: solid; border-color: var(--brand); background: var(--brand-soft); color: var(--brand-strong); }
+.addon-chip:disabled { cursor: default; opacity: .55; }
+.k-extra { font-weight: 900; color: var(--info); }
+.addon-pick { display: grid; gap: 8px; }
+.addon-pick button { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; padding: 0 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel); font-size: 16px; font-weight: 600; color: var(--ink); text-align: left; }
+.addon-pick button span { display: inline-flex; align-items: center; gap: 8px; }
+.addon-pick button svg { width: 18px; height: 18px; color: var(--brand); }
+.addon-pick button b { font-variant-numeric: tabular-nums; color: var(--brand-strong); }
+.addon-pick button.on { border-color: var(--brand); background: var(--brand-soft); }
+.addon-pick button:disabled { opacity: .5; cursor: default; }
+.addon-pick button:disabled b { color: var(--bad); }
 .line-row .note-btn { border: 0; background: none; color: var(--brand-strong); font-weight: 700; font-size: 12px; min-height: 24px; padding: 0 2px; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line-row .note-btn .nt { font-weight: 500; color: var(--muted); text-decoration: underline dotted; }
 .k-without { font-weight: 900; color: var(--bad); }
@@ -964,8 +982,9 @@ tr.struck td b { text-decoration: line-through; }
 .line-row .note-btn:hover { background: var(--soft); color: var(--brand-strong); }
 .line-row .note-btn.has { color: var(--brand-strong); background: var(--brand-soft); }
 .line-row .note-btn svg { width: 15px; height: 15px; }
-.line-opts { flex-wrap: nowrap; min-width: 0; }
-.line-opts .opt-chip { flex: none; }
+.line-opts { flex-wrap: wrap; min-width: 0; }
+.line-opts .nt { max-width: 100%; }
+.line-opts .opt-chip, .line-opts .addon-chip { flex: none; }
 .line-opts .nt { min-width: 0; border: 0; background: none; padding: 0; font-size: 12px; color: var(--muted); text-decoration: underline dotted; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
 @media (min-width: 600px) and (max-width: 1199px) {
   .ticket-panel .line-thumb { display: none; }
@@ -1041,6 +1060,7 @@ tr.struck td b { text-decoration: line-through; }
   .mini-card img { position: absolute; top: 4px; right: 4px; width: 36px; height: 26px; object-fit: cover; border-radius: 6px; }
   .mini-card .mini-pr { font-size: 11px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
   .mini-card .mini-qty { position: absolute; top: 3px; right: 3px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; padding: 0 4px; z-index: 1; }
+  .mini-card .mini-no.plus { color: var(--brand-strong); }
   .mini-card .mini-no { position: absolute; left: 4px; right: 4px; top: 20px; font-size: 9px; font-weight: 800; color: var(--bad); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 

@@ -7,6 +7,7 @@ import { fmt } from '../domain/money';
 import { can, mealInitials, uid } from '../domain/rules';
 import { LuCamera, LuStore } from 'react-icons/lu';
 import CategoryEditor from '../components/CategoryEditor';
+import AddOnEditor from '../components/AddOnEditor';
 
 type Tab = 'general' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'kitchen' | 'demo';
 
@@ -409,6 +410,8 @@ export function MenuEditor() {
     <>
       <h3 className="sub-head" style={{ marginTop: 0 }}>Categories</h3>
       <CategoryEditor />
+      <h3 className="sub-head">Add-ons</h3>
+      <AddOnEditor />
       <h3 className="sub-head">Meals and drinks</h3>
       <div className="row" style={{ marginBottom: 12 }}>
         <p className="muted grow" style={{ margin: 0 }}>
@@ -434,6 +437,7 @@ export function MenuEditor() {
                 <div className="muted" style={{ fontSize: 13 }}>
                   {categories.find((c) => c.id === m.categoryId)?.name}
                   {m.favourite ? ' · favourite' : ''}
+                  {m.addOnIds?.length ? ` · ${m.addOnIds.length} add-on${m.addOnIds.length === 1 ? '' : 's'}` : ''}
                 </div>
               </td>
               <td>{fmt(m.price, base)}</td>
@@ -545,6 +549,7 @@ function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) 
         Show in Favourites (first screen at the till)
       </label>
       <MadeWith m={m} setM={setM} />
+      <AddOnPicker m={m} setM={setM} />
     </Dialog>
   );
 }
@@ -618,6 +623,43 @@ function MadeWith({ m, setM }: { m: MenuItem; setM: (m: MenuItem) => void }) {
           Add
         </button>
       </div>
+    </>
+  );
+}
+
+/** Which add-ons this meal offers at the till (the list itself is edited under Menu > Add-ons). */
+function AddOnPicker({ m, setM }: { m: MenuItem; setM: (m: MenuItem) => void }) {
+  const addOns = useStore((s) => s.addOns);
+  const base = useStore((s) => s.currencies.find((c) => c.code === s.settings.baseCurrency)!);
+  const on = new Set(m.addOnIds ?? []);
+  const flip = (id: string) => {
+    const ids = on.has(id) ? (m.addOnIds ?? []).filter((x) => x !== id) : [...(m.addOnIds ?? []), id];
+    setM({ ...m, addOnIds: ids.length ? ids : undefined });
+  };
+  return (
+    <>
+      <div className="section-title">Add-ons the customer can ask for</div>
+      {addOns.length === 0 ? (
+        <p className="hint" style={{ marginTop: -4 }}>
+          No add-ons yet. Create them under <b>Add-ons</b> on the Menu screen.
+        </p>
+      ) : (
+        <>
+          <p className="hint" style={{ marginTop: -4 }}>
+            Tap to offer. The price is added per plate; to change it, edit the add-on.
+          </p>
+          <div className="seg">
+            {addOns
+              .slice()
+              .sort((a, b) => a.sort - b.sort)
+              .map((a) => (
+                <button key={a.id} className={on.has(a.id) ? 'on' : ''} aria-pressed={on.has(a.id)} onClick={() => flip(a.id)}>
+                  {a.name} <small>{a.price > 0 ? `+${fmt(a.price, base)}` : 'free'}</small>
+                </button>
+              ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

@@ -8,7 +8,7 @@ import {
   useStore,
 } from '../store/store';
 import { fmt, round2 } from '../domain/money';
-import { todayISO } from '../domain/rules';
+import { lineLabel, todayISO } from '../domain/rules';
 import { CREDIT_METHOD, type AppState, type Expense, type Order, type PaidFrom, type Purchase } from '../domain/types';
 import { Dialog, TopBar, toast } from '../components/ui';
 import BarChart from '../components/BarChart';
@@ -191,17 +191,19 @@ function Profit({ p }: { p: Period }) {
 
   // Profit per meal (needs a cost per plate on the menu item).
   const perMeal = useMemo(() => {
-    const m = new Map<string, { qty: number; sales: number }>();
+    // Sales include the add-ons sold with the meal (extra meat ...), and so does the cost.
+    const m = new Map<string, { qty: number; sales: number; extrasCost: number }>();
     for (const o of f.live) for (const l of o.lines) {
-      const cur = m.get(l.itemId) ?? { qty: 0, sales: 0 };
-      m.set(l.itemId, { qty: cur.qty + l.qty, sales: round2(cur.sales + l.qty * l.unitPrice) });
+      const cur = m.get(l.itemId) ?? { qty: 0, sales: 0, extrasCost: 0 };
+      const xc = (l.extras ?? []).reduce((s, x) => s + (x.cost ?? 0), 0) * l.qty;
+      m.set(l.itemId, { qty: cur.qty + l.qty, sales: round2(cur.sales + l.qty * l.unitPrice), extrasCost: round2(cur.extrasCost + xc) });
     }
     return [...m.entries()]
       .map(([id, v]) => {
         const item = menu.find((x) => x.id === id);
         const cost = item?.costPerPlate;
-        const totalCost = cost === undefined ? null : round2(cost * v.qty);
-        return { id, name: item?.name ?? id, ...v, cost, totalCost, profit: totalCost === null ? null : round2(v.sales - totalCost) };
+        const totalCost = cost === undefined ? null : round2(cost * v.qty + v.extrasCost);
+        return { id, name: item?.name ?? id, qty: v.qty, sales: v.sales, cost, totalCost, profit: totalCost === null ? null : round2(v.sales - totalCost) };
       })
       .sort((a, b) => (b.profit ?? -1) - (a.profit ?? -1));
   }, [f.live, menu]);
@@ -841,7 +843,7 @@ function Journal({ p }: { p: Period }) {
     const term = q.trim().toLowerCase();
     return orders
       .filter((o) => inTime(o.createdAt, p))
-      .filter((o) => !term || String(o.number) === term || o.lines.some((l) => l.name.toLowerCase().includes(term)))
+      .filter((o) => !term || String(o.number) === term || o.lines.some((l) => lineLabel(l).toLowerCase().includes(term)))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [orders, p, q]);
   const paid = round2(list.filter((o) => o.status !== 'cancelled').reduce((s, o) => s + o.total, 0));
@@ -882,7 +884,7 @@ function Journal({ p }: { p: Period }) {
                     <b>{o.number}</b>
                     {o.parentOrderId && <div className="muted" style={{ fontSize: 12 }}>add-on</div>}
                   </td>
-                  <td style={{ fontSize: 13 }}>{o.lines.map((l) => `${l.qty}× ${l.name}`).join(', ')}</td>
+                  <td style={{ fontSize: 13 }}>{o.lines.map((l) => `${l.qty}× ${lineLabel(l)}`).join(', ')}</td>
                   <td style={{ fontSize: 13 }}>
                     {o.payments
                       .map((x) => `${x.methodId === CREDIT_METHOD ? 'Change' : methods.find((m) => m.id === x.methodId)?.name ?? x.methodId} ${fmt(x.amount, currencies.find((cc) => cc.code === x.currency))}`)

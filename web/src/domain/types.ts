@@ -109,6 +109,32 @@ export interface MenuItem {
   sort: number;
   /** What one portion costs to make (base currency), for profit per meal. Optional. */
   costPerPlate?: number;
+  /** Add-ons the customer can ask for with this meal (extra meat +$1.50, extra gravy free ...). */
+  addOnIds?: ID[];
+}
+
+/**
+ * Something added to a meal on request, priced per plate (0 = free), e.g. Extra meat +$1.50, Extra gravy.
+ * Kept in one list so a price changes everywhere at once; each meal says which ones it offers.
+ */
+export interface AddOn {
+  id: ID;
+  name: string;
+  /** Price per plate in base currency. 0 = free. */
+  price: number;
+  /** What it costs to make (base currency), for profit per meal. Optional. */
+  cost?: number;
+  /** Switched off on the Sold out screen when it runs out. */
+  available: boolean;
+  sort: number;
+}
+
+/** An add-on as it was sold: name and price are copied, so later menu changes don't rewrite old sales. */
+export interface LineExtra {
+  id: ID;
+  name: string;
+  price: number;
+  cost?: number;
 }
 
 export interface OrderLine {
@@ -120,6 +146,11 @@ export interface OrderLine {
   note?: string;
   /** "Comes with" parts left out, by name, e.g. ["Coslo"]. Printed as NO COSLO on the kitchen ticket. */
   without?: string[];
+  /**
+   * Add-ons on every plate of this line, e.g. [Extra meat]. Printed as + EXTRA MEAT.
+   * unitPrice already includes them (meal price + add-ons), so every total stays a simple qty × unitPrice.
+   */
+  extras?: LineExtra[];
 }
 
 export interface Payment {
@@ -376,6 +407,7 @@ export interface AppState {
   categories: Category[];
   components: Component[];
   menu: MenuItem[];
+  addOns: AddOn[];
   orders: Order[];
   customers: Customer[];
   credit: CreditEntry[];

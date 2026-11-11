@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { setComponentAvailable, setItemAvailable, useCurrentUser, useStore } from '../store/store';
+import { setAddOnAvailable, setComponentAvailable, setItemAvailable, useCurrentUser, useStore } from '../store/store';
+import { fmt } from '../domain/money';
 import { TopBar } from '../components/ui';
 
 /** Phone-friendly screen: switch ingredients or whole meals sold out. */
@@ -8,6 +9,8 @@ export default function TodaysMenu() {
   const components = useStore((s) => s.components);
   const menu = useStore((s) => s.menu);
   const categories = useStore((s) => s.categories);
+  const addOns = useStore((s) => s.addOns);
+  const base = useStore((s) => s.currencies.find((c) => c.code === s.settings.baseCurrency)!);
 
   const blockedBy = useMemo(() => {
     const off = new Set(components.filter((c) => !c.available).map((c) => c.id));
@@ -41,6 +44,26 @@ export default function TodaysMenu() {
               </button>
             ))}
           </div>
+
+          {addOns.length > 0 && (
+            <>
+              <div className="section-title">Add-ons — a finished one can't be added at the till</div>
+              <div className="toggle-list">
+                {addOns
+                  .slice()
+                  .sort((x, y) => x.sort - y.sort)
+                  .map((a) => (
+                    <button key={a.id} className={`toggle ${a.available ? '' : 'off'}`} onClick={() => setAddOnAvailable(a.id, !a.available)}>
+                      <span>
+                        {a.name}
+                        <span className="sub">{a.price > 0 ? `+${fmt(a.price, base)} a plate` : 'free'}</span>
+                      </span>
+                      <span className="st">{a.available ? 'AVAILABLE' : 'FINISHED'}</span>
+                    </button>
+                  ))}
+              </div>
+            </>
+          )}
 
           {categories
             .slice()

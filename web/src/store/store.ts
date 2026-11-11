@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type {
+  AddOn,
   AppState,
   Cancellation,
   Category,
@@ -23,7 +24,7 @@ import type {
   Staff,
   StaffAction,
 } from '../domain/types';
-import { DEFAULT_MEAL_PERIODS, seedState, STOCK_ITEMS } from '../data/seed';
+import { DEFAULT_ADD_ONS, DEFAULT_MEAL_ADD_ONS, DEFAULT_MEAL_PERIODS, seedState, STOCK_ITEMS } from '../data/seed';
 import { exampleBooks, exampleCancellations, exampleHistory } from '../data/exampleHistory';
 import { nextFreeCard, cardsInUse, customerBalance, pinProblem, ROLE_LABEL, staffRights, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
 import { CREDIT_METHOD } from '../domain/types';
@@ -46,7 +47,13 @@ const listeners = new Set<() => void>();
 /** Bring data saved by an older version of the app up to date. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): AppState | null {
-  if (raw?.version === 7) return raw as AppState;
+  if (raw?.version === 8) return raw as AppState;
+  if (raw?.version === 7) {
+    // v8: priced add-ons (extra meat +$1.50, extra gravy free ...), chosen per meal.
+    const st = raw as AppState;
+    const menu = st.menu.map((m) => (m.addOnIds || !DEFAULT_MEAL_ADD_ONS[m.id] ? m : { ...m, addOnIds: DEFAULT_MEAL_ADD_ONS[m.id] }));
+    return { ...st, version: 8, addOns: st.addOns ?? DEFAULT_ADD_ONS, menu };
+  }
   if (raw?.version === 6) {
     // v7: meals "come with" parts the customer can say no to (coslo with rice meals, covo with sadza).
     const st = raw as AppState;
@@ -57,7 +64,7 @@ function migrate(raw: any): AppState | null {
       const optionalIds = withCoslo.filter((id) => id === 'coslo' || id === 'greens');
       return { ...m, componentIds: withCoslo, optionalIds: optionalIds.length ? optionalIds : undefined };
     });
-    return { ...st, version: 7, components, menu };
+    return migrate({ ...st, version: 7, components, menu });
   }
   if (raw?.version === 5) {
     // v6: staff management (history of staff changes).
@@ -509,6 +516,37 @@ export function upsertMenuItem(item: MenuItem) {
     const exists = st.menu.some((x) => x.id === item.id);
     return { ...st, menu: exists ? st.menu.map((x) => (x.id === item.id ? item : x)) : [...st.menu, item] };
   });
+}
+
+/* ------------------------------------------------------------------ add-ons */
+
+/** Add or change an add-on (Extra meat +$1.50 ...). Its price applies to new orders only. */
+export function upsertAddOn(a: AddOn): { ok: true } | { ok: false; error: string } {
+  const name = a.name.trim().replace(/\s+/g, ' ');
+  if (!name) return { ok: false, error: 'Give the add-on a name' };
+  if (!(a.price >= 0)) return { ok: false, error: 'The price cannot be below zero' };
+  if (state.addOns.some((x) => x.id !== a.id && x.name.toLowerCase() === name.toLowerCase())) return { ok: false, error: `There is already an add-on called ${name}` };
+  set((st) => {
+    const exists = st.addOns.some((x) => x.id === a.id);
+    const sort = exists ? a.sort : Math.max(0, ...st.addOns.map((x) => x.sort)) + 1;
+    const next = { ...a, name, price: round2(a.price), cost: a.cost === undefined ? undefined : round2(a.cost), sort };
+    return { ...st, addOns: exists ? st.addOns.map((x) => (x.id === a.id ? next : x)) : [...st.addOns, next] };
+  });
+  return { ok: true };
+}
+
+/** Remove an add-on from the menu and from every meal. Past sales keep it (they store their own copy). */
+export function deleteAddOn(id: string) {
+  set((st) => ({
+    ...st,
+    addOns: st.addOns.filter((a) => a.id !== id),
+    menu: st.menu.map((m) => (m.addOnIds?.includes(id) ? { ...m, addOnIds: m.addOnIds.filter((x) => x !== id) } : m)),
+  }));
+}
+
+/** Sold out today: a switched-off add-on can't be added at the till until it is back. */
+export function setAddOnAvailable(id: string, available: boolean) {
+  set((st) => ({ ...st, addOns: st.addOns.map((a) => (a.id === id ? { ...a, available } : a)) }));
 }
 
 /* --------------------------------------------------------------- categories */

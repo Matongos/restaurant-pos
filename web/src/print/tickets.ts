@@ -1,6 +1,7 @@
 import type { AppState, CreditEntry, Customer, Order } from '../domain/types';
 import { CREDIT_METHOD } from '../domain/types';
 import { fmt } from '../domain/money';
+import { lineLabel } from '../domain/rules';
 
 /**
  * Ticket layouts for 80 mm thermal printers.
@@ -23,6 +24,7 @@ export function kitchenTicketHTML(order: Order, s: AppState): string {
     .map(
       (l) =>
         `<div class="line"><b>${l.qty} ×</b> ${esc(l.name)}</div>` +
+          (l.extras ?? []).map((x) => `<div class="extra">+ ${esc(x.name.toUpperCase())}</div>`).join('') +
           (l.without ?? []).map((w) => `<div class="without">» NO ${esc(w.toUpperCase())}</div>`).join('') +
           (l.note ? `<div class="note">» ${esc(l.note)}</div>` : ''),
     )
@@ -45,7 +47,7 @@ export function customerSlipHTML(order: Order, s: AppState): string {
   const base = s.currencies.find((c) => c.code === s.settings.baseCurrency)!;
   const type = s.orderTypes.find((t) => t.id === order.orderTypeId);
   const rows = order.lines
-    .map((l) => `<tr><td>${l.qty} × ${esc(l.name)}</td><td class="r">${fmt(l.qty * l.unitPrice, base)}</td></tr>`)
+    .map((l) => `<tr><td>${l.qty} × ${esc(lineLabel(l))}</td><td class="r">${fmt(l.qty * l.unitPrice, base)}</td></tr>`)
     .join('');
   const pays = order.payments
     .map((p) => {
@@ -105,6 +107,7 @@ export const TICKET_CSS = `
   .line{font-size:16px;margin:3px 0}
   .note{font-size:13px;margin-left:16px}
   .without{font-size:15px;font-weight:900;margin-left:16px;letter-spacing:.02em}
+  .extra{font-size:15px;font-weight:900;margin-left:16px;letter-spacing:.02em}
   .meta{font-size:11px;text-align:center}
   .training,.addon{text-align:center;font-weight:800;border:2px solid #000;padding:2px;margin-bottom:4px}
   .logo{display:block;margin:0 auto 4px;max-width:40mm;max-height:20mm;filter:grayscale(1)}

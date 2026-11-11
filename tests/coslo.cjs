@@ -11,7 +11,7 @@ await pin('2222'); await page.waitForSelector('.items');
 await page.evaluate((k)=>{const st=JSON.parse(localStorage.getItem(k)); st.version=6; st.components=st.components.filter(c=>c.id!=='coslo'); st.menu.forEach(m=>{delete m.optionalIds; m.componentIds=m.componentIds.filter(x=>x!=='coslo');}); localStorage.setItem(k,JSON.stringify(st));},KEY);
 await page.reload(); await page.waitForSelector('.items');
 const mig=await page.evaluate((k)=>{const st=JSON.parse(localStorage.getItem(k)); const rb=st.menu.find(m=>m.id==='m-rice-beef'); const sb=st.menu.find(m=>m.id==='m-sadza-beef'); return {v:st.version, coslo:st.components.some(c=>c.id==='coslo'), rb, sb};},KEY);
-check('migrated v7', mig.v===7 && mig.coslo && mig.rb.componentIds.includes('coslo') && mig.rb.optionalIds.join()==='coslo' && mig.sb.optionalIds.join()==='greens', JSON.stringify(mig));
+check('migrated to latest', mig.v===8 && mig.coslo && mig.rb.componentIds.includes('coslo') && mig.rb.optionalIds.join()==='coslo' && mig.sb.optionalIds.join()==='greens', JSON.stringify(mig));
 // --- till
 await page.click('.item:has-text("Rice & Beef")'); await page.click('.item:has-text("Rice & Beef")');
 const line=()=>page.locator('.line-row').first();

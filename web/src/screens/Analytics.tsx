@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../store/store';
 import { fmt, round2 } from '../domain/money';
-import { balances, fmtDuration, serviceTimes } from '../domain/rules';
+import { balances, fmtDuration, lineLabel, serviceTimes } from '../domain/rules';
 import {
   allOrdersIn,
   buckets,
@@ -567,7 +567,7 @@ function Service({ customers, base, lateMs, hours, r }: Ctx) {
                   <b>{o.number}</b>
                 </td>
                 <td>{new Date(t.placed).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                <td>{o.lines.map((l) => `${l.qty}× ${l.name}`).join(', ')}</td>
+                <td>{o.lines.map((l) => `${l.qty}× ${lineLabel(l)}`).join(', ')}</td>
                 <td className="num">{t.toReadyMs !== undefined ? fmtDuration(t.toReadyMs) : '—'}</td>
                 <td className="num">
                   <b style={t.toServedMs! >= lateMs ? { color: 'var(--bad)' } : undefined}>{fmtDuration(t.toServedMs!)}</b>
@@ -627,6 +627,14 @@ function Money({ customers, all, base, r }: Ctx) {
       const cur = byItem.get(l.name) ?? { qty: 0, amount: 0 };
       byItem.set(l.name, { qty: cur.qty + l.qty, amount: round2(cur.amount + l.qty * l.unitPrice) });
     }
+  // Add-ons (extra meat, fried egg ...): how many plates had one, and what they brought in.
+  const byAddOn = new Map<string, { qty: number; amount: number }>();
+  for (const o of all)
+    for (const l of o.lines)
+      for (const x of l.extras ?? []) {
+        const cur = byAddOn.get(x.name) ?? { qty: 0, amount: 0 };
+        byAddOn.set(x.name, { qty: cur.qty + l.qty, amount: round2(cur.amount + l.qty * x.price) });
+      }
   const byCashier = new Map<string, number>();
   for (const o of all) byCashier.set(o.cashierId, round2((byCashier.get(o.cashierId) ?? 0) + o.total));
   const a = r.start.getTime(), b = r.end.getTime();
@@ -703,6 +711,31 @@ function Money({ customers, all, base, r }: Ctx) {
             ))}
         </tbody>
       </table>
+      {byAddOn.size > 0 && (
+        <>
+          <div className="section-title">Add-ons sold</div>
+          <table className="list">
+            <thead>
+              <tr>
+                <th>Add-on</th>
+                <th>Plates</th>
+                <th>Extra sales</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...byAddOn.entries()]
+                .sort((x, y) => y[1].qty - x[1].qty)
+                .map(([name, v]) => (
+                  <tr key={name}>
+                    <td>{name}</td>
+                    <td className="num">{v.qty}</td>
+                    <td className="num">{v.amount > 0 ? fmt(v.amount, base) : 'free'}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </>
+      )}
       <div className="row wrap" style={{ alignItems: 'flex-start', gap: 24 }}>
         <div className="grow">
           <div className="section-title">Eat In vs Take Away</div>

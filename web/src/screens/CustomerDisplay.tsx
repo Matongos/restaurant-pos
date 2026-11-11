@@ -54,6 +54,12 @@ export default function CustomerDisplay() {
             <div key={l.id}>
               <span>
                 {l.qty} × {l.name}
+                {l.extras?.map((x) => (
+                  <small key={x.id} className="cx-extra">
+                    + {x.name}
+                    {x.price > 0 ? ` (${fmt(x.price, base)} each)` : ''}
+                  </small>
+                ))}
               </span>
               <span>{fmt(l.qty * l.unitPrice, base)}</span>
             </div>

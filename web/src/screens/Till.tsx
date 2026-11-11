@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRoute, go } from '../router';
 import { setLiveCart, useCurrentUser, useStore, type PlaceOrderSuccess } from '../store/store';
-import { comesWith, isSellable, mealInitials, nextFreeCard, todayISO } from '../domain/rules';
+import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, nextFreeCard, sameExtras, todayISO } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
-import type { MenuItem, OrderLine } from '../domain/types';
+import type { AddOn, MenuItem, OrderLine } from '../domain/types';
 import { Dialog, MoreMenu, TopBar } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
@@ -21,6 +21,7 @@ export default function Till() {
   const user = useCurrentUser()!;
   const menu = useStore((s) => s.menu);
   const components = useStore((s) => s.components);
+  const addOns = useStore((s) => s.addOns);
   const categories = useStore((s) => s.categories);
   const orderTypes = useStore((s) => s.orderTypes);
   const currencies = useStore((s) => s.currencies);
@@ -82,7 +83,7 @@ export default function Till() {
 
   const add = (m: MenuItem) => {
     const auto = finishedParts(m);
-    const existing = lines.find((l) => l.itemId === m.id && !l.note && sameWithout(l.without, auto));
+    const existing = lines.find((l) => l.itemId === m.id && !l.note && !l.extras?.length && sameWithout(l.without, auto));
     if (existing) {
       setLines((ls) => ls.map((l) => (l.id === existing.id ? { ...l, qty: l.qty + 1 } : l)));
       setLastLine(existing.id);
@@ -101,38 +102,55 @@ export default function Till() {
     const t = setTimeout(() => setLastLine(null), 600);
     return () => clearTimeout(t);
   }, [lastLine, lines]);
-  /** One tap: "Coslo" ⇄ "No coslo" for this line. */
   /**
-   * Coslo ⇄ No coslo for `count` plates of a line. If that is fewer than the whole line, the line splits:
-   * 5 × Sadza & Beef  →  4 × Sadza & Beef  +  1 × Sadza & Beef (no greens).
+   * Change `count` plates of a line: "No coslo" on or off, or an add-on (Extra meat) on or off.
+   * If that is fewer than the whole line, the line splits:
+   * 5 × Sadza & Beef  →  4 × Sadza & Beef  +  1 × Sadza & Beef + Extra meat.
+   * An identical line already in the order (same meal, note, sides and add-ons) is joined rather than repeated.
    */
-  const applyWithout = (id: string, part: string, count: number) =>
+  const applyChange = (id: string, count: number, change: (l: OrderLine) => Pick<OrderLine, 'without' | 'extras' | 'unitPrice'>) =>
     setLines((ls) => {
       const line = ls.find((l) => l.id === id);
       if (!line) return ls;
-      const has = line.without?.includes(part);
-      const flipped = has ? line.without!.filter((w) => w !== part) : [...(line.without ?? []), part];
-      const without = flipped.length ? flipped : undefined;
-      // An identical line already in the order (same meal, note and sides) is joined rather than repeated.
-      const twin = ls.find((l) => l.id !== id && l.itemId === line.itemId && l.note === line.note && sameWithout(l.without, without));
+      const next = change(line);
+      const twin = ls.find((l) => l.id !== id && l.itemId === line.itemId && l.note === line.note && sameWithout(l.without, next.without) && sameExtras(l.extras, next.extras));
       if (count >= line.qty) {
         if (twin) return ls.filter((l) => l.id !== id).map((l) => (l.id === twin.id ? { ...l, qty: l.qty + line.qty } : l));
-        return ls.map((l) => (l.id === id ? { ...l, without } : l));
+        return ls.map((l) => (l.id === id ? { ...l, ...next } : l));
       }
       const rest = ls.map((l) => (l.id === id ? { ...l, qty: l.qty - count } : twin && l.id === twin.id ? { ...l, qty: l.qty + count } : l));
       if (twin) return rest;
       const i = rest.findIndex((l) => l.id === id);
-      const split: OrderLine = { ...line, id: crypto.randomUUID(), qty: count, without };
+      const split: OrderLine = { ...line, ...next, id: crypto.randomUUID(), qty: count };
       return [...rest.slice(0, i + 1), split, ...rest.slice(i + 1)];
     });
-  const [splitAsk, setSplitAsk] = useState<{ lineId: string; part: string } | null>(null);
+  const flipWithout = (part: string) => (l: OrderLine) => {
+    const flipped = l.without?.includes(part) ? l.without.filter((w) => w !== part) : [...(l.without ?? []), part];
+    return { without: flipped.length ? flipped : undefined, extras: l.extras, unitPrice: l.unitPrice };
+  };
+  /** Add-on on or off. The plate price is the meal price plus its add-ons. */
+  const flipExtra = (a: AddOn) => (l: OrderLine) => {
+    const has = l.extras?.some((x) => x.id === a.id);
+    const list = has ? l.extras!.filter((x) => x.id !== a.id) : [...(l.extras ?? []), { id: a.id, name: a.name, price: a.price, ...(a.cost !== undefined ? { cost: a.cost } : {}) }];
+    const extras = list.length ? list : undefined;
+    return { without: l.without, extras, unitPrice: round2(l.unitPrice - extrasPrice(l.extras) + extrasPrice(extras)) };
+  };
+  const [extraFor, setExtraFor] = useState<string | null>(null);
+  const [splitAsk, setSplitAsk] = useState<{ lineId: string; part?: string; addOn?: AddOn } | null>(null);
   /** One plate: switch straight away. Several: ask how many. */
   const toggleWithout = (id: string, part: string) => {
     const line = lines.find((l) => l.id === id);
     if (!line) return;
     if (line.qty > 1) setSplitAsk({ lineId: id, part });
-    else applyWithout(id, part, 1);
+    else applyChange(id, 1, flipWithout(part));
   };
+  const toggleExtra = (id: string, a: AddOn) => {
+    const line = lines.find((l) => l.id === id);
+    if (!line) return;
+    if (line.qty > 1) setSplitAsk({ lineId: id, addOn: a });
+    else applyChange(id, 1, flipExtra(a));
+  };
+  const priceTag = (n: number) => (n > 0 ? `+${fmt(n, base)}` : 'free');
 
   const changeQty = (id: string, d: number) =>
     setLines((ls) => ls.flatMap((l) => (l.id !== id ? [l] : l.qty + d <= 0 ? [] : [{ ...l, qty: l.qty + d }])));
@@ -220,6 +238,19 @@ export default function Till() {
                   </button>
                 );
               })}
+              {(l.extras ?? []).map((x) => (
+                <button key={x.id} className="addon-chip on" onClick={() => toggleExtra(l.id, addOns.find((a) => a.id === x.id) ?? { ...x, available: true, sort: 0 })} aria-label={`${x.name} added, ${priceTag(x.price)} a plate. Tap to take it off`}>
+                  <LuCheck aria-hidden="true" />
+                  {x.name}
+                  <small>{priceTag(x.price)}</small>
+                </button>
+              ))}
+              {addOnsFor(m, addOns).some((a) => !l.extras?.some((x) => x.id === a.id)) && (
+                <button className="addon-chip" onClick={() => setExtraFor(l.id)} aria-label={`Add an extra to ${l.name}`}>
+                  <LuPlus aria-hidden="true" />
+                  Extra
+                </button>
+              )}
               {l.note && (
                 <button className="nt" onClick={() => setNoteFor(l)}>
                   {l.note}
@@ -378,7 +409,11 @@ export default function Till() {
                       <span className="mono">{mealInitials(l.name)}</span>
                       {m?.photo && <img src={m.photo} alt="" />}
                       {l.qty > 1 && <span className="mini-qty">{l.qty}</span>}
-                      {!!l.without?.length && <span className="mini-no">no {l.without.join(', ').toLowerCase()}</span>}
+                      {(!!l.without?.length || !!l.extras?.length) && (
+                        <span className={`mini-no ${l.without?.length ? '' : 'plus'}`}>
+                          {[...(l.extras ?? []).map((x) => `+${x.name.toLowerCase()}`), ...(l.without ?? []).map((w) => `no ${w.toLowerCase()}`)].join(', ')}
+                        </span>
+                      )}
                       <span className="mini-pr">{fmt(l.qty * l.unitPrice, base)}</span>
                     </button>
                   );
@@ -501,19 +536,60 @@ export default function Till() {
         (() => {
           const line = lines.find((l) => l.id === splitAsk.lineId);
           if (!line) return null;
-          const removing = !line.without?.includes(splitAsk.part);
-          const label = removing ? `No ${splitAsk.part.toLowerCase()}` : `${splitAsk.part} back`;
+          const { part, addOn } = splitAsk;
+          const label = addOn
+            ? line.extras?.some((x) => x.id === addOn.id)
+              ? `Take ${addOn.name.toLowerCase()} off`
+              : `${addOn.name} (${priceTag(addOn.price)} each)`
+            : !line.without?.includes(part!)
+              ? `No ${part!.toLowerCase()}`
+              : `${part} back`;
           return (
             <SplitDialog
               title={`${label} on how many?`}
-              subtitle={`${line.qty} × ${line.name}${line.without?.length ? ` (no ${line.without.join(', ').toLowerCase()})` : ''}`}
+              subtitle={`${line.qty} × ${lineLabel(line)}${line.without?.length ? ` (no ${line.without.join(', ').toLowerCase()})` : ''}`}
               qty={line.qty}
               onPick={(n) => {
-                applyWithout(line.id, splitAsk.part, n);
+                applyChange(line.id, n, addOn ? flipExtra(addOn) : flipWithout(part!));
                 setSplitAsk(null);
               }}
               onClose={() => setSplitAsk(null)}
             />
+          );
+        })()}
+      {extraFor &&
+        (() => {
+          const line = lines.find((l) => l.id === extraFor);
+          if (!line) return null;
+          const m = menu.find((x) => x.id === line.itemId);
+          return (
+            <Dialog title={`Add to ${line.name}`} onClose={() => setExtraFor(null)} width={460}>
+              <p className="muted" style={{ marginTop: 0 }}>
+                Priced per plate{line.qty > 1 ? `; next you choose how many of the ${line.qty} plates` : ''}.
+              </p>
+              <div className="addon-pick">
+                {addOnsFor(m, addOns).map((a) => {
+                  const on = !!line.extras?.some((x) => x.id === a.id);
+                  return (
+                    <button
+                      key={a.id}
+                      className={on ? 'on' : ''}
+                      disabled={!a.available && !on}
+                      onClick={() => {
+                        setExtraFor(null);
+                        toggleExtra(line.id, a);
+                      }}
+                    >
+                      <span>
+                        {on ? <LuCheck aria-hidden="true" /> : <LuPlus aria-hidden="true" />}
+                        {a.name}
+                      </span>
+                      <b>{!a.available && !on ? 'Finished' : on ? 'Added' : priceTag(a.price)}</b>
+                    </button>
+                  );
+                })}
+              </div>
+            </Dialog>
           );
         })()}
       {noteFor && (
@@ -560,7 +636,8 @@ function SplitDialog({ title, subtitle, qty, onPick, onClose }: { title: string;
   );
 }
 
-const QUICK_NOTES = ['No gravy', 'Extra gravy', 'No greens', 'Soft sadza', 'Spicy', 'Well done'];
+/** Free-text requests. Priced or common extras (extra meat, extra gravy) are add-ons on the order line instead. */
+const QUICK_NOTES = ['No gravy', 'Gravy on the side', 'Soft sadza', 'Spicy', 'Well done', 'No salt'];
 
 function NoteDialog({ line, onClose, onSave }: { line: OrderLine; onClose: () => void; onSave: (n: string) => void }) {
   const [note, setNote] = useState(line.note ?? '');

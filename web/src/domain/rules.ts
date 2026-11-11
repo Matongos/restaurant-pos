@@ -1,4 +1,4 @@
-import type { AppState, Component, CreditEntry, Customer, MenuItem, Order, Role, Staff } from './types';
+import type { AddOn, AppState, Component, CreditEntry, Customer, LineExtra, MenuItem, Order, Role, Staff } from './types';
 
 /** A meal can be sold only if it is switched on AND every component it uses is available. */
 export function isSellable(item: MenuItem, state: Pick<AppState, 'components'>): boolean {
@@ -21,10 +21,27 @@ export function comesWith(item: MenuItem | undefined, components: Component[]): 
     .map((c) => ({ id: c.id, name: shortName(c.name), available: c.available }));
 }
 
-/** What the kitchen needs to know about a line beyond its name: "No coslo · extra gravy". */
-export function lineExtras(l: { note?: string; without?: string[] }): string {
-  return [...(l.without ?? []).map((w) => `No ${w.toLowerCase()}`), l.note].filter(Boolean).join(' · ');
+/** What the kitchen needs to know about a line beyond its name: "+ Extra meat · No coslo · soft sadza". */
+export function lineExtras(l: { note?: string; without?: string[]; extras?: LineExtra[] }): string {
+  return [...(l.extras ?? []).map((x) => `+ ${x.name}`), ...(l.without ?? []).map((w) => `No ${w.toLowerCase()}`), l.note].filter(Boolean).join(' · ');
 }
+
+/** "Sadza & Beef + Extra meat": the line's name with its add-ons, for lists and the sales journal. */
+export function lineLabel(l: { name: string; extras?: LineExtra[] }): string {
+  return [l.name, ...(l.extras ?? []).map((x) => x.name)].join(' + ');
+}
+
+/** The add-ons a meal offers, in menu order (switched-off ones included, so the till can show them as finished). */
+export function addOnsFor(item: MenuItem | undefined, addOns: AddOn[]): AddOn[] {
+  if (!item?.addOnIds?.length) return [];
+  const ids = new Set(item.addOnIds);
+  return addOns.filter((a) => ids.has(a.id)).sort((a, b) => a.sort - b.sort);
+}
+
+/** Add-ons on one plate, added up (base currency). */
+export const extrasPrice = (extras?: LineExtra[]) => Math.round((extras ?? []).reduce((s, x) => s + x.price, 0) * 100) / 100;
+/** Same set of add-ons, in any order. */
+export const sameExtras = (a?: LineExtra[], b?: LineExtra[]) => (a ?? []).map((x) => x.id).sort().join('|') === (b ?? []).map((x) => x.id).sort().join('|');
 
 /** Cards currently held by customers (orders not yet served). */
 export function cardsInUse(orders: Order[]): Set<number> {

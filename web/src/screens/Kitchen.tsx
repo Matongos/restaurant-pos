@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { setOrderStatus, useCurrentUser, useStore } from '../store/store';
-import { fmtDuration, timerState } from '../domain/rules';
+import { fmtDuration, lineLabel, timerState } from '../domain/rules';
 import { Dialog, TopBar, useNow } from '../components/ui';
 import { LuCheck, LuRotateCcw } from 'react-icons/lu';
 import { TIMER_CLASS } from './ActiveOrders';
@@ -63,6 +63,9 @@ export default function Kitchen() {
                   {o.lines.map((l) => (
                     <div key={l.id}>
                       <b>{l.qty} ×</b> {l.name}
+                      {l.extras?.map((x) => (
+                        <div key={x.id} className="k-extra">+ {x.name.toUpperCase()}</div>
+                      ))}
                       {l.without?.map((w) => (
                         <div key={w} className="k-without">» NO {w.toUpperCase()}</div>
                       ))}
@@ -85,7 +88,7 @@ export default function Kitchen() {
           {recent.map((o) => (
             <div key={o.id} className="row" style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
               <b style={{ fontSize: 24, width: 60 }}>{o.number}</b>
-              <span className="grow">{o.lines.map((l) => `${l.qty}× ${l.name}`).join(', ')}</span>
+              <span className="grow">{o.lines.map((l) => `${l.qty}× ${lineLabel(l)}`).join(', ')}</span>
               <button
                 className="btn"
                 onClick={() => {

@@ -29,6 +29,27 @@ export const STOCK_ITEMS = [
   { id: 'st-containers', name: 'Take-away containers', unit: 'pack of 100', lastUnitCost: 9 },
 ];
 
+/** Add-ons the customer can ask for, priced per plate (0 = free). The owner changes them under Menu. */
+export const DEFAULT_ADD_ONS = [
+  { id: 'ad-meat', name: 'Extra meat', price: 1.5, cost: 0.9, available: true, sort: 1 },
+  { id: 'ad-egg', name: 'Fried egg', price: 0.5, cost: 0.15, available: true, sort: 2 },
+  { id: 'ad-gravy', name: 'Extra gravy', price: 0, available: true, sort: 3 },
+  { id: 'ad-chilli', name: 'Chilli sauce', price: 0, available: true, sort: 4 },
+];
+
+/** Which add-ons each sample meal offers. */
+export const DEFAULT_MEAL_ADD_ONS: Record<string, string[]> = {
+  'm-sadza-beef': ['ad-meat', 'ad-gravy', 'ad-chilli'],
+  'm-sadza-chicken': ['ad-meat', 'ad-gravy', 'ad-chilli'],
+  'm-rice-beef': ['ad-meat', 'ad-egg', 'ad-gravy', 'ad-chilli'],
+  'm-rice-chicken': ['ad-meat', 'ad-egg', 'ad-gravy', 'ad-chilli'],
+  'm-sadza-oxtail': ['ad-meat', 'ad-gravy', 'ad-chilli'],
+  'm-sadza-fish': ['ad-chilli'],
+  'm-chips-chicken': ['ad-meat', 'ad-chilli'],
+  'm-sadza-beans': ['ad-egg', 'ad-gravy', 'ad-chilli'],
+  'b-full': ['ad-egg'],
+};
+
 export const DEFAULT_MEAL_PERIODS = [
   { id: 'breakfast', name: 'Breakfast', from: 6, to: 11 },
   { id: 'lunch', name: 'Lunch', from: 11, to: 16 },
@@ -37,7 +58,8 @@ export const DEFAULT_MEAL_PERIODS = [
 
 /** Fresh demo state. Example history is added by the store at load time (never saved). */
 export function seedState(): AppState {
-  return baseState();
+  const st = baseState();
+  return { ...st, menu: st.menu.map((m) => (DEFAULT_MEAL_ADD_ONS[m.id] ? { ...m, addOnIds: DEFAULT_MEAL_ADD_ONS[m.id] } : m)) };
 }
 
 function baseState(): AppState {
@@ -66,7 +88,7 @@ function baseState(): AppState {
   });
 
   return {
-    version: 7,
+    version: 8,
     settings: {
       branchId: 'main',
       restaurantName: 'Training Restaurant',
@@ -155,6 +177,7 @@ function baseState(): AppState {
       item('d-maheu', 'Maheu', 'drinks', 1, '🥛', [], { isDrink: true }),
       item('d-tea', 'Tea', 'drinks', 0.5, '☕', [], { isDrink: true }),
     ],
+    addOns: DEFAULT_ADD_ONS,
     orders: [],
     stockItems: STOCK_ITEMS,
     purchases: [],

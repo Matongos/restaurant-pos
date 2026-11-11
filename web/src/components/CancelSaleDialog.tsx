@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { cancelOrder, useCurrentUser, useStore } from '../store/store';
 import { fmt, round2 } from '../domain/money';
+import { lineLabel } from '../domain/rules';
 import { CREDIT_METHOD, type Order, type RefundMethod } from '../domain/types';
 import { Dialog, toast } from './ui';
 
@@ -68,7 +69,7 @@ export default function CancelSaleDialog({ order, onClose }: { order: Order; onC
         <div>
           {group.flatMap((o) => o.lines).map((l) => (
             <div key={l.id}>
-              {l.qty} × {l.name}
+              {l.qty} × {lineLabel(l)}
             </div>
           ))}
           <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
