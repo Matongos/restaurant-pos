@@ -57,6 +57,58 @@ export const DEFAULT_DELIVERY_AREAS = [
   { id: 'da-far', name: 'Far suburbs', fee: 3 },
 ];
 
+/**
+ * How each stock item is counted, when to warn and whether running out hides meals.
+ * Example values: the restaurant adjusts them under Stock.
+ */
+export const STOCK_SETUP: Record<string, Partial<import('../domain/types').StockItem>> = {
+  'st-mealie': { track: true, countUnit: 'kg', perPack: 10, lowAt: 10, hideWhenOut: true },
+  'st-rice': { track: true, countUnit: 'kg', perPack: 10, lowAt: 5, hideWhenOut: true },
+  'st-beef': { track: true, countUnit: 'kg', perPack: 1, lowAt: 3, hideWhenOut: true },
+  'st-chicken': { track: true, countUnit: 'kg', perPack: 1, lowAt: 3, hideWhenOut: true },
+  'st-oxtail': { track: true, countUnit: 'kg', perPack: 1, lowAt: 2, hideWhenOut: true },
+  'st-fish': { track: true, countUnit: 'kg', perPack: 1, lowAt: 2, hideWhenOut: true },
+  'st-potato': { track: true, countUnit: 'kg', perPack: 10, lowAt: 5, hideWhenOut: true },
+  'st-beans': { track: true, countUnit: 'kg', perPack: 1, lowAt: 2, hideWhenOut: true },
+  'st-eggs': { track: true, countUnit: 'egg', perPack: 30, lowAt: 15, hideWhenOut: true },
+  'st-bread': { track: true, countUnit: 'loaf', perPack: 1, lowAt: 3, hideWhenOut: true },
+  'st-soda': { track: true, countUnit: 'bottle', perPack: 24, lowAt: 12, hideWhenOut: true },
+  'st-water': { track: true, countUnit: 'bottle', perPack: 24, lowAt: 12, hideWhenOut: true },
+  'st-maheu': { track: true, countUnit: 'bottle', perPack: 20, lowAt: 10, hideWhenOut: true },
+  'st-containers': { track: true, countUnit: 'container', perPack: 100, lowAt: 50, perPackedPlate: 1 },
+};
+
+/** What one plate uses, in each item's count unit (example amounts). */
+export const DEFAULT_RECIPES: Record<string, { stockItemId: string; qty: number }[]> = {
+  'm-sadza-beef': [{ stockItemId: 'st-mealie', qty: 0.18 }, { stockItemId: 'st-beef', qty: 0.2 }],
+  'm-sadza-chicken': [{ stockItemId: 'st-mealie', qty: 0.18 }, { stockItemId: 'st-chicken', qty: 0.25 }],
+  'm-rice-beef': [{ stockItemId: 'st-rice', qty: 0.15 }, { stockItemId: 'st-beef', qty: 0.2 }],
+  'm-rice-chicken': [{ stockItemId: 'st-rice', qty: 0.15 }, { stockItemId: 'st-chicken', qty: 0.25 }],
+  'm-sadza-oxtail': [{ stockItemId: 'st-mealie', qty: 0.18 }, { stockItemId: 'st-oxtail', qty: 0.3 }],
+  'm-sadza-fish': [{ stockItemId: 'st-mealie', qty: 0.18 }, { stockItemId: 'st-fish', qty: 0.35 }],
+  'm-chips-chicken': [{ stockItemId: 'st-potato', qty: 0.3 }, { stockItemId: 'st-chicken', qty: 0.25 }],
+  'm-sadza-beans': [{ stockItemId: 'st-mealie', qty: 0.18 }, { stockItemId: 'st-beans', qty: 0.12 }],
+  'b-full': [{ stockItemId: 'st-eggs', qty: 2 }, { stockItemId: 'st-bread', qty: 0.25 }],
+  'b-tea-bread': [{ stockItemId: 'st-bread', qty: 0.25 }],
+  's-sadza': [{ stockItemId: 'st-mealie', qty: 0.15 }],
+  's-rice': [{ stockItemId: 'st-rice', qty: 0.12 }],
+  's-chips': [{ stockItemId: 'st-potato', qty: 0.3 }],
+  'd-water': [{ stockItemId: 'st-water', qty: 1 }],
+  'd-soda': [{ stockItemId: 'st-soda', qty: 1 }],
+  'd-maheu': [{ stockItemId: 'st-maheu', qty: 1 }],
+};
+export const DEFAULT_ADDON_RECIPES: Record<string, { stockItemId: string; qty: number }[]> = {
+  'ad-egg': [{ stockItemId: 'st-eggs', qty: 1 }],
+};
+
+/** Demo opening stock take, so the Stock screen has something to count down from. */
+export const DEMO_OPENING_COUNT: Record<string, number> = {
+  'st-mealie': 30, 'st-rice': 20, 'st-beef': 8, 'st-chicken': 10, 'st-oxtail': 1.5, 'st-fish': 5, 'st-potato': 15, 'st-beans': 5,
+  'st-eggs': 60, 'st-bread': 6, 'st-soda': 48, 'st-water': 48, 'st-maheu': 20, 'st-containers': 200,
+};
+export const demoOpeningMoves = (at: string) =>
+  Object.entries(DEMO_OPENING_COUNT).map(([stockItemId, qty]) => ({ id: `sm-open-${stockItemId}`, stockItemId, kind: 'count' as const, qty, reason: 'Opening stock (demo)', at, by: 'u-manager' }));
+
 export const DEFAULT_MEAL_PERIODS = [
   { id: 'breakfast', name: 'Breakfast', from: 6, to: 11 },
   { id: 'lunch', name: 'Lunch', from: 11, to: 16 },
@@ -66,7 +118,11 @@ export const DEFAULT_MEAL_PERIODS = [
 /** Fresh demo state. Example history is added by the store at load time (never saved). */
 export function seedState(): AppState {
   const st = baseState();
-  return { ...st, menu: st.menu.map((m) => (DEFAULT_MEAL_ADD_ONS[m.id] ? { ...m, addOnIds: DEFAULT_MEAL_ADD_ONS[m.id] } : m)) };
+  return {
+    ...st,
+    menu: st.menu.map((m) => ({ ...m, ...(DEFAULT_MEAL_ADD_ONS[m.id] ? { addOnIds: DEFAULT_MEAL_ADD_ONS[m.id] } : {}), ...(DEFAULT_RECIPES[m.id] ? { recipe: DEFAULT_RECIPES[m.id] } : {}) })),
+    addOns: st.addOns.map((a) => (DEFAULT_ADDON_RECIPES[a.id] ? { ...a, recipe: DEFAULT_ADDON_RECIPES[a.id] } : a)),
+  };
 }
 
 function baseState(): AppState {
@@ -95,7 +151,7 @@ function baseState(): AppState {
   });
 
   return {
-    version: 9,
+    version: 10,
     settings: {
       branchId: 'main',
       restaurantName: 'Training Restaurant',
@@ -187,7 +243,8 @@ function baseState(): AppState {
     ],
     addOns: DEFAULT_ADD_ONS,
     orders: [],
-    stockItems: STOCK_ITEMS,
+    stockItems: STOCK_ITEMS.map((i) => ({ ...i, ...STOCK_SETUP[i.id] })),
+    stockMoves: demoOpeningMoves(new Date(Date.now() - 60000).toISOString()),
     purchases: [],
     expenses: [],
     cancellations: [],

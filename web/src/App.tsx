@@ -14,6 +14,7 @@ import SettingsScreen, { MenuScreen } from './screens/Settings';
 import Analytics from './screens/Analytics';
 import Accounts from './screens/Accounts';
 import StaffScreen from './screens/StaffScreen';
+import StockScreen from './screens/Stock';
 
 const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/till': { perm: 'take_orders', el: Till },
@@ -26,6 +27,7 @@ const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/reports': { perm: 'reports', el: Analytics },
   '/accounts': { perm: 'accounts', el: Accounts },
   '/staff': { perm: 'staff', el: StaffScreen },
+  '/stock': { perm: 'stock', el: StockScreen },
 };
 
 export default function App() {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRoute, go } from '../router';
-import { deliveryProblem, setLiveCart, useCurrentUser, useStore, type PlaceOrderSuccess } from '../store/store';
+import { deliveryProblem, setLiveCart, useCurrentUser, useStockLevels, useStore, type PlaceOrderSuccess } from '../store/store';
+import { outOfStockIds } from '../domain/stock';
 import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, nextFreeCard, sameExtras, tidyName, todayISO } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
 import type { AddOn, DeliveryInfo, MenuItem, OrderLine } from '../domain/types';
@@ -64,7 +65,11 @@ export default function Till() {
   const deliveryMissing = isDelivery ? deliveryProblem(delivery ?? undefined) : '';
   const total = round2(itemsTotal + deliveryFee);
 
-  const sellable = useMemo(() => menu.filter((m) => isSellable(m, { components })), [menu, components]);
+  // Counted stock that has run out hides the meals that need it (when the item is set to do that).
+  const levels = useStockLevels();
+  const outStock = useMemo(() => outOfStockIds(levels), [levels]);
+  const addOnOut = (a: AddOn) => (a.recipe ?? []).some((r) => outStock.has(r.stockItemId));
+  const sellable = useMemo(() => menu.filter((m) => isSellable(m, { components }, outStock)), [menu, components, outStock]);
   const hiddenCount = menu.length - sellable.length;
 
   const shown = useMemo(() => {
@@ -622,7 +627,7 @@ export default function Till() {
                     <button
                       key={a.id}
                       className={on ? 'on' : ''}
-                      disabled={!a.available && !on}
+                      disabled={(!a.available || addOnOut(a)) && !on}
                       onClick={() => {
                         setExtraFor(null);
                         toggleExtra(line.id, a);
@@ -632,7 +637,7 @@ export default function Till() {
                         {on ? <LuCheck aria-hidden="true" /> : <LuPlus aria-hidden="true" />}
                         {a.name}
                       </span>
-                      <b>{!a.available && !on ? 'Finished' : on ? 'Added' : priceTag(a.price)}</b>
+                      <b>{(!a.available || addOnOut(a)) && !on ? 'Finished' : on ? 'Added' : priceTag(a.price)}</b>
                     </button>
                   );
                 })}

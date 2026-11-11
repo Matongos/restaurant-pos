@@ -5,6 +5,7 @@ import { uid } from '../domain/rules';
 import { fmt } from '../domain/money';
 import type { AddOn } from '../domain/types';
 import { Dialog, toast } from './ui';
+import RecipeEditor from './RecipeEditor';
 
 /**
  * Add-ons the customer can ask for with a meal: Extra meat +$1.50, Fried egg +$0.50, Extra gravy (free).
@@ -99,6 +100,7 @@ function AddOnDialog({ addOn, isNew, onClose }: { addOn: AddOn; isNew: boolean; 
   const [price, setPrice] = useState(isNew ? '' : String(addOn.price));
   const [cost, setCost] = useState(addOn.cost === undefined ? '' : String(addOn.cost));
   const [meals, setMeals] = useState<Set<string>>(() => new Set(menu.filter((m) => m.addOnIds?.includes(addOn.id)).map((m) => m.id)));
+  const [recipe, setRecipe] = useState(addOn.recipe);
   const [error, setError] = useState('');
   const p = price.trim() === '' ? 0 : Number(price);
   const blocker = !name.trim() ? 'Type a name' : !(p >= 0) ? 'Check the price' : '';
@@ -111,7 +113,7 @@ function AddOnDialog({ addOn, isNew, onClose }: { addOn: AddOn; isNew: boolean; 
     });
   const save = () => {
     if (blocker) return;
-    const r = upsertAddOn({ ...addOn, name, price: p, cost: cost.trim() === '' ? undefined : Math.max(0, Number(cost) || 0) });
+    const r = upsertAddOn({ ...addOn, name, price: p, cost: cost.trim() === '' ? undefined : Math.max(0, Number(cost) || 0), recipe: recipe?.filter((x) => x.qty > 0).length ? recipe.filter((x) => x.qty > 0) : undefined });
     if (!r.ok) return setError(r.error);
     for (const m of menu) {
       const has = !!m.addOnIds?.includes(addOn.id);
@@ -177,6 +179,7 @@ function AddOnDialog({ addOn, isNew, onClose }: { addOn: AddOn; isNew: boolean; 
             </div>
           );
         })}
+      <RecipeEditor value={recipe} onChange={setRecipe} what="portion" />
       {error && <div className="error">{error}</div>}
     </Dialog>
   );

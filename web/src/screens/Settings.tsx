@@ -9,6 +9,7 @@ import { LuCamera, LuStore } from 'react-icons/lu';
 import CategoryEditor from '../components/CategoryEditor';
 import AddOnEditor from '../components/AddOnEditor';
 import DeliverySettings from '../components/DeliverySettings';
+import RecipeEditor from '../components/RecipeEditor';
 
 type Tab = 'general' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'delivery' | 'kitchen' | 'demo';
 
@@ -477,7 +478,7 @@ function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) 
             className="btn primary"
             disabled={!valid}
             onClick={() => {
-              upsertMenuItem({ ...m, name: m.name.trim() });
+              upsertMenuItem({ ...m, name: m.name.trim(), recipe: m.recipe?.filter((r) => r.qty > 0).length ? m.recipe.filter((r) => r.qty > 0) : undefined });
               toast('Saved');
               onClose();
             }}
@@ -553,6 +554,7 @@ function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) 
       </label>
       <MadeWith m={m} setM={setM} />
       <AddOnPicker m={m} setM={setM} />
+      <RecipeEditor value={m.recipe} onChange={(recipe) => setM({ ...m, recipe })} />
     </Dialog>
   );
 }

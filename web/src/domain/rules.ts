@@ -1,8 +1,10 @@
 import type { AddOn, AppState, Component, CreditEntry, Customer, LineExtra, MenuItem, Order, Role, Staff } from './types';
 
 /** A meal can be sold only if it is switched on AND every component it uses is available. */
-export function isSellable(item: MenuItem, state: Pick<AppState, 'components'>): boolean {
+export function isSellable(item: MenuItem, state: Pick<AppState, 'components'>, outOfStock?: Set<string>): boolean {
   if (!item.available) return false;
+  // Counted stock that has run out (and is set to hide its meals) hides every meal whose recipe needs it.
+  if (outOfStock?.size && (item.recipe ?? []).some((r) => outOfStock.has(r.stockItemId))) return false;
   // Only the main parts hide a meal; a finished "comes with" part (coslo) just gets left out.
   const optional = new Set(item.optionalIds ?? []);
   return item.componentIds.every((cid) => optional.has(cid) || state.components.find((c) => c.id === cid)?.available !== false);
@@ -145,13 +147,14 @@ export type Permission =
   | 'accounts'
   | 'staff'
   | 'till_settings'
+  | 'stock'
   | 'screens';
 
 const PERMS: Record<Role, Permission[]> = {
-  super_admin: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'menu_edit', 'settings', 'reports', 'accounts', 'staff', 'till_settings', 'screens'],
-  manager: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'menu_edit', 'reports', 'accounts', 'staff', 'till_settings', 'screens'],
+  super_admin: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'stock', 'menu_edit', 'settings', 'reports', 'accounts', 'staff', 'till_settings', 'screens'],
+  manager: ['take_orders', 'active_orders', 'change_owed', 'todays_menu', 'kitchen', 'stock', 'menu_edit', 'reports', 'accounts', 'staff', 'till_settings', 'screens'],
   cashier: ['take_orders', 'active_orders', 'change_owed'],
-  kitchen: ['todays_menu', 'kitchen', 'active_orders'],
+  kitchen: ['todays_menu', 'kitchen', 'stock', 'active_orders'],
   attendant: ['active_orders'],
 };
 

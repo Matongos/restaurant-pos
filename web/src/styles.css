@@ -1099,3 +1099,69 @@ tr.struck td b { text-decoration: line-through; }
 .split-pick button { min-height: 60px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--panel); font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .split-pick button:hover { border-color: var(--brand); background: var(--brand-soft); }
 .split-pick .all { grid-column: span 2; font-size: 18px; background: var(--soft); }
+
+/* ================================================================ stock */
+.stock-stats .stat { text-align: left; cursor: pointer; border: 1px solid var(--line); }
+.stock-stats .stat.bad .val { color: var(--bad); }
+.stock-stats .stat.warn .val { color: var(--warn); }
+.stock-list { display: grid; gap: 8px; }
+.stock-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(0, 1.2fr) auto; gap: 14px; align-items: center; padding: 12px 16px; border: 1px solid var(--line); border-left: 4px solid var(--good); border-radius: 10px; background: var(--panel); text-align: left; color: var(--ink); }
+.stock-row.st-low { border-left-color: var(--warn); }
+.stock-row.st-out { border-left-color: var(--bad); background: var(--bad-soft); }
+.stock-row.st-uncounted, .stock-row.st-untracked { border-left-color: var(--line-strong); }
+.stock-row .sr-name { display: flex; flex-direction: column; min-width: 0; }
+.stock-row .sr-name b { font-size: 16px; }
+.stock-row small { font-size: 12px; color: var(--muted); }
+.stock-row .sr-amt { display: flex; flex-direction: column; gap: 6px; }
+.stock-row .sr-amt b { font-size: 20px; }
+.stock-row .sr-bar { display: block; height: 6px; border-radius: 3px; background: var(--soft); overflow: hidden; max-width: 180px; }
+.stock-row .sr-bar span { display: block; height: 100%; background: var(--good); border-radius: 3px; }
+.stock-row.st-low .sr-bar span { background: var(--warn); }
+.stock-row.st-out .sr-bar span { background: var(--bad); }
+.stock-row .sr-use { display: flex; flex-direction: column; font-size: 14px; }
+.sr-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 800; white-space: nowrap; background: var(--good-soft); color: var(--good); }
+.sr-pill svg { width: 13px; height: 13px; }
+.sr-pill.low { background: var(--warn-soft); color: var(--warn); }
+.sr-pill.out { background: var(--bad); color: #fff; }
+.sr-pill.uncounted, .sr-pill.untracked { background: var(--soft); color: var(--muted); }
+.stock-how { font-size: 13px; margin-top: 18px; max-width: 760px; }
+.take-list { display: grid; gap: 2px; }
+.take-row { display: grid; grid-template-columns: minmax(0, 1.6fr) 1fr 1.2fr 1fr; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.take-row.head { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.take-in { display: flex; align-items: center; gap: 6px; }
+.take-in input { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; font: inherit; }
+.take-in small { color: var(--muted); font-size: 12px; }
+.neg { color: var(--bad); }
+.pos { color: var(--good); }
+.item-now { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 12px; border-radius: 10px; background: var(--soft); }
+.item-now > div { display: flex; flex-direction: column; gap: 2px; }
+.item-now b { font-size: 16px; }
+.stock-hist { display: grid; font-size: 14px; }
+.stock-hist > div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.stock-hist > div > span { display: flex; flex-direction: column; min-width: 0; }
+.stock-hist small { font-size: 12px; }
+.stock-hist b { white-space: nowrap; }
+.recipe-rows { display: grid; gap: 6px; margin-bottom: 8px; }
+.recipe-row { display: grid; grid-template-columns: minmax(0, 1fr) 100px 70px auto; gap: 8px; align-items: center; }
+.recipe-row select, .recipe-row input { min-width: 0; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; font: inherit; background: var(--panel); }
+.recipe-unit { font-size: 13px; }
+@media (max-width: 899px) {
+  .stock-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+  .stock-row .sr-name { grid-column: 1; }
+  .stock-row .sr-pill { grid-column: 2; grid-row: 1; justify-self: end; }
+  .stock-row .sr-amt { grid-column: 1; }
+  .stock-row .sr-use { grid-column: 2; grid-row: 2; text-align: right; font-size: 13px; }
+  .item-now { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 599px) {
+  .stock-act span { display: none; }
+  .stock-act { min-width: 44px; justify-content: center; padding: 0 10px; }
+  .stock-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .take-row { grid-template-columns: minmax(0, 1fr) 110px; }
+  .take-row > :nth-child(2) { grid-column: 1; grid-row: 2; font-size: 12px; }
+  .take-row > :nth-child(3) { grid-column: 2; grid-row: 1 / span 2; }
+  .take-row > :nth-child(4) { grid-column: 1; grid-row: 3; font-size: 12px; }
+  .take-row.head { display: none; }
+  .recipe-row { grid-template-columns: minmax(0, 1fr) 80px auto; }
+  .recipe-row .recipe-unit { display: none; }
+}

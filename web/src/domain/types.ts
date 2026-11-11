@@ -111,6 +111,8 @@ export interface MenuItem {
   costPerPlate?: number;
   /** Add-ons the customer can ask for with this meal (extra meat +$1.50, extra gravy free ...). */
   addOnIds?: ID[];
+  /** Stock one plate uses (0.2 kg beef, 0.18 kg mealie meal). Taken off stock with every sale. */
+  recipe?: RecipeLine[];
 }
 
 /**
@@ -127,6 +129,8 @@ export interface AddOn {
   /** Switched off on the Sold out screen when it runs out. */
   available: boolean;
   sort: number;
+  /** Stock one portion uses (extra meat: 0.1 kg beef). */
+  recipe?: RecipeLine[];
 }
 
 /** An add-on as it was sold: name and price are copied, so later menu changes don't rewrite old sales. */
@@ -205,6 +209,8 @@ export interface Order {
   cancellationId?: ID;
   /** Delivery orders only: where it goes and the fee (already included in total). */
   delivery?: DeliveryInfo;
+  /** Stock this order used, worked out when it was sold (count units by stock item). */
+  stockUsed?: Record<ID, number>;
 }
 
 /** Where a delivery goes. The fee is in base currency and is part of the order total. */
@@ -361,8 +367,45 @@ export type PaidFrom = 'cash_drawer' | 'bank' | 'mobile_money' | 'owner';
 export interface StockItem {
   id: ID;
   name: string;
+  /** How it is bought, e.g. "10 kg bag", "crate of 24", "kg". */
   unit: string; // kg, bag, crate, litre, each
-  lastUnitCost?: number; // base currency
+  /** Cost of one `unit` (base currency), from the last purchase. */
+  lastUnitCost?: number;
+  /** Count it and take it off with every sale. */
+  track?: boolean;
+  /** What it is counted in, e.g. "kg", "bottle", "egg". Defaults to `unit`. */
+  countUnit?: string;
+  /** How many count units one purchase unit holds: a "10 kg bag" holds 10 kg. Default 1. */
+  perPack?: number;
+  /** Warn when the amount left drops to this (count units). */
+  lowAt?: number;
+  /** When none is left, hide the meals that need it from the till. */
+  hideWhenOut?: boolean;
+  /** Packaging: used once for every Take Away or Delivery plate (e.g. containers). */
+  perPackedPlate?: number;
+}
+
+/** How much of a stock item one plate (or one add-on) uses, in the item's count unit. */
+export interface RecipeLine {
+  stockItemId: ID;
+  qty: number;
+}
+
+/**
+ * A stock movement other than a sale or purchase. Never edited or deleted:
+ * a count sets the amount (what was really there); waste takes some off.
+ */
+export interface StockMove {
+  id: ID;
+  stockItemId: ID;
+  kind: 'count' | 'waste';
+  /** count: the amount counted. waste: the amount thrown away (positive). Count units. */
+  qty: number;
+  /** count: what the system expected just before, so the difference can be shown. */
+  expected?: number;
+  reason?: string;
+  at: string;
+  by: ID;
 }
 
 export interface PurchaseLine {
@@ -372,6 +415,8 @@ export interface PurchaseLine {
   unit: string;
   /** Cost per unit in the purchase currency. */
   unitCost: number;
+  /** What this adds to stock, in the item's count unit (e.g. 2 bags × 10 kg = 20). */
+  stockQty?: number;
 }
 
 export interface Purchase {
@@ -444,6 +489,7 @@ export interface AppState {
   customers: Customer[];
   credit: CreditEntry[];
   stockItems: StockItem[];
+  stockMoves: StockMove[];
   purchases: Purchase[];
   expenses: Expense[];
   cancellations: Cancellation[];

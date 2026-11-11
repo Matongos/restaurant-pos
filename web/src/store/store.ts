@@ -1,6 +1,8 @@
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import type {
   AddOn,
+  StockItem,
+  StockMove,
   AppState,
   DeliveryArea,
   DeliveryInfo,
@@ -27,11 +29,12 @@ import type {
   Staff,
   StaffAction,
 } from '../domain/types';
-import { DEFAULT_ADD_ONS, DEFAULT_DELIVERY_AREAS, DEFAULT_MEAL_ADD_ONS, DEFAULT_MEAL_PERIODS, seedState, STOCK_ITEMS } from '../data/seed';
+import { DEFAULT_ADD_ONS, DEFAULT_ADDON_RECIPES, DEFAULT_DELIVERY_AREAS, DEFAULT_MEAL_ADD_ONS, DEFAULT_RECIPES, demoOpeningMoves, STOCK_SETUP, DEFAULT_MEAL_PERIODS, seedState, STOCK_ITEMS } from '../data/seed';
 import { exampleBooks, exampleCancellations, exampleHistory } from '../data/exampleHistory';
 import { nextFreeCard, cardsInUse, customerBalance, pinProblem, ROLE_LABEL, staffRights, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
 import { CREDIT_METHOD } from '../domain/types';
 import { round2 } from '../domain/money';
+import { purchaseToStock, stockLevels, usageFor, type StockLevel } from '../domain/stock';
 
 /**
  * Prototype store.
@@ -50,16 +53,30 @@ const listeners = new Set<() => void>();
 /** Bring data saved by an older version of the app up to date. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): AppState | null {
-  if (raw?.version === 9) return raw as AppState;
+  if (raw?.version === 10) return raw as AppState;
+  if (raw?.version === 9) {
+    // v10: stock counted down with every sale (recipes per meal, counts, waste).
+    const st = raw as AppState;
+    const known = new Set(st.stockItems.map((i) => i.id));
+    return {
+      ...st,
+      version: 10,
+      stockItems: st.stockItems.map((i) => (i.track === undefined && STOCK_SETUP[i.id] ? { ...i, ...STOCK_SETUP[i.id] } : i)),
+      menu: st.menu.map((m) => (m.recipe || !DEFAULT_RECIPES[m.id] ? m : { ...m, recipe: DEFAULT_RECIPES[m.id].filter((r) => known.has(r.stockItemId)) })),
+      addOns: st.addOns.map((a) => (a.recipe || !DEFAULT_ADDON_RECIPES[a.id] ? a : { ...a, recipe: DEFAULT_ADDON_RECIPES[a.id] })),
+      // Practice data only: give the demo an opening stock take. A real (non-training) set-up starts uncounted.
+      stockMoves: st.settings.trainingMode ? demoOpeningMoves(new Date().toISOString()).filter((m) => known.has(m.stockItemId)) : [],
+    };
+  }
   if (raw?.version === 8) {
     // v9: delivery orders (areas with fees; customer, address and rider on the order).
     const st = raw as AppState;
-    return {
+    return migrate({
       ...st,
       version: 9,
       settings: { ...st.settings, deliveryAreas: st.settings.deliveryAreas ?? DEFAULT_DELIVERY_AREAS },
       orderTypes: st.orderTypes.map((t) => (t.id === 'delivery' ? { ...t, packaging: t.packaging || 'Plastic container + bag' } : t)),
-    };
+    });
   }
   if (raw?.version === 7) {
     // v8: priced add-ons (extra meat +$1.50, extra gravy free ...), chosen per meal.
@@ -400,6 +417,8 @@ export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
     training: s.settings.trainingMode,
     ...(delivery ? { delivery } : {}),
   };
+  const stockUsed = usageFor(input.lines, input.orderTypeId, s);
+  if (stockUsed) order.stockUsed = stockUsed;
 
   // ---- customer change balance
   const used = round2(input.payments.filter((p) => p.methodId === CREDIT_METHOD).reduce((a, p) => a + p.baseAmount, 0));
@@ -783,8 +802,15 @@ export function recordPurchase(input: PurchaseInput): { ok: true; purchase: Purc
       stock.push(item);
     }
     const idx = stock.indexOf(item);
-    stock[idx] = { ...item, unit: l.unit.trim() || item.unit, lastUnitCost: round2(l.unitCost / cur.rate) };
-    return { stockItemId: item.id, name: item.name, qty: l.qty, unit: l.unit.trim() || item.unit, unitCost: round2(l.unitCost) };
+    // Bought by the count unit (e.g. 3 kg of a "10 kg bag" item): keep the pack unit, store the cost per pack.
+    const typed = l.unit.trim();
+    const byCount = !!typed && typed.toLowerCase() === (item.countUnit ?? '').toLowerCase() && typed.toLowerCase() !== item.unit.toLowerCase();
+    const perPackN = item.perPack && item.perPack > 0 ? item.perPack : 1;
+    stock[idx] = byCount
+      ? { ...item, lastUnitCost: round2((l.unitCost / cur.rate) * perPackN) }
+      : { ...item, unit: typed || item.unit, lastUnitCost: round2(l.unitCost / cur.rate) };
+    const unit = l.unit.trim() || item.unit;
+    return { stockItemId: item.id, name: item.name, qty: l.qty, unit, unitCost: round2(l.unitCost), stockQty: purchaseToStock(item, l.qty, unit) };
   });
   const total = round2(pl.reduce((s, l) => s + l.qty * l.unitCost, 0));
   const purchase: Purchase = {
@@ -805,6 +831,59 @@ export function recordPurchase(input: PurchaseInput): { ok: true; purchase: Purc
   return { ok: true, purchase };
 }
 
+/* ------------------------------------------------------------------- stock */
+
+/** Stock levels for every item, recalculated only when sales, purchases or counts change. */
+export function useStockLevels(): Map<string, StockLevel> {
+  const stockItems = useStore((s) => s.stockItems);
+  const stockMoves = useStore((s) => s.stockMoves);
+  const orders = useStore((s) => s.orders);
+  const purchases = useStore((s) => s.purchases);
+  // Re-check once a minute so "used today" rolls over at midnight.
+  const minute = Math.floor(Date.now() / 60000);
+  return useMemo(() => stockLevels({ stockItems, stockMoves, orders, purchases }), [stockItems, stockMoves, orders, purchases, minute]);
+}
+
+/**
+ * A stock take: what was really there. Each count becomes the new starting point for that item,
+ * and keeps what the system expected so the difference (losses) can be seen later.
+ */
+export function recordStockCount(counts: { stockItemId: string; qty: number }[], by: string): { ok: true; n: number } | { ok: false; error: string } {
+  const valid = counts.filter((c) => Number.isFinite(c.qty) && c.qty >= 0);
+  if (!valid.length) return { ok: false, error: 'Type at least one amount counted.' };
+  const at = new Date().toISOString();
+  const levels = stockLevels(state);
+  const moves: StockMove[] = valid.map((c) => {
+    const lv = levels.get(c.stockItemId);
+    return { id: uid('sm-'), stockItemId: c.stockItemId, kind: 'count', qty: Math.round(c.qty * 1000) / 1000, expected: lv && lv.status !== 'uncounted' ? lv.onHand : undefined, at, by };
+  });
+  set((st) => ({ ...st, stockMoves: [...st.stockMoves, ...moves] }));
+  return { ok: true, n: moves.length };
+}
+
+/** Stock thrown away or used without a sale (spoiled, burnt, staff meal). */
+export function recordWaste(stockItemId: string, qty: number, reason: string, by: string): { ok: true } | { ok: false; error: string } {
+  if (!(qty > 0)) return { ok: false, error: 'Type how much.' };
+  if (!reason.trim()) return { ok: false, error: 'Give a reason.' };
+  const m: StockMove = { id: uid('sm-'), stockItemId, kind: 'waste', qty: Math.round(qty * 1000) / 1000, reason: reason.trim(), at: new Date().toISOString(), by };
+  set((st) => ({ ...st, stockMoves: [...st.stockMoves, m] }));
+  return { ok: true };
+}
+
+/** Add or change a stock item (how it is counted, when to warn, whether it hides meals). */
+export function upsertStockItem(item: StockItem): { ok: true } | { ok: false; error: string } {
+  const name = item.name.trim().replace(/\s+/g, ' ');
+  if (!name) return { ok: false, error: 'Give the item a name' };
+  if (!item.unit.trim()) return { ok: false, error: 'How is it bought? e.g. kg, 10 kg bag, crate of 24' };
+  if (state.stockItems.some((x) => x.id !== item.id && x.name.toLowerCase() === name.toLowerCase())) return { ok: false, error: `${name} is already in the list` };
+  const next = { ...item, name, unit: item.unit.trim(), countUnit: item.countUnit?.trim() || undefined };
+  set((st) => ({
+    ...st,
+    stockItems: st.stockItems.some((x) => x.id === item.id) ? st.stockItems.map((x) => (x.id === item.id ? next : x)) : [...st.stockItems, next],
+  }));
+  return { ok: true };
+}
+
 /** Correct a purchase entered by mistake: adds a reversing record with negative amounts. */
 export function reversePurchase(id: string, reason: string, by: string): { ok: boolean; error?: string } {
   const p = state.purchases.find((x) => x.id === id);
@@ -814,7 +893,7 @@ export function reversePurchase(id: string, reason: string, by: string): { ok: b
   const r: Purchase = {
     ...p,
     id: uid('p-'),
-    lines: p.lines.map((l) => ({ ...l, qty: -l.qty })),
+    lines: p.lines.map((l) => ({ ...l, qty: -l.qty, stockQty: l.stockQty !== undefined ? -l.stockQty : undefined })),
     total: -p.total,
     baseTotal: -p.baseTotal,
     at: new Date().toISOString(),

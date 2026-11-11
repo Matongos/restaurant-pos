@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { setAddOnAvailable, setComponentAvailable, setItemAvailable, useCurrentUser, useStore } from '../store/store';
+import { setAddOnAvailable, setComponentAvailable, setItemAvailable, useCurrentUser, useStockLevels, useStore } from '../store/store';
+import { missingStock, outOfStockIds } from '../domain/stock';
 import { fmt } from '../domain/money';
 import { TopBar } from '../components/ui';
 
@@ -12,16 +13,21 @@ export default function TodaysMenu() {
   const addOns = useStore((s) => s.addOns);
   const base = useStore((s) => s.currencies.find((c) => c.code === s.settings.baseCurrency)!);
 
+  const levels = useStockLevels();
+  const stockItems = useStore((s) => s.stockItems);
+  const outStock = useMemo(() => outOfStockIds(levels), [levels]);
   const blockedBy = useMemo(() => {
     const off = new Set(components.filter((c) => !c.available).map((c) => c.id));
     const map: Record<string, string[]> = {};
     for (const m of menu) {
       const optional = new Set(m.optionalIds ?? []);
       const names = m.componentIds.filter((id) => off.has(id) && !optional.has(id)).map((id) => components.find((c) => c.id === id)!.name);
-      if (names.length) map[m.id] = names;
+      // Counted stock at zero (e.g. Beef 0 kg) hides the meal as well.
+      const out = missingStock(m.recipe, outStock, stockItems).map((n) => `${n} (out of stock)`);
+      if (names.length || out.length) map[m.id] = [...names, ...out];
     }
     return map;
-  }, [components, menu]);
+  }, [components, menu, outStock, stockItems]);
 
   return (
     <div className="app">
