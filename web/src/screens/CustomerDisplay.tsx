@@ -64,6 +64,12 @@ export default function CustomerDisplay() {
               <span>{fmt(l.qty * l.unitPrice, base)}</span>
             </div>
           ))}
+          {!!cart.deliveryFee && (
+            <div>
+              <span>Delivery fee</span>
+              <span>{fmt(cart.deliveryFee, base)}</span>
+            </div>
+          )}
         </div>
       </div>
       <div className="right">

@@ -56,6 +56,7 @@ export default function Kitchen() {
                     <span className="clock">{fmtDuration(waited)}</span>
                     {state === 'late' && <span className="late-pill">LATE</span>}
                     <small>{type?.packaging}</small>
+                    {o.delivery && <small>for {o.delivery.name}</small>}
                   </span>
                 </div>
                 <div className="ob">

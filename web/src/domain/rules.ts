@@ -196,7 +196,8 @@ export function serviceTimes(o: Order) {
   // Use the LAST "ready" in case the kitchen recalled the order.
   const ready = [...o.history].reverse().find((h) => h.status === 'ready')?.at;
   // An order closed automatically (its card was reused) has no real "served" time.
-  const served = o.history.find((h) => h.status === 'served' && !h.auto)?.at;
+  // A delivery counts as handed over when the rider leaves; the ride itself is not kitchen or counter time.
+  const served = (o.delivery && o.history.find((h) => h.status === 'out_for_delivery')?.at) || o.history.find((h) => h.status === 'served' && !h.auto)?.at;
   const p = Date.parse(placed);
   return {
     placed,

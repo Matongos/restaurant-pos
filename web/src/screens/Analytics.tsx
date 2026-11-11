@@ -635,6 +635,15 @@ function Money({ customers, all, base, r }: Ctx) {
         const cur = byAddOn.get(x.name) ?? { qty: 0, amount: 0 };
         byAddOn.set(x.name, { qty: cur.qty + l.qty, amount: round2(cur.amount + l.qty * x.price) });
       }
+  // Deliveries: how many, the fees charged, and by area.
+  const deliveries = all.filter((o) => o.delivery && !o.parentOrderId);
+  const deliveryFees = round2(deliveries.reduce((s, o) => s + (o.delivery?.fee ?? 0), 0));
+  const byArea = new Map<string, { n: number; fees: number }>();
+  for (const o of deliveries) {
+    const k = o.delivery!.areaName ?? 'Other address';
+    const cur = byArea.get(k) ?? { n: 0, fees: 0 };
+    byArea.set(k, { n: cur.n + 1, fees: round2(cur.fees + o.delivery!.fee) });
+  }
   const byCashier = new Map<string, number>();
   for (const o of all) byCashier.set(o.cashierId, round2((byCashier.get(o.cashierId) ?? 0) + o.total));
   const a = r.start.getTime(), b = r.end.getTime();
@@ -711,6 +720,42 @@ function Money({ customers, all, base, r }: Ctx) {
             ))}
         </tbody>
       </table>
+      {deliveries.length > 0 && (
+        <>
+          <div className="section-title">Deliveries</div>
+          <table className="list">
+            <thead>
+              <tr>
+                <th>Area</th>
+                <th>Deliveries</th>
+                <th>Fees</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...byArea.entries()]
+                .sort((x, y) => y[1].n - x[1].n)
+                .map(([name, v]) => (
+                  <tr key={name}>
+                    <td>{name}</td>
+                    <td className="num">{v.n}</td>
+                    <td className="num">{fmt(v.fees, base)}</td>
+                  </tr>
+                ))}
+              <tr className="total-row-light">
+                <td>
+                  <b>All deliveries</b>
+                </td>
+                <td className="num">
+                  <b>{deliveries.length}</b>
+                </td>
+                <td className="num">
+                  <b>{fmt(deliveryFees, base)}</b>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      )}
       {byAddOn.size > 0 && (
         <>
           <div className="section-title">Add-ons sold</div>
@@ -738,7 +783,7 @@ function Money({ customers, all, base, r }: Ctx) {
       )}
       <div className="row wrap" style={{ alignItems: 'flex-start', gap: 24 }}>
         <div className="grow">
-          <div className="section-title">Eat In vs Take Away</div>
+          <div className="section-title">Order types</div>
           <table className="list">
             <tbody>
               {orderTypes

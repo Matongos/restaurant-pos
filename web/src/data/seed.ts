@@ -50,6 +50,13 @@ export const DEFAULT_MEAL_ADD_ONS: Record<string, string[]> = {
   'b-full': ['ad-egg'],
 };
 
+/** Example delivery areas and fees. The owner sets real ones in Settings → Delivery. */
+export const DEFAULT_DELIVERY_AREAS = [
+  { id: 'da-near', name: 'Within 2 km', fee: 1 },
+  { id: 'da-town', name: 'Town & nearby suburbs', fee: 2 },
+  { id: 'da-far', name: 'Far suburbs', fee: 3 },
+];
+
 export const DEFAULT_MEAL_PERIODS = [
   { id: 'breakfast', name: 'Breakfast', from: 6, to: 11 },
   { id: 'lunch', name: 'Lunch', from: 11, to: 16 },
@@ -88,7 +95,7 @@ function baseState(): AppState {
   });
 
   return {
-    version: 8,
+    version: 9,
     settings: {
       branchId: 'main',
       restaurantName: 'Training Restaurant',
@@ -112,6 +119,7 @@ function baseState(): AppState {
       showExampleHistory: true,
       mealPeriods: DEFAULT_MEAL_PERIODS,
       customersPerStaffHour: 12,
+      deliveryAreas: DEFAULT_DELIVERY_AREAS,
     },
     staff: [
       { id: 'u-owner', name: 'Owner', pin: '1234', role: 'super_admin', active: true },

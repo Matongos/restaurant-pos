@@ -25,7 +25,7 @@ await pin('2222'); await page.waitForSelector('.items');
 check('manager has settings', (await page.locator('.nav-item:has-text("Settings")').count())===1);
 await setts();
 const tabs=(await page.locator('.tabs button').allTextContents()).join('|');
-check('manager tabs', tabs==='Numbers & printing|Serving times', tabs);
+check('manager tabs', tabs==='Numbers & printing|Delivery|Serving times', tabs);
 await page.screenshot({path:'look/d-24-printing.png',fullPage:true});
 // 2. print & next
 await page.click('.toggle:has-text("Print & next customer")');

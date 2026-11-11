@@ -166,7 +166,8 @@ export interface Payment {
 export type OrderStatus = 'in_kitchen' | 'ready' | 'served' | 'cancelled';
 
 export interface StatusEvent {
-  status: OrderStatus | 'placed';
+  /** 'out_for_delivery' is logged when a rider leaves with a delivery order (its status stays open until delivered). */
+  status: OrderStatus | 'placed' | 'out_for_delivery';
   at: string;
   by?: ID;
   /** Set when the system closed the order (its card was handed out again). */
@@ -202,6 +203,33 @@ export interface Order {
   example?: boolean;
   /** Set when the sale was cancelled. The order itself is never deleted. */
   cancellationId?: ID;
+  /** Delivery orders only: where it goes and the fee (already included in total). */
+  delivery?: DeliveryInfo;
+}
+
+/** Where a delivery goes. The fee is in base currency and is part of the order total. */
+export interface DeliveryInfo {
+  name: string;
+  phone: string;
+  /** Street, house number, landmarks: whatever the rider needs. */
+  address: string;
+  /** The delivery area chosen (sets the fee), e.g. "Town centre". */
+  areaId?: ID;
+  areaName?: string;
+  fee: number;
+  /** For the rider, e.g. "Call at the gate". */
+  note?: string;
+  /** Set when the rider leaves with it. */
+  outAt?: string;
+  outBy?: ID;
+  rider?: string;
+}
+
+/** A delivery area and its fee, set by the owner (Settings → Delivery). */
+export interface DeliveryArea {
+  id: ID;
+  name: string;
+  fee: number;
 }
 
 /**
@@ -289,6 +317,8 @@ export interface Settings {
   mealPeriods: MealPeriod[];
   /** How many customers one server can handle in an hour (for staffing advice). */
   customersPerStaffHour: number;
+  /** Delivery areas with their fee. The cashier can still type a different fee for an address. */
+  deliveryAreas?: DeliveryArea[];
 }
 
 export interface MealPeriod {
@@ -303,7 +333,9 @@ export interface LiveCart {
   tillId: ID;
   orderTypeId: ID;
   lines: OrderLine[];
+  /** Includes the delivery fee, if any. */
   total: number;
+  deliveryFee?: number;
   paid?: number;
   change?: number;
   changeCurrency?: string;

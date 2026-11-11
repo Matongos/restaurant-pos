@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getState, useStore, type PlaceOrderSuccess } from '../store/store';
-import { changeVoucherHTML, customerSlipHTML, kitchenTicketHTML, printTickets, TICKET_CSS } from '../print/tickets';
+import { changeVoucherHTML, customerSlipHTML, deliverySlipHTML, kitchenTicketHTML, printTickets, TICKET_CSS } from '../print/tickets';
 import { fmt } from '../domain/money';
 import { Dialog } from '../components/ui';
 import { LuCheck, LuPrinter } from 'react-icons/lu';
@@ -28,7 +28,9 @@ export default function OrderDoneDialog({ result, onNew }: { result: PlaceOrderS
     const s = getState();
     const list: { title: string; html: string }[] = [];
     if (s.settings.printKitchenTicket !== false) list.push({ title: 'Kitchen ticket', html: kitchenTicketHTML(order, s) });
-    if (!order.parentOrderId && (order.numberMode === 'slip' || order.numberMode === 'both'))
+    // A delivery always gets a slip for the bag (who, where, phone, paid). The customer slip is not needed.
+    if (order.delivery) list.push({ title: 'Delivery slip', html: deliverySlipHTML(order, s) });
+    else if (!order.parentOrderId && (order.numberMode === 'slip' || order.numberMode === 'both'))
       list.push({ title: 'Customer slip', html: customerSlipHTML(order, s) });
     if (kept && customer && s.settings.printChangeSlip !== false)
       list.push({ title: 'Change slip', html: changeVoucherHTML(kept, customer, balanceAfter ?? kept.amount, s) });
@@ -93,7 +95,13 @@ export default function OrderDoneDialog({ result, onNew }: { result: PlaceOrderS
   const countdown = left !== null && left > 0 ? ` (${left})` : '';
   const printedNames = parts.map((p) => p.title.toLowerCase()).join(', ');
 
-  const handOver = order.parentOrderId ? 'Added to the same number' : order.numberMode === 'slip' ? 'Hand over the printed slip' : 'Hand over card';
+  const handOver = order.parentOrderId
+    ? 'Added to the same number'
+    : order.delivery
+      ? `Delivery to ${order.delivery.name}${order.numberMode === 'slip' ? '' : ' — keep the card with the order'}`
+      : order.numberMode === 'slip'
+        ? 'Hand over the printed slip'
+        : 'Hand over card';
 
   return (
     <Dialog

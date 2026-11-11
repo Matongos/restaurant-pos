@@ -8,11 +8,12 @@ import { can, mealInitials, uid } from '../domain/rules';
 import { LuCamera, LuStore } from 'react-icons/lu';
 import CategoryEditor from '../components/CategoryEditor';
 import AddOnEditor from '../components/AddOnEditor';
+import DeliverySettings from '../components/DeliverySettings';
 
-type Tab = 'general' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'kitchen' | 'demo';
+type Tab = 'general' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'delivery' | 'kitchen' | 'demo';
 
 /** Tabs a manager may change: how the till runs day to day. Everything else is the owner's. */
-const MANAGER_TABS: Tab[] = ['numbers', 'kitchen'];
+const MANAGER_TABS: Tab[] = ['numbers', 'delivery', 'kitchen'];
 
 export default function SettingsScreen() {
   const user = useCurrentUser()!;
@@ -24,6 +25,7 @@ export default function SettingsScreen() {
     ['payments', 'Payment methods'],
     ['currencies', 'Currencies'],
     ['menu', 'Menu & categories'],
+    ['delivery', 'Delivery'],
     ['kitchen', 'Serving times'],
     ['demo', 'Demo data'],
   ];
@@ -46,6 +48,7 @@ export default function SettingsScreen() {
             {tab === 'payments' && <PaymentMethods />}
             {tab === 'currencies' && <Currencies />}
             {tab === 'menu' && <MenuEditor />}
+            {tab === 'delivery' && <DeliverySettings />}
             {tab === 'kitchen' && <KitchenSettings />}
             {tab === 'demo' && <Demo />}
           </div>

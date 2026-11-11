@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { placeOrder, setLiveCart, useStore, type CustomerRef, type PlaceOrderSuccess } from '../store/store';
 import { fmt, fromBase, round2, toBase } from '../domain/money';
 import { cardsInUse, customerBalance, nextFreeCard, tidyName } from '../domain/rules';
-import { CREDIT_METHOD, type OrderLine, type Payment } from '../domain/types';
+import { CREDIT_METHOD, type DeliveryInfo, type OrderLine, type Payment } from '../domain/types';
 import { Dialog, toast } from '../components/ui';
 import CustomerPicker, { selectionReady, type CustomerSelection } from '../components/CustomerPicker';
 import ChangeFinder from '../components/ChangeFinder';
@@ -15,6 +15,8 @@ interface Props {
   lines: OrderLine[];
   parentOrderId?: string;
   cashierId: string;
+  /** Delivery orders: the details and fee (total already includes the fee). */
+  delivery?: DeliveryInfo;
   onCancel: () => void;
   onDone: (r: PlaceOrderSuccess) => void;
 }
@@ -27,7 +29,7 @@ interface Props {
  *      Keeping change for the customer, and their name, happen right there.
  *   4. The confirm button always says what it will do, or what is missing.
  */
-export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrderId, cashierId, onCancel, onDone }: Props) {
+export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrderId, cashierId, delivery, onCancel, onDone }: Props) {
   const currencies = useStore((s) => s.currencies);
   const methods = useStore((s) => s.paymentMethods);
   const settings = useStore((s) => s.settings);
@@ -117,6 +119,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
       orderTypeId,
       lines,
       total,
+      deliveryFee: delivery?.fee || undefined,
       paid: paidBase,
       change: toBase(hand, changeCur),
       changeCurrency: changeCur.code,
@@ -178,12 +181,14 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
       keep: keepBase > 0 ? { amount: keepBase, currency: changeCur.code } : undefined,
       parentOrderId,
       cashierId,
+      delivery,
     });
     if (!r.ok) return toast(r.error);
     setLiveCart(tillId, {
       orderTypeId,
       lines,
       total,
+      deliveryFee: delivery?.fee || undefined,
       paid: paidBase,
       change: toBase(hand, changeCur),
       changeCurrency: changeCur.code,

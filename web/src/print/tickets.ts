@@ -36,6 +36,7 @@ export function kitchenTicketHTML(order: Order, s: AppState): string {
       <div class="num">${order.number}</div>
       <div class="type">${esc(type?.ticketLabel ?? '')}</div>
       <div class="pack">${esc(type?.packaging ?? '')}</div>
+      ${order.delivery ? `<div class="pack"><b>for ${esc(order.delivery.name)}${order.delivery.areaName ? ` · ${esc(order.delivery.areaName)}` : ''}</b></div>` : ''}
       <hr/>
       ${lines}
       <hr/>
@@ -67,11 +68,45 @@ export function customerSlipHTML(order: Order, s: AppState): string {
       <div class="num">${order.number}</div>
       <div class="type">${esc(type?.name ?? '')}</div>
       <hr/>
-      <table>${rows}<tr class="tot"><td>Total</td><td class="r">${fmt(order.total, base)}</td></tr>${pays}
+      <table>${rows}${order.delivery ? `<tr><td>Delivery fee</td><td class="r">${fmt(order.delivery.fee, base)}</td></tr>` : ''}<tr class="tot"><td>Total</td><td class="r">${fmt(order.total, base)}</td></tr>${pays}
       <tr><td>Change</td><td class="r">${fmt(order.changeGiven * changeCur.rate, changeCur)}</td></tr></table>
       <hr/>
       <div class="small">${date(order.createdAt)} ${time(order.createdAt)}</div>
       <div class="small">${esc(s.settings.receiptFooter)}</div>
+    </div>`;
+}
+
+/**
+ * Delivery slip: goes in the bag with the food, for the rider. Who, where, phone,
+ * what is inside and that it is already paid.
+ */
+export function deliverySlipHTML(order: Order, s: AppState): string {
+  const d = order.delivery;
+  if (!d) return '';
+  const base = s.currencies.find((c) => c.code === s.settings.baseCurrency)!;
+  const cashier = s.staff.find((u) => u.id === order.cashierId);
+  const rows = order.lines.map((l) => `<tr><td>${l.qty} × ${esc(lineLabel(l))}</td><td class="r">${fmt(l.qty * l.unitPrice, base)}</td></tr>`).join('');
+  const paidBy = order.payments
+    .map((p) => (p.methodId === CREDIT_METHOD ? 'customer change' : s.paymentMethods.find((m) => m.id === p.methodId)?.name ?? p.methodId))
+    .join(' + ');
+  return `
+    <div class="ticket">
+      ${order.training ? '<div class="training">TRAINING — NOT A REAL ORDER</div>' : ''}
+      <div class="type">DELIVERY</div>
+      <div class="num">${order.number}</div>
+      <hr/>
+      <div class="dl-to">${esc(d.name)}</div>
+      <div class="dl-phone">${esc(d.phone)}</div>
+      <div class="dl-addr">${esc(d.address)}</div>
+      ${d.areaName ? `<div class="small" style="text-align:left">Area: ${esc(d.areaName)}</div>` : ''}
+      ${d.note ? `<div class="note" style="margin-left:0">» ${esc(d.note)}</div>` : ''}
+      <hr/>
+      <table>${rows}<tr><td>Delivery fee</td><td class="r">${fmt(d.fee, base)}</td></tr><tr class="tot"><td>Total</td><td class="r">${fmt(order.total, base)}</td></tr></table>
+      <div class="paid">PAID${paidBy ? ` — ${esc(paidBy)}` : ''}</div>
+      <div class="small">Do not collect money</div>
+      <hr/>
+      <div class="meta">${date(order.createdAt)} ${time(order.createdAt)} · ${esc(cashier?.name ?? '')}</div>
+      <div class="small">${esc(s.settings.restaurantName)} · ${esc(s.settings.phone)}</div>
     </div>`;
 }
 
@@ -109,6 +144,10 @@ export const TICKET_CSS = `
   .without{font-size:15px;font-weight:900;margin-left:16px;letter-spacing:.02em}
   .extra{font-size:15px;font-weight:900;margin-left:16px;letter-spacing:.02em}
   .meta{font-size:11px;text-align:center}
+  .dl-to{font-size:18px;font-weight:800}
+  .dl-phone{font-size:16px;font-weight:800;letter-spacing:.03em}
+  .dl-addr{font-size:15px;margin:2px 0}
+  .paid{text-align:center;font-size:16px;font-weight:900;border:2px solid #000;padding:2px;margin-top:6px}
   .training,.addon{text-align:center;font-weight:800;border:2px solid #000;padding:2px;margin-bottom:4px}
   .logo{display:block;margin:0 auto 4px;max-width:40mm;max-height:20mm;filter:grayscale(1)}
   table{width:100%;border-collapse:collapse} td{padding:1px 0} .r{text-align:right} .tot td{font-weight:800;border-top:1px solid #000}

@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRoute, go } from '../router';
-import { setLiveCart, useCurrentUser, useStore, type PlaceOrderSuccess } from '../store/store';
-import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, nextFreeCard, sameExtras, todayISO } from '../domain/rules';
+import { deliveryProblem, setLiveCart, useCurrentUser, useStore, type PlaceOrderSuccess } from '../store/store';
+import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, nextFreeCard, sameExtras, tidyName, todayISO } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
-import type { AddOn, MenuItem, OrderLine } from '../domain/types';
+import type { AddOn, DeliveryInfo, MenuItem, OrderLine } from '../domain/types';
 import { Dialog, MoreMenu, TopBar } from '../components/ui';
 import PayDialog from './PayDialog';
 import OrderDoneDialog from './OrderDoneDialog';
 import CollectChangeDialog from '../components/CollectChangeDialog';
-import { LuArrowRight, LuArrowRightLeft, LuCheck, LuChevronDown, LuChevronRight, LuChevronUp, LuCreditCard, LuHandCoins, LuMessageSquarePlus, LuMinus, LuPackage, LuPlus, LuSearch, LuStar, LuTrash2, LuUtensils, LuX } from 'react-icons/lu';
+import { LuArrowRight, LuArrowRightLeft, LuBike, LuCheck, LuChevronDown, LuChevronRight, LuChevronUp, LuCreditCard, LuHandCoins, LuMessageSquarePlus, LuMapPin, LuMinus, LuPackage, LuPencil, LuPlus, LuSearch, LuStar, LuTrash2, LuUtensils, LuX } from 'react-icons/lu';
 
 
 const TILL_ID = 'till-1';
@@ -55,7 +55,14 @@ export default function Till() {
   const [noteFor, setNoteFor] = useState<OrderLine | null>(null);
   const [collecting, setCollecting] = useState(false);
 
-  const total = round2(lines.reduce((s, l) => s + l.qty * l.unitPrice, 0));
+  const itemsTotal = round2(lines.reduce((s, l) => s + l.qty * l.unitPrice, 0));
+  // Delivery: who, where and the fee. Kept while the cashier switches type, cleared after each order.
+  const [delivery, setDelivery] = useState<Partial<DeliveryInfo> | null>(null);
+  const [askDelivery, setAskDelivery] = useState(false);
+  const isDelivery = !addonFor && typeId === 'delivery';
+  const deliveryFee = isDelivery ? round2(Number(delivery?.fee) || 0) : 0;
+  const deliveryMissing = isDelivery ? deliveryProblem(delivery ?? undefined) : '';
+  const total = round2(itemsTotal + deliveryFee);
 
   const sellable = useMemo(() => menu.filter((m) => isSellable(m, { components })), [menu, components]);
   const hiddenCount = menu.length - sellable.length;
@@ -72,8 +79,8 @@ export default function Till() {
   useEffect(() => {
     if (done) return;
     if (lines.length === 0) setLiveCart(TILL_ID, null);
-    else setLiveCart(TILL_ID, { orderTypeId: typeId, lines, total });
-  }, [lines, typeId, total, done]);
+    else setLiveCart(TILL_ID, { orderTypeId: typeId, lines, total, deliveryFee: deliveryFee || undefined });
+  }, [lines, typeId, total, deliveryFee, done]);
 
   useEffect(() => () => setLiveCart(TILL_ID, null), []);
 
@@ -165,6 +172,8 @@ export default function Till() {
   const newOrder = () => {
     setDone(null);
     setLines([]);
+    setDelivery(null);
+    if (typeId === 'delivery') setTypeId(enabledTypes[0]?.id ?? 'eat_in');
     setLiveCart(TILL_ID, null);
     if (addonFor) go('/orders');
   };
@@ -202,7 +211,17 @@ export default function Till() {
     window.addEventListener('resize', checkChips);
     return () => window.removeEventListener('resize', checkChips);
   }, [visibleCats.length, showFav]);
-  const typeIcon = (id: string) => (id === 'take_away' ? <LuPackage aria-hidden="true" /> : <LuUtensils aria-hidden="true" />);
+  const typeIcon = (id: string) =>
+    id === 'take_away' ? <LuPackage aria-hidden="true" /> : id === 'delivery' ? <LuBike aria-hidden="true" /> : <LuUtensils aria-hidden="true" />;
+  const pickType = (id: string) => {
+    setTypeId(id);
+    if (id === 'delivery' && deliveryProblem(delivery ?? undefined)) setAskDelivery(true);
+  };
+  /** Pay — or, for a delivery still missing its address, ask for it first. */
+  const startPay = () => {
+    if (deliveryMissing) return setAskDelivery(true);
+    setPaying(true);
+  };
 
   const lineRows = (inSheet: boolean) =>
     lines.map((l) => {
@@ -431,9 +450,9 @@ export default function Till() {
               </button>
             </div>
           ) : (
-            <div className="type-toggle" role="radiogroup" aria-label="Order type">
+            <div className={`type-toggle n${enabledTypes.length}`} role="radiogroup" aria-label="Order type">
               {enabledTypes.map((t) => (
-                <button key={t.id} role="radio" aria-checked={typeId === t.id} className={`${t.id} ${typeId === t.id ? 'on' : ''}`} onClick={() => setTypeId(t.id)}>
+                <button key={t.id} role="radio" aria-checked={typeId === t.id} className={`${t.id} ${typeId === t.id ? 'on' : ''}`} onClick={() => pickType(t.id)}>
                   {typeIcon(t.id)}
                   <span>
                     {t.name}
@@ -442,6 +461,28 @@ export default function Till() {
                 </button>
               ))}
             </div>
+          )}
+          {isDelivery && (
+            <button className={`delivery-card ${deliveryMissing ? 'missing' : ''}`} onClick={() => setAskDelivery(true)}>
+              <LuMapPin aria-hidden="true" />
+              {deliveryMissing ? (
+                <span className="grow">
+                  <b>Delivery details needed</b>
+                  <small>Name, phone and address for the rider</small>
+                </span>
+              ) : (
+                <span className="grow">
+                  <b>
+                    {delivery!.name} · {delivery!.phone}
+                  </b>
+                  <small>
+                    {delivery!.address}
+                    {delivery!.areaName ? ` · ${delivery!.areaName}` : ''}
+                  </small>
+                </span>
+              )}
+              <LuPencil aria-hidden="true" className="edit-ic" />
+            </button>
           )}
           <div className="lines" ref={linesRef}>
             {lines.length === 0 && <div className="empty">Tap a meal to add it.</div>}
@@ -453,8 +494,14 @@ export default function Till() {
                 <span>
                   Subtotal ({itemCount} {itemCount === 1 ? 'item' : 'items'})
                 </span>
-                <b>{fmt(total, base)}</b>
+                <b>{fmt(itemsTotal, base)}</b>
               </div>
+              {isDelivery && (
+                <div>
+                  <span>Delivery fee{delivery?.areaName ? ` (${delivery.areaName})` : ''}</span>
+                  <b>{deliveryFee > 0 ? fmt(deliveryFee, base) : 'free'}</b>
+                </div>
+              )}
             </div>
             <div className="total-row">
               <span>Total</span>
@@ -478,7 +525,7 @@ export default function Till() {
               <button className="btn big icon-only clear-order" onClick={clear} disabled={!lines.length} aria-label="Clear order" title="Clear order">
                 <LuTrash2 aria-hidden="true" />
               </button>
-              <button className="btn big primary pay-btn" onClick={() => setPaying(true)} disabled={!lines.length}>
+              <button className="btn big primary pay-btn" onClick={startPay} disabled={!lines.length}>
                 <LuCreditCard aria-hidden="true" />
                 Pay {fmt(total, base)}
                 <LuArrowRight aria-hidden="true" className="pay-arrow" />
@@ -506,7 +553,7 @@ export default function Till() {
               <button className="btn big" onClick={() => setSheet(false)}>
                 Add more
               </button>
-              <button className="btn big primary" onClick={() => { setSheet(false); setPaying(true); }} disabled={!lines.length}>
+              <button className="btn big primary" onClick={() => { setSheet(false); startPay(); }} disabled={!lines.length}>
                 <LuCreditCard aria-hidden="true" />
                 Pay {fmt(total, base)}
               </button>
@@ -523,9 +570,10 @@ export default function Till() {
           lines={lines}
           parentOrderId={parent?.id}
           cashierId={user.id}
+          delivery={isDelivery ? (delivery as DeliveryInfo) : undefined}
           onCancel={() => {
             setPaying(false);
-            setLiveCart(TILL_ID, { orderTypeId: typeId, lines, total });
+            setLiveCart(TILL_ID, { orderTypeId: typeId, lines, total, deliveryFee: deliveryFee || undefined });
           }}
           onDone={finish}
         />
@@ -592,6 +640,16 @@ export default function Till() {
             </Dialog>
           );
         })()}
+      {askDelivery && (
+        <DeliveryDialog
+          value={delivery}
+          onClose={() => setAskDelivery(false)}
+          onSave={(d) => {
+            setDelivery(d);
+            setAskDelivery(false);
+          }}
+        />
+      )}
       {noteFor && (
         <NoteDialog
           line={noteFor}
@@ -667,6 +725,139 @@ function NoteDialog({ line, onClose, onSave }: { line: OrderLine; onClose: () =>
       <label className="field">
         Note (prints on the kitchen ticket)
         <input autoFocus value={note} onChange={(e) => setNote(e.target.value)} />
+      </label>
+    </Dialog>
+  );
+}
+
+/**
+ * Delivery details: who, phone, area (sets the fee), address and a note for the rider.
+ * Typing a name or phone suggests earlier delivery customers, so regulars are one tap.
+ */
+function DeliveryDialog({ value, onClose, onSave }: { value: Partial<DeliveryInfo> | null; onClose: () => void; onSave: (d: Partial<DeliveryInfo>) => void }) {
+  const areas = useStore((s) => s.settings.deliveryAreas ?? []);
+  const orders = useStore((s) => s.orders);
+  const base = useStore((s) => s.currencies.find((c) => c.code === s.settings.baseCurrency)!);
+  const [d, setD] = useState<Partial<DeliveryInfo>>(() => value ?? {});
+  const [feeStr, setFeeStr] = useState(value?.fee !== undefined ? String(value.fee) : '');
+  const [picked, setPicked] = useState(!!value?.name);
+  const patch = (p: Partial<DeliveryInfo>) => setD((x) => ({ ...x, ...p }));
+  const draft = { ...d, fee: feeStr.trim() === '' ? NaN : Number(feeStr) };
+  const blocker = deliveryProblem(draft) || (feeStr.trim() === '' ? 'Choose an area or type the fee' : '');
+
+  // Earlier delivery customers, newest first, one per phone number.
+  const past = useMemo(() => {
+    const seen = new Set<string>();
+    const list: DeliveryInfo[] = [];
+    for (let i = orders.length - 1; i >= 0 && list.length < 300; i--) {
+      const x = orders[i].delivery;
+      if (!x || orders[i].example) continue;
+      const k = x.phone.replace(/\D/g, '');
+      if (seen.has(k)) continue;
+      seen.add(k);
+      list.push(x);
+    }
+    return list;
+  }, [orders]);
+  const q = (d.name ?? '').trim().toLowerCase();
+  const qd = (d.phone ?? '').replace(/\D/g, '');
+  const matches = picked
+    ? []
+    : past.filter((x) => (q.length >= 2 && x.name.toLowerCase().includes(q)) || (qd.length >= 3 && x.phone.replace(/\D/g, '').includes(qd))).slice(0, 4);
+  const usePast = (x: DeliveryInfo) => {
+    const area = areas.find((a) => a.id === x.areaId);
+    setD({ name: x.name, phone: x.phone, address: x.address, note: x.note, areaId: area?.id, areaName: area?.name ?? x.areaName });
+    setFeeStr(String(area ? area.fee : x.fee));
+    setPicked(true);
+  };
+  const pickArea = (id: string) => {
+    const a = areas.find((x) => x.id === id)!;
+    patch({ areaId: a.id, areaName: a.name });
+    setFeeStr(String(a.fee));
+  };
+  const save = () => {
+    if (blocker) return;
+    onSave({ ...d, name: tidyName(d.name ?? ''), phone: (d.phone ?? '').trim(), address: (d.address ?? '').trim(), fee: round2(Number(feeStr)) });
+  };
+
+  return (
+    <Dialog
+      title="Delivery details"
+      onClose={onClose}
+      width={600}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button className={`btn ${blocker ? 'blocked' : 'primary'}`} aria-disabled={!!blocker} onClick={save}>
+            {blocker || 'Save delivery details'}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid">
+        <label className="field" style={{ marginTop: 0 }}>
+          Customer name
+          <input id="dl-name" autoFocus autoComplete="off" value={d.name ?? ''} onChange={(e) => { patch({ name: e.target.value }); setPicked(false); }} placeholder="e.g. Tendai Ncube" />
+        </label>
+        <label className="field" style={{ marginTop: 0 }}>
+          Phone (for the rider)
+          <input id="dl-phone" type="tel" inputMode="tel" autoComplete="off" value={d.phone ?? ''} onChange={(e) => { patch({ phone: e.target.value }); setPicked(false); }} placeholder="e.g. 0772 123 456" />
+        </label>
+      </div>
+      {matches.length > 0 && (
+        <div className="dl-past">
+          <div className="muted">Delivered to before — tap to fill in:</div>
+          {matches.map((x) => (
+            <button key={x.phone} onClick={() => usePast(x)}>
+              <b>{x.name}</b> · {x.phone}
+              <small>{x.address}</small>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="section-title">Area</div>
+      {areas.length ? (
+        <div className="seg dl-areas">
+          {areas.map((a) => (
+            <button key={a.id} className={d.areaId === a.id ? 'on' : ''} aria-pressed={d.areaId === a.id} onClick={() => pickArea(a.id)}>
+              {a.name}
+              <small>{a.fee > 0 ? fmt(a.fee, base) : 'free'}</small>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="hint" style={{ marginTop: -4 }}>No delivery areas set up yet (Settings → Delivery). Type the fee below.</p>
+      )}
+      <div className="form-grid">
+        <label className="field">
+          Delivery fee ({base.code})
+          <input
+            id="dl-fee"
+            type="number"
+            inputMode="decimal"
+            step="0.5"
+            min={0}
+            value={feeStr}
+            onChange={(e) => {
+              setFeeStr(e.target.value);
+              if (d.areaId) {
+                const a = areas.find((x) => x.id === d.areaId);
+                if (a && Number(e.target.value) !== a.fee) patch({ areaId: undefined, areaName: undefined });
+              }
+            }}
+            placeholder="0.00"
+          />
+        </label>
+      </div>
+      <label className="field">
+        Address
+        <textarea id="dl-address" rows={2} value={d.address ?? ''} onChange={(e) => patch({ address: e.target.value })} placeholder="House number, street, suburb, landmark" />
+      </label>
+      <label className="field">
+        Note for the rider (optional)
+        <input id="dl-note" value={d.note ?? ''} onChange={(e) => patch({ note: e.target.value })} placeholder="e.g. Blue gate, call when outside" />
       </label>
     </Dialog>
   );

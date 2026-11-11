@@ -2,6 +2,9 @@ import { useSyncExternalStore } from 'react';
 import type {
   AddOn,
   AppState,
+  DeliveryArea,
+  DeliveryInfo,
+  OrderType,
   Cancellation,
   Category,
   CreditEntry,
@@ -24,7 +27,7 @@ import type {
   Staff,
   StaffAction,
 } from '../domain/types';
-import { DEFAULT_ADD_ONS, DEFAULT_MEAL_ADD_ONS, DEFAULT_MEAL_PERIODS, seedState, STOCK_ITEMS } from '../data/seed';
+import { DEFAULT_ADD_ONS, DEFAULT_DELIVERY_AREAS, DEFAULT_MEAL_ADD_ONS, DEFAULT_MEAL_PERIODS, seedState, STOCK_ITEMS } from '../data/seed';
 import { exampleBooks, exampleCancellations, exampleHistory } from '../data/exampleHistory';
 import { nextFreeCard, cardsInUse, customerBalance, pinProblem, ROLE_LABEL, staffRights, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
 import { CREDIT_METHOD } from '../domain/types';
@@ -47,12 +50,22 @@ const listeners = new Set<() => void>();
 /** Bring data saved by an older version of the app up to date. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): AppState | null {
-  if (raw?.version === 8) return raw as AppState;
+  if (raw?.version === 9) return raw as AppState;
+  if (raw?.version === 8) {
+    // v9: delivery orders (areas with fees; customer, address and rider on the order).
+    const st = raw as AppState;
+    return {
+      ...st,
+      version: 9,
+      settings: { ...st.settings, deliveryAreas: st.settings.deliveryAreas ?? DEFAULT_DELIVERY_AREAS },
+      orderTypes: st.orderTypes.map((t) => (t.id === 'delivery' ? { ...t, packaging: t.packaging || 'Plastic container + bag' } : t)),
+    };
+  }
   if (raw?.version === 7) {
     // v8: priced add-ons (extra meat +$1.50, extra gravy free ...), chosen per meal.
     const st = raw as AppState;
     const menu = st.menu.map((m) => (m.addOnIds || !DEFAULT_MEAL_ADD_ONS[m.id] ? m : { ...m, addOnIds: DEFAULT_MEAL_ADD_ONS[m.id] }));
-    return { ...st, version: 8, addOns: st.addOns ?? DEFAULT_ADD_ONS, menu };
+    return migrate({ ...st, version: 8, addOns: st.addOns ?? DEFAULT_ADD_ONS, menu });
   }
   if (raw?.version === 6) {
     // v7: meals "come with" parts the customer can say no to (coslo with rice meals, covo with sadza).
@@ -293,6 +306,18 @@ export interface PlaceOrderInput {
   keep?: { amount: number; currency: string };
   parentOrderId?: string;
   cashierId: string;
+  /** Delivery orders: name, phone, address and fee (the fee is added to the total). */
+  delivery?: DeliveryInfo;
+}
+
+/** What still stops a delivery order going through, or '' when the details are complete. */
+export function deliveryProblem(d?: Partial<DeliveryInfo>): string {
+  if (!d) return 'Add the delivery details';
+  if (!d.name?.trim()) return 'Type the customer name';
+  if ((d.phone ?? '').replace(/\D/g, '').length < 7) return 'Type a phone number for the rider';
+  if (!d.address?.trim()) return 'Type the delivery address';
+  if (!(Number(d.fee) >= 0)) return 'Check the delivery fee';
+  return '';
 }
 
 export type CustomerRef = { id: string } | { name: string; phone?: string; note?: string };
@@ -312,7 +337,22 @@ export type PlaceOrderResult = PlaceOrderSuccess | { ok: false; error: string };
 export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
   const s = state;
   const now = new Date().toISOString();
-  const total = round2(input.lines.reduce((sum, l) => sum + l.qty * l.unitPrice, 0));
+  const isDelivery = input.orderTypeId === 'delivery' && !input.parentOrderId;
+  if (isDelivery) {
+    const problem = deliveryProblem(input.delivery);
+    if (problem) return { ok: false, error: problem };
+  }
+  const delivery: DeliveryInfo | undefined = isDelivery
+    ? {
+        ...input.delivery!,
+        name: tidyName(input.delivery!.name),
+        phone: input.delivery!.phone.trim(),
+        address: input.delivery!.address.trim(),
+        note: input.delivery!.note?.trim() || undefined,
+        fee: round2(input.delivery!.fee),
+      }
+    : undefined;
+  const total = round2(input.lines.reduce((sum, l) => sum + l.qty * l.unitPrice, 0) + (delivery?.fee ?? 0));
   const mode = s.settings.numberMode;
 
   let number: number;
@@ -358,6 +398,7 @@ export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
     createdAt: now,
     parentOrderId: input.parentOrderId,
     training: s.settings.trainingMode,
+    ...(delivery ? { delivery } : {}),
   };
 
   // ---- customer change balance
@@ -429,6 +470,52 @@ export function setOrderStatus(orderId: string, status: OrderStatus, by?: string
       return match ? { ...o, status, history: [...o.history, { status, at, by }] } : o;
     }),
   }));
+}
+
+/** A rider leaves with a delivery order. It stays open (and its card in use) until marked delivered. */
+export function sendOutForDelivery(orderId: string, rider: string, by: string) {
+  const at = new Date().toISOString();
+  set((st) => ({
+    ...st,
+    orders: st.orders.map((o) =>
+      o.id === orderId && o.delivery
+        ? {
+            ...o,
+            // Food leaving the shop is done in the kitchen, even if nobody tapped Done there.
+            status: o.status === 'in_kitchen' ? 'ready' : o.status,
+            delivery: { ...o.delivery, outAt: at, outBy: by, rider: rider.trim() || undefined },
+            history: [...o.history, ...(o.status === 'in_kitchen' ? [{ status: 'ready' as const, at, by }] : []), { status: 'out_for_delivery' as const, at, by }],
+          }
+        : o,
+    ),
+  }));
+}
+
+/* ----------------------------------------------------------- order types */
+
+export function setOrderTypeEnabled(id: string, enabled: boolean) {
+  set((st) => ({ ...st, orderTypes: st.orderTypes.map((t) => (t.id === id ? { ...t, enabled } : t)) }));
+}
+
+export function updateOrderType(id: string, patch: Partial<Pick<OrderType, 'name' | 'ticketLabel' | 'packaging'>>) {
+  set((st) => ({ ...st, orderTypes: st.orderTypes.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
+}
+
+/** Add or change a delivery area (Town centre $1 ...). */
+export function upsertDeliveryArea(a: DeliveryArea): { ok: true } | { ok: false; error: string } {
+  const name = a.name.trim().replace(/\s+/g, ' ');
+  if (!name) return { ok: false, error: 'Give the area a name' };
+  if (!(a.fee >= 0)) return { ok: false, error: 'The fee cannot be below zero' };
+  const areas = state.settings.deliveryAreas ?? [];
+  if (areas.some((x) => x.id !== a.id && x.name.toLowerCase() === name.toLowerCase())) return { ok: false, error: `${name} is already listed` };
+  const next = { ...a, name, fee: round2(a.fee) };
+  const list = areas.some((x) => x.id === a.id) ? areas.map((x) => (x.id === a.id ? next : x)) : [...areas, next];
+  set((st) => ({ ...st, settings: { ...st.settings, deliveryAreas: list } }));
+  return { ok: true };
+}
+
+export function deleteDeliveryArea(id: string) {
+  set((st) => ({ ...st, settings: { ...st.settings, deliveryAreas: (st.settings.deliveryAreas ?? []).filter((a) => a.id !== id) } }));
 }
 
 /* ------------------------------------------------------------- live display */
