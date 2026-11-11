@@ -5,3 +5,7 @@ dist/
 .env
 .env.*
 !.env.example
+
+# screenshots written by the test scripts
+look/
+tests/look/
