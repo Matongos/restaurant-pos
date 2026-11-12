@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
-    "build:deploy": "vite build"
+    "build:deploy": "vite build && node -e \"const fs=require('fs');if(fs.existsSync('../site'))fs.cpSync('../site','dist/site',{recursive:true})\""
   },
   "dependencies": {
     "react": "^19.2.0",

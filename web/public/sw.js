@@ -30,6 +30,7 @@ self.addEventListener('fetch', (e) => {
   const same = url.origin === self.location.origin;
   const font = /fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
   if (!same && !font) return; // database and other services: always live
+  if (same && url.pathname.startsWith('/site')) return; // the product website is not part of the app
 
   if (req.mode === 'navigate') {
     e.respondWith(
