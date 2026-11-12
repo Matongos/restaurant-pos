@@ -1,10 +1,10 @@
-# Publishes the product website (the site/ folder) to GitHub Pages whenever it changes.
+# Publishes the product website (web/public/site, also served at /site/ on the app's address) to GitHub Pages whenever it changes.
 name: Product website
 
 on:
   push:
     branches: [main]
-    paths: ['site/**', '.github/workflows/site.yml']
+    paths: ['web/public/site/**', '.github/workflows/site.yml']
   workflow_dispatch:
 
 permissions:
@@ -29,6 +29,6 @@ jobs:
           enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: web/public/site
       - id: deployment
         uses: actions/deploy-pages@v4
