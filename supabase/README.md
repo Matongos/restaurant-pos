@@ -8,8 +8,9 @@ only see the published menu, and only TechPlug admins can open the owner console
 
 1. Go to **supabase.com** → *Start your project* → sign in (GitHub or email).
 2. **New project** → name `techplug-pos`, choose a strong database password (keep it in your password
-   manager — never send it to anyone), region **South Africa (Cape Town)** if offered, otherwise the
-   closest to your restaurants.
+   manager — never send it to anyone), region **Central EU (Frankfurt)** or
+   **West Europe (London)** — Supabase has no African region, and these are the closest to
+   Southern Africa.
 3. When it is ready: left menu **SQL Editor** → *New query* → paste everything from
    `migrations/0001_restaurants.sql` → **Run**. It should say *Success*.
 4. **Authentication → Providers**: Email is on by default. (Phone / SMS login can be added later.)
