@@ -1,0 +1,71 @@
+# Builds the Windows installer (TechPlug-POS-Setup.exe) and publishes it as a GitHub Release.
+# Run it from the Actions tab ("Run workflow"), or push a tag like desktop-v1.0.0.
+name: Windows app
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version number (e.g. 1.0.1)
+        required: true
+        default: 1.0.0
+  push:
+    tags: ['desktop-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: v
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then V="${{ github.event.inputs.version }}"; else V="${GITHUB_REF_NAME#desktop-v}"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          cd web/src-tauri
+          sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"$V\"/" tauri.conf.json
+          sed -i "0,/^version = \".*\"/s//version = \"$V\"/" Cargo.toml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: web/src-tauri -> target
+
+      - name: Install Tauri CLI
+        working-directory: web
+        run: npm install --no-save @tauri-apps/cli@^2
+
+      - name: Build installer
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: web
+          tauriScript: npx tauri
+          tagName: desktop-v${{ steps.v.outputs.version }}
+          releaseName: TechPlug POS ${{ steps.v.outputs.version }} for Windows
+          releaseBody: |
+            Download **TechPlug-POS-Setup.exe** below and open it.
+            If Windows shows "Windows protected your PC", click **More info → Run anyway**.
+            The app updates itself: it always opens the newest version when online, and works offline after the first start.
+          releaseDraft: false
+          prerelease: false
+
+      - name: Add a copy with a fixed name (for the website's download button)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXE=$(ls web/src-tauri/target/release/bundle/nsis/*-setup.exe | head -1)
+          cp "$EXE" TechPlug-POS-Setup.exe
+          gh release upload "desktop-v${{ steps.v.outputs.version }}" TechPlug-POS-Setup.exe --clobber

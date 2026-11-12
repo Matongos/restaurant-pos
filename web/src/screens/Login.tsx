@@ -1,3 +1,4 @@
+import { InstallCard } from '../components/AppInstall';
 import { useEffect, useState } from 'react';
 import { login, useStore } from '../store/store';
 import { LuDelete } from 'react-icons/lu';
@@ -65,6 +66,7 @@ export default function Login() {
           <div className="hint">
             Demo PINs — Owner 1234 · Manager 2222 · Cashier 1111 · Kitchen 3333 · Attendant 4444
           </div>
+          <InstallCard />
         </div>
       </div>
     </div>

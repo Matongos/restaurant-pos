@@ -16,6 +16,7 @@ import Accounts from './screens/Accounts';
 import StaffScreen from './screens/StaffScreen';
 import StockScreen from './screens/Stock';
 import TablesScreen from './screens/Tables';
+import { UpdateBar } from './components/AppInstall';
 
 const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/till': { perm: 'take_orders', el: Till },
@@ -83,6 +84,7 @@ export default function App() {
   return (
     <>
       {body}
+      <UpdateBar />
       <ToastHost />
     </>
   );
