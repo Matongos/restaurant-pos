@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import CloudAccount from '../components/CloudAccount';
 import { addComponent, setExampleHistory, resetDemo, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
 import type { Currency, MenuItem, NumberMode, PrintWhen } from '../domain/types';
 import { compressLogo, compressPhoto } from '../components/photo';
@@ -12,7 +13,7 @@ import DeliverySettings from '../components/DeliverySettings';
 import ServiceSettings from '../components/ServiceSettings';
 import RecipeEditor from '../components/RecipeEditor';
 
-type Tab = 'general' | 'service' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'delivery' | 'kitchen' | 'demo';
+type Tab = 'general' | 'online' | 'service' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'delivery' | 'kitchen' | 'demo';
 
 /** Tabs a manager may change: how the till runs day to day. Everything else is the owner's. */
 const MANAGER_TABS: Tab[] = ['numbers', 'delivery', 'kitchen'];
@@ -23,6 +24,7 @@ export default function SettingsScreen() {
   const [tab, setTab] = useState<Tab>(owner ? 'general' : 'numbers');
   const allTabs: [Tab, string][] = [
     ['general', 'Restaurant & branding'],
+    ['online', 'Online account'],
     ['service', 'How you serve'],
     ['numbers', 'Numbers & printing'],
     ['payments', 'Payment methods'],
@@ -47,6 +49,7 @@ export default function SettingsScreen() {
           </div>
           <div className="card" style={{ padding: 20 }}>
             {tab === 'general' && <General />}
+            {tab === 'online' && <CloudAccount />}
             {tab === 'service' && <ServiceSettings />}
             {tab === 'numbers' && <Numbers />}
             {tab === 'payments' && <PaymentMethods />}

@@ -13,11 +13,17 @@ only see the published menu, and only TechPlug admins can open the owner console
    Southern Africa.
 3. When it is ready: left menu **SQL Editor** → *New query* → paste everything from
    `migrations/0001_restaurants.sql` → **Run**. It should say *Success*.
-4. **Authentication → Providers**: Email is on by default. (Phone / SMS login can be added later.)
-5. **Project Settings → API**: you will see the **Project URL** and the **anon public** key.
+4. **Authentication → Sign In / Providers → Email**: turn **Confirm email** *off* for now and Save.
+   (Supabase's built-in email only sends to your own team's addresses, so restaurant owners would never
+   get the confirmation email. Turn it back on once a mail service such as Resend is set up under
+   **Authentication → Emails → SMTP settings** — that also makes "Forgot password" work for everyone.)
+5. **Authentication → URL Configuration**: *Site URL* = the app's address
+   (`https://web-delta-five-slu2k38rxm.vercel.app`), and add the same address under *Redirect URLs*.
+   Email links (confirm, new password) then come back to the app.
+6. **Project Settings → API Keys**: you will see the **Project URL** and the **publishable** key.
    These two are meant to be public (they are built into the app); share them so they can be added
    to the app's settings. **Never share the `service_role` key or the database password.**
-6. Make yourself an admin for the owner console: after you have signed up in the app, run in the SQL Editor:
+7. Make yourself an admin for the owner console: after you have signed up in the app, run in the SQL Editor:
    `insert into platform_admins (user_id) select id from auth.users where email = 'your@email';`
 
 ## What is in it
@@ -39,3 +45,19 @@ only see the published menu, and only TechPlug admins can open the owner console
 `tests/test_security.sql` runs on plain PostgreSQL with `tests/stub_supabase.sql` standing in for
 Supabase's login system. It checks that restaurants cannot see each other, customers cannot read
 records, prices come from the server, sold-out meals are refused and the console is admin-only.
+
+## How the app syncs
+
+`web/src/cloud/` — `api.ts` (sign-up, sign-in, calls; plain `fetch`) and `sync.ts`:
+
+- Every change is saved on the device first; changed items go into an outbox and are sent with
+  `push_records()` a second later, or when the internet comes back.
+- Every 8 seconds (and when the app comes back to the front) the device fetches records changed since it
+  last looked. A change still waiting in this device's outbox is kept over an older one from the internet.
+- The first device of a restaurant uploads everything; each further device signs in with the same
+  email and downloads the restaurant's data (replacing its own). Staff keep using their PINs.
+- `tests/cloud-mock.cjs` is a small stand-in for Supabase; `tests/sync.cjs` tests two tills selling,
+  going offline and catching up against it.
+
+Known limit for now: with two tills both giving out slip numbers, two sales within a few seconds of each
+other can get the same number (each order is still kept separately).

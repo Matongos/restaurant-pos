@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { login, useStore } from '../store/store';
 import { LuDelete } from 'react-icons/lu';
 import { BrandMark } from '../components/ui';
+import { getLink } from '../cloud/sync';
 
 export default function Login() {
   const [pin, setPin] = useState('');
@@ -63,9 +64,9 @@ export default function Login() {
               <LuDelete aria-hidden="true" />
             </button>
           </div>
-          <div className="hint">
+          {!getLink() && <div className="hint">
             Demo PINs — Owner 1234 · Manager 2222 · Cashier 1111 · Kitchen 3333 · Attendant 4444
-          </div>
+          </div>}
           <InstallCard />
         </div>
       </div>

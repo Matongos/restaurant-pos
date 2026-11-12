@@ -25,6 +25,7 @@ import {
   LuEllipsisVertical,
 } from 'react-icons/lu';
 import { go, useRoute } from '../router';
+import { useSyncStatus } from '../cloud/sync';
 import { logout, updateSettings, useCurrentUser, useStockLevels, useStore } from '../store/store';
 import { balances, can, ROLE_LABEL, type Permission } from '../domain/rules';
 import type { Role, ServiceMode } from '../domain/types';
@@ -95,12 +96,15 @@ function useOnline() {
 
 function OnlineStatus() {
   const online = useOnline();
+  const sync = useSyncStatus();
   const [open, setOpen] = useState(false);
+  const linked = !!sync.link;
+  const trouble = linked && (sync.state === 'error' || sync.state === 'signed-out');
   return (
     <div className="status-wrap">
-      <button className={`online-chip ${online ? 'on' : 'off'}`} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog">
+      <button className={`online-chip ${!online ? 'off' : trouble ? 'warn' : 'on'}`} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog">
         <span className="dot" aria-hidden="true" />
-        {online ? 'Online' : 'Offline'}
+        {!online ? 'Offline' : trouble ? 'Not syncing' : linked && sync.pending ? 'Syncing' : 'Online'}
         <LuChevronDown aria-hidden="true" />
       </button>
       {open && (
@@ -109,6 +113,17 @@ function OnlineStatus() {
           <div className="status-pop" role="dialog" aria-label="Connection">
             <b>{online ? 'Connected to the internet' : 'No internet connection'}</b>
             <p>Sales are saved on this device{online ? '' : ' and you can keep selling'}.</p>
+            {linked ? (
+              <p>
+                {trouble
+                  ? sync.error
+                  : sync.pending
+                    ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to go to the online account.`
+                    : `In step with ${sync.link!.restaurantName}'s online account.`}
+              </p>
+            ) : (
+              <p className="muted">Not connected to an online account.</p>
+            )}
           </div>
         </>
       )}

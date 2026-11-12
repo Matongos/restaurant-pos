@@ -221,19 +221,59 @@ function emit() {
   listeners.forEach((l) => l());
 }
 
+type ChangeHook = (prev: AppState, next: AppState) => void;
+let changeHook: ChangeHook | null = null;
+/** The online sync listens here for changes made on this device. */
+export function onLocalChange(hook: ChangeHook | null) {
+  changeHook = hook;
+}
+
 function set(updater: (s: AppState) => AppState) {
+  const prev = state;
   state = updater(state);
   persist();
   emit();
+  changeHook?.(prev, state);
+}
+
+/** Changes that came from another device: saved and shown, but not sent back out. */
+export function applyRemote(updater: (s: AppState) => AppState) {
+  const next = updater(state);
+  if (next === state) return;
+  state = next;
+  persist();
+  dropEndedSession();
+  emit();
+}
+
+/** Replace everything on this device with the restaurant's data from the online account. */
+export function replaceAll(next: AppState) {
+  state = withExamples(next);
+  persist();
+  dropEndedSession();
+  emit();
+}
+
+/** An empty restaurant (no menu, orders or staff) with this version's default settings, to fill from the online account. */
+export function emptyState(): AppState {
+  const seed = stripExamples(seedState());
+  return {
+    ...seed,
+    staff: [], currencies: [], paymentMethods: [], orderTypes: [], categories: [], components: [], menu: [], addOns: [],
+    orders: [], customers: [], credit: [], stockItems: [], stockMoves: [], purchases: [], expenses: [], cancellations: [], staffLog: [],
+    liveCarts: {},
+  };
 }
 
 // Another window (e.g. customer display) changed the data → reload it here.
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
     if (e.key === KEY) {
+      const prev = state;
       state = load();
       dropEndedSession();
       emit();
+      changeHook?.(prev, state); // another window of this app changed something: send it too
     }
   });
 }
@@ -869,9 +909,11 @@ export function setExampleHistory(on: boolean) {
 }
 
 export function resetDemo() {
+  const prev = state;
   state = withExamples(seedState());
   persist();
   emit();
+  changeHook?.(prev, state);
 }
 
 /* -------------------------------------------------------------- accounting */
