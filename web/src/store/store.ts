@@ -916,6 +916,53 @@ export function resetDemo() {
   changeHook?.(prev, state);
 }
 
+/**
+ * Start a real restaurant: remove the demo staff, customers, change, stock, sales and books, and
+ * (unless kept) the sample menu. Keeps payment methods, currencies, order types and categories.
+ * The owner stays, with a new PIN. Goes to the online account like any other change.
+ */
+export function startFresh(opts: { ownerPin: string; keepMenu: boolean; byId: string }): { ok: true } | { ok: false; error: string } {
+  const pin = opts.ownerPin.trim();
+  if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'Owner PIN must be 4 digits.' };
+  if (/^(\d)\1{3}$/.test(pin) || pin === '1234') return { ok: false, error: 'Choose a PIN that is harder to guess.' };
+  const now = new Date().toISOString();
+  set((st0) => {
+    const st = stripExamples(st0);
+    const me = st.staff.find((x) => x.id === opts.byId && x.role === 'super_admin') ?? st.staff.find((x) => x.role === 'super_admin' && !x.deletedAt);
+    const owner: Staff = { ...(me ?? { id: uid('u-'), name: 'Owner', role: 'super_admin', active: true }), pin, active: true, pinChangedAt: now };
+    const demoSettings = seedState().settings;
+    return {
+      ...st,
+      settings: {
+        ...st.settings,
+        trainingMode: false,
+        showExampleHistory: false,
+        tagline: st.settings.tagline === demoSettings.tagline ? '' : st.settings.tagline,
+        address: st.settings.address === demoSettings.address ? '' : st.settings.address,
+        phone: st.settings.phone === demoSettings.phone ? '' : st.settings.phone,
+      },
+      staff: [owner],
+      menu: opts.keepMenu ? st.menu.map((m) => ({ ...m, available: true })) : [],
+      addOns: opts.keepMenu ? st.addOns : [],
+      components: opts.keepMenu ? st.components.map((c) => ({ ...c, available: true })) : [],
+      stockItems: opts.keepMenu ? st.stockItems : [],
+      stockMoves: [],
+      orders: [],
+      customers: [],
+      credit: [],
+      purchases: [],
+      expenses: [],
+      cancellations: [],
+      staffLog: [],
+      liveCarts: {},
+      dayCounter: { date: todayISO(), lastSlip: 0 },
+    };
+  });
+  writeSession(getState().staff[0].id);
+  emit();
+  return { ok: true };
+}
+
 /* -------------------------------------------------------------- accounting */
 
 /** A manager or owner PIN, used to approve cancellations. */

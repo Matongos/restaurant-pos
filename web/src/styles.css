@@ -1322,3 +1322,7 @@ tr.struck td b { text-decoration: line-through; }
   .cloud-item, .cloud-state { flex-wrap: wrap; }
   .cloud-state .btn, .cloud-item .btn { width: 100%; }
 }
+.fresh-card { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); display: grid; gap: 10px; }
+.fresh-card p { margin: 0; line-height: 1.5; }
+.fresh-card > .btn { justify-self: start; }
+.fresh-form { display: grid; gap: 12px; }

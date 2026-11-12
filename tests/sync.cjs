@@ -130,6 +130,25 @@ const mock = async () => (await fetch(MOCK + '/__state')).json();
   await D.page.waitForSelector('.slug-state.bad', { timeout: 5000 });
   check('taken address flagged', /Taken/.test(await D.page.textContent('.slug-state')));
 
+  // ---- start fresh on A: practice data goes away on B too
+  await A.page.goto(URL + '#/settings'); await A.page.click('.tabs button:has-text("Start fresh")');
+  check('reset hidden while connected', !(await A.page.isVisible('button:has-text("Reset to the demo restaurant")')));
+  await A.page.click('button:has-text("Start fresh…")');
+  await A.page.locator('label:has-text("owner PIN") input').fill('1234');
+  await A.page.locator('label:has-text("Type START") input').fill('start');
+  await A.page.click('button:has-text("Remove practice data")');
+  check('demo PIN refused', /harder to guess/.test(await A.page.textContent('.error-text')));
+  await A.page.locator('label:has-text("owner PIN") input').fill('2580');
+  await A.page.click('button:has-text("Remove practice data")');
+  await A.page.waitForTimeout(500);
+  check('still signed in after fresh start', await A.page.isVisible('.topbar'));
+  await B.page.waitForFunction(() => { const s = JSON.parse(localStorage.getItem('restaurant-pos.state.v1')); return s.customers.length === 0 && s.staff.length === 1 && s.orders.length === 0 && s.credit.length === 0; }, null, { timeout: 20000 });
+  const bs = await B.page.evaluate(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1')));
+  check('fresh start reaches B', bs.staff[0].pin === '2580' && bs.menu.length > 0 && !bs.settings.trainingMode && bs.stockMoves.length === 0, JSON.stringify({ s: bs.staff.length, m: bs.menu.length }));
+  await B.page.evaluate(() => sessionStorage.clear()); await B.page.goto(URL); await B.page.waitForSelector('.keypad');
+  await pin(B.page, '1234'); check('old PIN no longer works', await B.page.isVisible('.keypad'));
+  await pin(B.page, '2580'); await B.page.waitForSelector('.topbar'); check('new owner PIN works on B', true);
+
   // ---- disconnect
   await openOnline(B.page);
   await B.page.click('button:has-text("Disconnect this device")'); await B.page.click('.row button:text-is("Disconnect")');

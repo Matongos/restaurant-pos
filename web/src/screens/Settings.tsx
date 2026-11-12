@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import CloudAccount from '../components/CloudAccount';
-import { addComponent, setExampleHistory, resetDemo, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
+import { useSyncStatus } from '../cloud/sync';
+import { addComponent, setExampleHistory, resetDemo, startFresh, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
 import type { Currency, MenuItem, NumberMode, PrintWhen } from '../domain/types';
 import { compressLogo, compressPhoto } from '../components/photo';
 import { Dialog, TopBar, toast } from '../components/ui';
@@ -32,7 +33,7 @@ export default function SettingsScreen() {
     ['menu', 'Menu & categories'],
     ['delivery', 'Delivery'],
     ['kitchen', 'Serving times'],
-    ['demo', 'Demo data'],
+    ['demo', 'Start fresh'],
   ];
   const tabs = owner ? allTabs : allTabs.filter(([k]) => MANAGER_TABS.includes(k));
   return (
@@ -778,17 +779,21 @@ function ExampleToggle() {
 
 function Demo() {
   const [sure, setSure] = useState(false);
+  const linked = !!useSyncStatus().link;
   return (
     <>
-      <p>This prototype keeps its data in this browser. Reset puts back the demo menu and removes all orders.</p>
+      <StartFresh />
+      <h3 className="cloud-h" style={{ marginTop: 28 }}>Practice data</h3>
       <ExampleToggle />
-      {!sure ? (
+      {linked ? (
+        <p className="hint">Putting the demo restaurant back is switched off while this device is connected to your online account.</p>
+      ) : !sure ? (
         <button className="btn danger" onClick={() => setSure(true)}>
-          Reset demo data
+          Reset to the demo restaurant
         </button>
       ) : (
         <div className="row wrap">
-          <b>Remove all orders and settings?</b>
+          <b>Put back the demo menu and remove all orders?</b>
           <button className="btn" onClick={() => setSure(false)}>
             Keep them
           </button>
@@ -805,6 +810,70 @@ function Demo() {
         </div>
       )}
     </>
+  );
+}
+
+function StartFresh() {
+  const user = useCurrentUser()!;
+  const [open, setOpen] = useState(false);
+  const [keepMenu, setKeepMenu] = useState(true);
+  const [pin, setPin] = useState('');
+  const [typed, setTyped] = useState('');
+  const [error, setError] = useState('');
+  if (user.role !== 'super_admin') return null;
+  return (
+    <div className="fresh-card">
+      <b>Start fresh with your real restaurant</b>
+      <p className="muted">
+        Removes the practice staff, customers and their change, stock, sales and books. Payment methods, currencies and categories stay. You
+        stay as the owner with a new PIN; add your real staff afterwards in Staff.
+      </p>
+      {!open ? (
+        <button className="btn primary" onClick={() => setOpen(true)}>
+          Start fresh…
+        </button>
+      ) : (
+        <div className="fresh-form">
+          <div className="toggle">
+            <span>
+              Keep the sample menu to edit
+              <span className="sub">Off = start with an empty menu and add your own meals.</span>
+            </span>
+            <button className={`switch ${keepMenu ? 'on' : ''}`} role="switch" aria-checked={keepMenu} aria-label="Keep the sample menu" onClick={() => setKeepMenu(!keepMenu)}>
+              <span />
+            </button>
+          </div>
+          <div className="form-grid">
+            <label className="field">
+              Your new owner PIN
+              <input inputMode="numeric" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} />
+            </label>
+            <label className="field">
+              Type START to confirm
+              <input value={typed} onChange={(e) => setTyped(e.target.value)} />
+            </label>
+          </div>
+          {error && <div className="error-text">{error}</div>}
+          <div className="row wrap">
+            <button className="btn" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+            <button
+              className="btn danger-fill"
+              disabled={typed.trim().toUpperCase() !== 'START'}
+              onClick={() => {
+                const r = startFresh({ ownerPin: pin, keepMenu, byId: user.id });
+                if (!r.ok) return setError(r.error);
+                setOpen(false);
+                toast(`Fresh start done — your owner PIN is now ${pin}`);
+              }}
+            >
+              Remove practice data
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
