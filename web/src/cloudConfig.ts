@@ -1,0 +1,4 @@
+// Online account settings (Supabase). The publishable key is designed to be public: what it can
+// reach is limited by the row-level security rules in supabase/migrations. Never put a secret key here.
+export const SUPABASE_URL = 'https://lrgeumaidmfmkszfdqjm.supabase.co';
+export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_FCs9Rr3rw75K9sKw1Yh3aA_R1AATemp';
