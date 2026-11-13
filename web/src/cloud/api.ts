@@ -236,3 +236,13 @@ export function slugFrom(name: string): string {
     .slice(0, 40)
     .replace(/-+$/g, '');
 }
+
+/** Change rows; returns the rows that were changed (empty when the filter matched nothing). */
+export function patch<T = unknown>(table: string, query: string, body: Record<string, unknown>): Promise<T[]> {
+  return call(`/rest/v1/${table}?${query}`, { method: 'PATCH', body: JSON.stringify(body), headers: { Prefer: 'return=representation' } }) as Promise<T[]>;
+}
+
+/** Add a row without reading it back (used for website / app events, allowed without signing in). */
+export function insertQuiet(table: string, body: Record<string, unknown>): Promise<unknown> {
+  return call(`/rest/v1/${table}`, { method: 'POST', body: JSON.stringify(body), headers: { Prefer: 'return=minimal' } });
+}

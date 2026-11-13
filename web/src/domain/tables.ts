@@ -13,12 +13,12 @@ const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 /** The open bill at this table, if any. */
 export function openTab(orders: Order[], tableId: string): Order | undefined {
-  return orders.find((o) => o.table?.round === 1 && o.table.tableId === tableId && o.status !== 'cancelled' && o.table.status !== 'paid');
+  return orders.find((o) => o.table?.round === 1 && !o.online && o.table.tableId === tableId && o.status !== 'cancelled' && o.table.status !== 'paid');
 }
 
 /** Every open bill (tables that are taken). */
 export function openTabs(orders: Order[]): Order[] {
-  return orders.filter((o) => o.table?.round === 1 && o.status !== 'cancelled' && o.table.status !== 'paid' && !o.example);
+  return orders.filter((o) => o.table?.round === 1 && !o.online && o.status !== 'cancelled' && o.table.status !== 'paid' && !o.example);
 }
 
 /** All rounds of a bill, oldest first (cancelled ones left out). */

@@ -67,6 +67,16 @@ export default function Login() {
           {!getLink() && <div className="hint">
             Demo PINs — Owner 1234 · Manager 2222 · Cashier 1111 · Kitchen 3333 · Attendant 4444
           </div>}
+          {!getLink() && (
+            <div className="setup-links">
+              <a className="btn primary" href="#/setup">
+                New restaurant? Set it up
+              </a>
+              <a className="btn" href="#/setup?connect=1">
+                Connect to my restaurant
+              </a>
+            </div>
+          )}
           <InstallCard />
         </div>
       </div>

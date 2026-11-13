@@ -18,6 +18,12 @@ import StockScreen from './screens/Stock';
 import TablesScreen from './screens/Tables';
 import { UpdateBar } from './components/AppInstall';
 import { LinkNotice } from './components/CloudAccount';
+import OnlineOrders, { OnlineOrderAlert } from './screens/OnlineOrders';
+import { PostersScreen } from './components/WebsiteSettings';
+import { OrderStatusPage, RestaurantPage } from './screens/PublicPages';
+import Console from './screens/Console';
+import Setup from './screens/Setup';
+import { TrialBar } from './components/TrialBar';
 
 const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/till': { perm: 'take_orders', el: Till },
@@ -32,6 +38,8 @@ const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/staff': { perm: 'staff', el: StaffScreen },
   '/stock': { perm: 'stock', el: StockScreen },
   '/tables': { perm: 'tables', el: TablesScreen },
+  '/online': { perm: 'take_orders', el: OnlineOrders },
+  '/posters': { perm: 'settings', el: PostersScreen },
 };
 
 export default function App() {
@@ -54,13 +62,18 @@ export default function App() {
   const perm = permFor(path);
 
   // After login (or on an unknown address) each role goes straight to its own screen.
-  const needsLanding = !!user && path !== '/display' && (!perm || !can(user.role, perm));
+  const needsLanding = !!user && path !== '/display' && !/^\/(r\/|o\/|console|setup)/.test(path) && (!perm || !can(user.role, perm));
   useEffect(() => {
     if (needsLanding && user) window.location.replace(`#${homeFor(user.role, mode)}`);
   }, [needsLanding, user, mode]);
 
   // The customer display is view-only and needs no login.
   if (path === '/display') return <CustomerDisplay />;
+  // Customers' pages (restaurant page, QR menu, their order), the TechPlug console and first-time setup need no PIN.
+  if (path.startsWith('/r/')) return <RestaurantPage slug={decodeURIComponent(path.slice(3))} table={query.get('t') ?? undefined} />;
+  if (path.startsWith('/o/')) return <OrderStatusPage token={path.slice(3)} />;
+  if (path === '/console') return <Console />;
+  if (path === '/setup') return <><Setup connect={query.get('connect') === '1'} /><ToastHost /></>;
 
   let body: ReactElement;
   if (!user) body = <Login />;
@@ -87,6 +100,8 @@ export default function App() {
       {body}
       <UpdateBar />
       <LinkNotice />
+      <OnlineOrderAlert />
+      {user && <TrialBar />}
       <ToastHost />
     </>
   );

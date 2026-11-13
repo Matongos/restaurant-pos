@@ -1,6 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react';
 import type {
   DiningTable,
+  OnlineOrderInfo,
   TableInfo,
   TabShare,
   AddOn,
@@ -640,6 +641,61 @@ export function sendTableRound(input: { tableId: string; guests?: number; lines:
   return { ok: true, order };
 }
 
+/** A customer's order from the web page / QR menu, accepted at the till: goes to the kitchen now, paid at the counter. */
+export function acceptOnlineOrder(input: {
+  online: OnlineOrderInfo;
+  lines: { itemId: string; name: string; qty: number; unitPrice: number; extras?: string[]; without?: string[]; note?: string }[];
+  cashierId: string;
+}): { ok: true; order: Order } | { ok: false; error: string } {
+  const s = state;
+  if (s.orders.some((o) => o.online?.id === input.online.id)) return { ok: false, error: 'This order is already on the till.' };
+  const lines: OrderLine[] = input.lines.map((l) => {
+    const item = s.menu.find((m) => m.id === l.itemId);
+    const extras = (l.extras ?? []).map((id) => s.addOns.find((a) => a.id === id)).filter((a): a is AddOn => !!a).map((a) => ({ id: a.id, name: a.name, price: a.price, cost: a.cost }));
+    return {
+      id: uid('l-'),
+      itemId: l.itemId,
+      name: item?.name ?? l.name,
+      qty: l.qty,
+      unitPrice: l.unitPrice,
+      ...(extras.length ? { extras } : {}),
+      ...(l.without?.length ? { without: l.without } : {}),
+      ...(l.note ? { note: l.note } : {}),
+    };
+  });
+  if (!lines.length) return { ok: false, error: 'This order is empty.' };
+  const now = new Date().toISOString();
+  const typeId = input.online.mode === 'table' ? 'eat_in' : s.orderTypes.find((t) => t.id === 'take_away')?.id ?? 'eat_in';
+  const label = input.online.mode === 'table' && input.online.table ? `${input.online.table} · WEB ${input.online.number}` : `WEB ${input.online.number}`;
+  const order: Order = {
+    id: uid('o-'),
+    branchId: s.settings.branchId,
+    tillId: 'online',
+    number: input.online.number,
+    numberMode: 'slip',
+    orderTypeId: typeId,
+    lines,
+    total: round2(lines.reduce((a, l) => a + l.qty * l.unitPrice, 0)),
+    payments: [],
+    changeGiven: 0,
+    changeCurrency: s.settings.baseCurrency,
+    status: 'in_kitchen',
+    history: [
+      { status: 'placed', at: now, by: input.cashierId },
+      { status: 'in_kitchen', at: now, by: input.cashierId },
+    ],
+    cashierId: input.cashierId,
+    createdAt: now,
+    training: s.settings.trainingMode,
+    table: { tableId: `web-${input.online.id}`, name: label, round: 1, waiterId: input.cashierId, status: 'open', shares: [] },
+    online: input.online,
+  };
+  const stockUsed = usageFor(lines, typeId, s);
+  if (stockUsed) order.stockUsed = stockUsed;
+  set((st) => ({ ...st, orders: [...st.orders, order] }));
+  return { ok: true, order };
+}
+
 /** Food taken to the table: rounds that are ready (or still in the kitchen) are marked served. */
 export function serveTable(tabId: string, by: string) {
   const at = new Date().toISOString();
@@ -655,7 +711,7 @@ export function serveTable(tabId: string, by: string) {
 export function billTable(tabId: string, by: string): { ok: true } | { ok: false; error: string } {
   const tab = state.orders.find((o) => o.id === tabId);
   if (!tab?.table) return { ok: false, error: 'Bill not found.' };
-  const pct = state.settings.serviceChargePct ?? 0;
+  const pct = tab.online ? 0 : state.settings.serviceChargePct ?? 0;
   const items = tabItemsTotal(state.orders, tab);
   const sc = pct > 0 ? round2((items * pct) / 100) : 0;
   const own = round2(tab.lines.reduce((a, l) => a + l.qty * l.unitPrice, 0));
@@ -921,7 +977,7 @@ export function resetDemo() {
  * (unless kept) the sample menu. Keeps payment methods, currencies, order types and categories.
  * The owner stays, with a new PIN. Goes to the online account like any other change.
  */
-export function startFresh(opts: { ownerPin: string; keepMenu: boolean; byId: string }): { ok: true } | { ok: false; error: string } {
+export function startFresh(opts: { ownerPin: string; keepMenu: boolean; byId?: string; ownerName?: string; restaurantName?: string; town?: string }): { ok: true } | { ok: false; error: string } {
   const pin = opts.ownerPin.trim();
   if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'Owner PIN must be 4 digits.' };
   if (/^(\d)\1{3}$/.test(pin) || pin === '1234') return { ok: false, error: 'Choose a PIN that is harder to guess.' };
@@ -929,7 +985,8 @@ export function startFresh(opts: { ownerPin: string; keepMenu: boolean; byId: st
   set((st0) => {
     const st = stripExamples(st0);
     const me = st.staff.find((x) => x.id === opts.byId && x.role === 'super_admin') ?? st.staff.find((x) => x.role === 'super_admin' && !x.deletedAt);
-    const owner: Staff = { ...(me ?? { id: uid('u-'), name: 'Owner', role: 'super_admin', active: true }), pin, active: true, pinChangedAt: now };
+    const owner: Staff = { ...(me ?? { id: uid('u-'), name: 'Owner', role: 'super_admin', active: true }), pin, active: true, pinChangedAt: now, createdAt: now };
+    if (opts.ownerName?.trim()) owner.name = tidyName(opts.ownerName);
     const demoSettings = seedState().settings;
     return {
       ...st,
@@ -937,8 +994,9 @@ export function startFresh(opts: { ownerPin: string; keepMenu: boolean; byId: st
         ...st.settings,
         trainingMode: false,
         showExampleHistory: false,
+        ...(opts.restaurantName?.trim() ? { restaurantName: opts.restaurantName.trim() } : {}),
         tagline: st.settings.tagline === demoSettings.tagline ? '' : st.settings.tagline,
-        address: st.settings.address === demoSettings.address ? '' : st.settings.address,
+        address: opts.town?.trim() ? opts.town.trim() : st.settings.address === demoSettings.address ? '' : st.settings.address,
         phone: st.settings.phone === demoSettings.phone ? '' : st.settings.phone,
       },
       staff: [owner],

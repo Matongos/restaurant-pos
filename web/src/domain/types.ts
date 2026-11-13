@@ -216,6 +216,19 @@ export interface Order {
    * (tab); later rounds point to it with parentOrderId. Money paid for the table is kept on round 1.
    */
   table?: TableInfo;
+  /** Ordered by the customer on the restaurant's web page / QR menu, paid at the counter. Kept on round 1 (a bill like a table's). */
+  online?: OnlineOrderInfo;
+}
+
+export interface OnlineOrderInfo {
+  /** The online order's id in the online account. */
+  id: string;
+  number: number;
+  name: string;
+  phone: string;
+  mode: 'pickup' | 'delivery' | 'table';
+  table?: string;
+  readyMinutes?: number;
 }
 
 /** A dining table set up in Settings → How you serve. */

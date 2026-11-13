@@ -104,6 +104,7 @@ export function useSyncStatus(): SyncStatus {
   );
 }
 export const getLink = () => link;
+export const isSyncLeader = () => leader;
 
 /* ------------------------------------------------------------------ noticing local changes */
 
@@ -256,6 +257,13 @@ async function pull(): Promise<void> {
 
 /* ------------------------------------------------------------------ the loop */
 
+/** Extra jobs run after every successful sync (online orders, public menu, restaurant details). */
+const tickJobs: (() => Promise<void>)[] = [];
+export function onSyncTick(job: () => Promise<void>) {
+  tickJobs.push(job);
+}
+let lastPushAt = 0;
+
 let leader = false;
 let running = false;
 let again = false;
@@ -280,8 +288,22 @@ export async function syncNow(): Promise<void> {
   running = true;
   setStatus({ state: 'syncing' });
   try {
+    const before = outbox.size;
     await push();
+    if (before) lastPushAt = Date.now();
+    // Tell the online account this restaurant is open (the QR menu and online orders depend on it).
+    if (Date.now() - lastPushAt > 60_000) {
+      await rpc('push_records', { rid: link.restaurantId, items: [], device: deviceId() });
+      lastPushAt = Date.now();
+    }
     await pull();
+    for (const job of tickJobs) {
+      try {
+        await job();
+      } catch (e) {
+        console.warn('sync job failed', e);
+      }
+    }
     const now = new Date().toISOString();
     write(LINK_KEY + '.last', now);
     setStatus({ state: 'idle', lastSync: now, error: '' });
@@ -326,7 +348,7 @@ function becomeLeader() {
 /** Start syncing (call once when the app opens). The customer display window never syncs. */
 export function startSync() {
   if (typeof window === 'undefined') return;
-  if (location.hash.startsWith('#/display')) return;
+  if (/^#\/(display|r\/|o\/|console)/.test(location.hash)) return;
   const locks = (navigator as Navigator & { locks?: { request: (n: string, cb: () => Promise<void>) => Promise<void> } }).locks;
   if (locks?.request) void locks.request('techplug-pos-sync', () => new Promise<void>(() => becomeLeader()));
   else becomeLeader();

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { IconType } from 'react-icons';
 import {
+  LuGlobe,
   LuBoxes,
   LuLayoutGrid,
   LuBookOpenText,
@@ -26,6 +27,7 @@ import {
 } from 'react-icons/lu';
 import { go, useRoute } from '../router';
 import { useSyncStatus } from '../cloud/sync';
+import { useOnlineOrders } from '../cloud/online';
 import { logout, updateSettings, useCurrentUser, useStockLevels, useStore } from '../store/store';
 import { balances, can, ROLE_LABEL, type Permission } from '../domain/rules';
 import type { Role, ServiceMode } from '../domain/types';
@@ -155,6 +157,7 @@ function useNavItems(): NavDef[] {
   const credit = useStore((s) => s.credit);
   const levels = useStockLevels();
   const mode = useStore((s) => s.settings.serviceMode ?? 'counter');
+  const web = useOnlineOrders();
   if (!user) return [];
   const busyTables = orders.filter((o) => o.table?.round === 1 && o.status !== 'cancelled' && o.table.status !== 'paid' && !o.example).length;
   // Stock badge: items running low or out (needs buying or counting).
@@ -166,6 +169,7 @@ function useNavItems(): NavDef[] {
     // Tables only: there is no counter till; food is ordered from a table.
     ...(mode === 'tables' ? [] : [{ to: '/till', label: 'Sell', perm: 'take_orders' as Permission, Icon: LuHouse }]),
     { to: '/orders', label: 'Orders', perm: 'active_orders', Icon: LuClipboardList, badge: openOrders },
+    ...(web.on ? [{ to: '/online', label: 'Online orders', perm: 'take_orders' as Permission, Icon: LuGlobe, badge: web.news.length }] : []),
     { to: '/kitchen', label: 'Kitchen', perm: 'kitchen', Icon: LuCookingPot },
     { to: '/change-owed', label: 'Change', perm: 'change_owed', Icon: LuHandCoins, badge: owed },
     { to: '/todays-menu', label: 'Sold out', perm: 'todays_menu', Icon: LuUtensilsCrossed },

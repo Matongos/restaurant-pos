@@ -64,7 +64,7 @@ function Start({ onSignedIn }: { onSignedIn: () => void }) {
   );
 }
 
-function SlugField({ name, slug, setSlug, ok, setOk }: { name: string; slug: string; setSlug: (s: string) => void; ok: boolean | null; setOk: (b: boolean | null) => void }) {
+export function SlugField({ name, slug, setSlug, ok, setOk }: { name: string; slug: string; setSlug: (s: string) => void; ok: boolean | null; setOk: (b: boolean | null) => void }) {
   const [touched, setTouched] = useState(false);
   useEffect(() => {
     if (!touched) setSlug(slugFrom(name));
@@ -188,7 +188,7 @@ function SignUp({ onSignedIn, onConfirm }: { onSignedIn: () => void; onConfirm: 
   );
 }
 
-function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
+export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -245,7 +245,7 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   );
 }
 
-async function createAndUpload(p: Pending, currency: string, say: (s: string) => void) {
+export async function createAndUpload(p: Pending, currency: string, say: (s: string) => void) {
   say('Creating your restaurant…');
   const id = await createRestaurant(p.name, p.slug, p.town, currency || 'USD');
   writePending(null);
@@ -258,7 +258,7 @@ async function createAndUpload(p: Pending, currency: string, say: (s: string) =>
 
 /* ------------------------------------------------------------------ signed in, pick the restaurant */
 
-function ChooseRestaurant({ onSignOut }: { onSignOut: () => void }) {
+export function ChooseRestaurant({ onSignOut }: { onSignOut: () => void }) {
   const settings = useStore((s) => s.settings);
   const [list, setList] = useState<Membership[] | null>(null);
   const [error, setError] = useState('');

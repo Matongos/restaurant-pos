@@ -23,7 +23,9 @@ only see the published menu, and only TechPlug admins can open the owner console
 6. **Project Settings → API Keys**: you will see the **Project URL** and the **publishable** key.
    These two are meant to be public (they are built into the app); share them so they can be added
    to the app's settings. **Never share the `service_role` key or the database password.**
-7. Make yourself an admin for the owner console: after you have signed up in the app, run in the SQL Editor:
+7. **SQL Editor → New query**: paste everything from `migrations/0002_console_and_online.sql` → **Run**
+   (owner console, plan protection, extra menu details for the restaurant page).
+8. Make yourself an admin for the owner console: after you have signed up in the app, run in the SQL Editor:
    `insert into platform_admins (user_id) select id from auth.users where email = 'your@email';`
 
 ## What is in it
