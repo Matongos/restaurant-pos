@@ -1,8 +1,8 @@
 /** Online orders from the restaurant's web page / QR menu: accept or decline, then take payment at the counter. */
 import { useEffect, useState } from 'react';
-import { LuCheck, LuGlobe, LuPhone, LuX, LuClock, LuBellRing } from 'react-icons/lu';
+import { LuCheck, LuGlobe, LuPhone, LuX, LuClock, LuBellRing, LuMapPin, LuBike } from 'react-icons/lu';
 import { TopBar, toast } from '../components/ui';
-import { getState, useCurrentUser, useStore } from '../store/store';
+import { getState, sendOnlineOut, useCurrentUser, useStore } from '../store/store';
 import { fmt } from '../domain/money';
 import { lineLabel, minutesSince } from '../domain/rules';
 import { tabDue } from '../domain/tables';
@@ -85,6 +85,11 @@ export default function OnlineOrders() {
                         <LuPhone aria-hidden="true" /> {r.phone}
                       </a>
                     </div>
+                    {r.mode === 'delivery' && (
+                      <div className="web-address">
+                        <LuMapPin aria-hidden="true" /> {r.address}
+                      </div>
+                    )}
                     <ul className="web-lines">
                       {r.lines.map((l, i) => (
                         <li key={i}>
@@ -98,7 +103,10 @@ export default function OnlineOrders() {
                       ))}
                     </ul>
                     <div className="web-total">
-                      Total <b>{fmt(Number(r.total), base)}</b> · pays at the counter
+                      Total <b>{fmt(Number(r.total), base)}</b>
+                      {r.mode === 'delivery'
+                        ? ` · includes delivery ${fmt(Math.max(0, Number(r.total) - r.lines.reduce((a, l) => a + l.qty * l.unitPrice, 0)), base)} · pays the rider`
+                        : ' · pays at the counter'}
                     </div>
                     <div className="web-actions">
                       <span className="muted">Ready in</span>
@@ -123,20 +131,36 @@ export default function OnlineOrders() {
                 {open.map((o) => {
                   const due = tabDue(orders, o);
                   const ready = o.status === 'ready' || o.status === 'served';
+                  const delivery = o.online!.mode === 'delivery';
+                  const out = !!o.online!.outAt;
+                  const state = out
+                    ? `Out for delivery${o.online!.rider ? ` with ${o.online!.rider}` : ''}`
+                    : ready
+                      ? delivery
+                        ? 'Ready — send it out'
+                        : 'Ready — waiting for the customer'
+                      : 'In the kitchen';
                   return (
                     <div key={o.id} className={`web-card ${ready ? 'ready' : ''}`}>
                       <div className="web-head">
                         <b className="web-no">{o.table?.name}</b>
-                        <span className={`web-state ${ready ? 'ready' : ''}`}>{ready ? 'Ready — waiting for the customer' : 'In the kitchen'}</span>
+                        {delivery && <span className="web-mode">Delivery</span>}
+                        <span className={`web-state ${ready ? 'ready' : ''}`}>{state}</span>
                         <span className="muted">{minutesSince(o.createdAt)} min ago</span>
                       </div>
                       <div className="web-who">
                         {o.online!.name} · <a href={`tel:${o.online!.phone.replace(/\s/g, '')}`}>{o.online!.phone}</a>
                       </div>
+                      {delivery && (
+                        <div className="web-address">
+                          <LuMapPin aria-hidden="true" /> {o.online!.address}
+                        </div>
+                      )}
                       <div className="web-total">{o.lines.map((l) => `${l.qty} × ${lineLabel(l)}`).join(', ')}</div>
                       <div className="web-actions">
-                        <button className="btn primary" onClick={() => setPaying(o.id)}>
-                          Take payment {fmt(due, base)}
+                        {delivery && !out && <SendOut orderId={o.id} disabled={!ready} />}
+                        <button className={`btn ${delivery && !out ? '' : 'primary'}`} onClick={() => setPaying(o.id)}>
+                          {delivery ? (out ? `Rider paid in ${fmt(due, base)}` : `Take payment ${fmt(due, base)}`) : `Take payment ${fmt(due, base)}`}
                         </button>
                       </div>
                     </div>
@@ -216,4 +240,33 @@ function beep() {
   } catch {
     /* no sound available */
   }
+}
+
+/** The rider leaves with an online delivery: the customer's page then says it is on the way. */
+function SendOut({ orderId, disabled }: { orderId: string; disabled: boolean }) {
+  const user = useCurrentUser()!;
+  const [asking, setAsking] = useState(false);
+  const [rider, setRider] = useState('');
+  if (!asking)
+    return (
+      <button className="btn primary" disabled={disabled} title={disabled ? 'When the kitchen marks it ready' : undefined} onClick={() => setAsking(true)}>
+        <LuBike aria-hidden="true" /> Send out
+      </button>
+    );
+  return (
+    <span className="web-sendout">
+      <input className="plain-input" placeholder="Rider (optional)" aria-label="Rider" value={rider} onChange={(e) => setRider(e.target.value)} autoFocus />
+      <button
+        className="btn primary"
+        onClick={() => {
+          const r = sendOnlineOut(orderId, rider, user.id);
+          if (!r.ok) return toast(r.error);
+          toast('Out for delivery — the customer can see it is on the way');
+          setAsking(false);
+        }}
+      >
+        Rider has left
+      </button>
+    </span>
+  );
 }

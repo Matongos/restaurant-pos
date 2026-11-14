@@ -1544,3 +1544,14 @@ tr.struck td b { text-decoration: line-through; }
 .branch-add .row .grow { flex: 1 1 auto; }
 @media (max-width: 560px) { .branch-totals { grid-template-columns: 1fr; } }
 .switch-link { display: block; margin: 14px auto 0; font-size: 14px; color: var(--muted); text-align: center; }
+.web-address { display: flex; align-items: flex-start; gap: 6px; padding: 8px 10px; background: var(--soft); border-radius: 8px; font-weight: 600; }
+.web-address svg { flex: none; margin-top: 3px; }
+.web-sendout { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.web-sendout input { min-width: 160px; }
+.web-delivery { margin: -4px 0 8px; }
+.pub-mode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0 4px; }
+.pub-mode button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 12px; background: #fff; text-align: left; font: inherit; color: inherit; min-height: 56px; }
+.pub-mode button.on { border-color: var(--pub-brand, #0f766e); background: color-mix(in srgb, var(--pub-brand, #0f766e) 8%, #fff); }
+.pub-mode small { color: #4b5563; }
+.pub-fee { margin: 6px 0; color: #374151; font-size: 14px; }
+.pub-field textarea { font: inherit; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 10px; resize: vertical; }

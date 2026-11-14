@@ -772,7 +772,12 @@ export function acceptOnlineOrder(input: {
   });
   if (!lines.length) return { ok: false, error: 'This order is empty.' };
   const now = new Date().toISOString();
-  const typeId = input.online.mode === 'table' ? 'eat_in' : s.orderTypes.find((t) => t.id === 'take_away')?.id ?? 'eat_in';
+  const delivering = input.online.mode === 'delivery';
+  const typeId =
+    input.online.mode === 'table'
+      ? 'eat_in'
+      : (delivering && s.orderTypes.find((t) => t.id === 'delivery')?.id) || s.orderTypes.find((t) => t.id === 'take_away')?.id || 'eat_in';
+  const fee = delivering ? round2(Math.max(0, input.online.deliveryFee ?? 0)) : 0;
   const label = input.online.mode === 'table' && input.online.table ? `${input.online.table} · WEB ${input.online.number}` : `WEB ${input.online.number}`;
   const order: Order = {
     id: uid('o-'),
@@ -782,11 +787,12 @@ export function acceptOnlineOrder(input: {
     numberMode: 'slip',
     orderTypeId: typeId,
     lines,
-    total: round2(lines.reduce((a, l) => a + l.qty * l.unitPrice, 0)),
+    total: round2(lines.reduce((a, l) => a + l.qty * l.unitPrice, 0) + fee),
     payments: [],
     changeGiven: 0,
     changeCurrency: s.settings.baseCurrency,
     status: 'in_kitchen',
+    ...(delivering ? { delivery: { name: input.online.name, phone: input.online.phone, address: input.online.address ?? '', fee } } : {}),
     history: [
       { status: 'placed', at: now, by: input.cashierId },
       { status: 'in_kitchen', at: now, by: input.cashierId },
@@ -801,6 +807,30 @@ export function acceptOnlineOrder(input: {
   if (stockUsed) order.stockUsed = stockUsed;
   set((st) => ({ ...st, orders: [...st.orders, order] }));
   return { ok: true, order };
+}
+
+/** An online delivery leaves with the rider (the customer's page then says it is on the way). */
+export function sendOnlineOut(orderId: string, rider: string, by: string): { ok: true } | { ok: false; error: string } {
+  const o = state.orders.find((x) => x.id === orderId);
+  if (!o?.online || o.online.mode !== 'delivery') return { ok: false, error: 'Not an online delivery.' };
+  if (o.online.outAt) return { ok: true };
+  const at = new Date().toISOString();
+  const r = rider.trim() || undefined;
+  set((st) => ({
+    ...st,
+    orders: st.orders.map((x) =>
+      x.id === orderId
+        ? {
+            ...x,
+            status: x.status === 'in_kitchen' || x.status === 'ready' ? 'served' : x.status,
+            online: { ...x.online!, outAt: at, rider: r },
+            delivery: x.delivery ? { ...x.delivery, outAt: at, outBy: by, rider: r } : x.delivery,
+            history: [...x.history, { status: 'out_for_delivery', at, by }],
+          }
+        : x,
+    ),
+  }));
+  return { ok: true };
 }
 
 /** Food taken to the table: rounds that are ready (or still in the kitchen) are marked served. */
@@ -821,7 +851,7 @@ export function billTable(tabId: string, by: string): { ok: true } | { ok: false
   const pct = tab.online ? 0 : state.settings.serviceChargePct ?? 0;
   const items = tabItemsTotal(state.orders, tab);
   const sc = pct > 0 ? round2((items * pct) / 100) : 0;
-  const own = round2(tab.lines.reduce((a, l) => a + l.qty * l.unitPrice, 0));
+  const own = round2(tab.lines.reduce((a, l) => a + l.qty * l.unitPrice, 0) + (tab.online ? tab.delivery?.fee ?? 0 : 0));
   const at = new Date().toISOString();
   void by;
   set((st) => ({

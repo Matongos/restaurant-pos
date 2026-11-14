@@ -48,7 +48,7 @@ export interface RemoteOnlineOrder {
   address: string | null;
   lines: { itemId: string; name: string; qty: number; unitPrice: number; extras?: string[]; without?: string[]; note?: string }[];
   total: number;
-  status: 'new' | 'accepted' | 'declined' | 'ready' | 'collected' | 'cancelled';
+  status: 'new' | 'accepted' | 'declined' | 'ready' | 'out' | 'collected' | 'cancelled';
   ready_minutes: number | null;
   created_at: string;
 }
@@ -151,6 +151,7 @@ export function publicMenuFrom(s: AppState) {
         sort: m.sort,
       })),
     addOns: s.addOns.map((a) => ({ id: a.id, name: a.name, price: a.price, available: a.available })),
+    delivery: s.settings.onlineDelivery?.on ? { on: true, fee: s.settings.onlineDelivery.fee || 0, area: s.settings.onlineDelivery.area || '' } : { on: false },
   };
 }
 
@@ -200,7 +201,7 @@ async function pollOrders() {
   const since = new Date(Date.now() - 36 * 3600_000).toISOString();
   const rows = await select<RemoteOnlineOrder[]>(
     'online_orders',
-    `select=id,number,customer_name,phone,mode,table_name,address,lines,total,status,ready_minutes,created_at&restaurant_id=eq.${link.restaurantId}&status=in.(new,accepted,ready)&created_at=gt.${encodeURIComponent(since)}&order=created_at.asc`,
+    `select=id,number,customer_name,phone,mode,table_name,address,lines,total,status,ready_minutes,created_at&restaurant_id=eq.${link.restaurantId}&status=in.(new,accepted,ready,out)&created_at=gt.${encodeURIComponent(since)}&order=created_at.asc`,
   );
   const first = st.checkedAt === 0;
   for (const r of rows) {
@@ -223,8 +224,16 @@ async function followLocalOrders(remote: RemoteOnlineOrder[]) {
     let next: RemoteOnlineOrder['status'] | null = null;
     if (o.status === 'cancelled') next = 'cancelled';
     else if (o.table?.status === 'paid') next = 'collected';
+    else if (o.online.outAt && (r.status === 'accepted' || r.status === 'ready')) next = 'out';
     else if ((o.status === 'ready' || o.status === 'served') && r.status === 'accepted') next = 'ready';
-    if (next && next !== r.status) await patch('online_orders', `id=eq.${r.id}`, { status: next });
+    if (next && next !== r.status) {
+      try {
+        await patch('online_orders', `id=eq.${r.id}`, { status: next });
+      } catch {
+        // 'out' needs database step 3; the customer still sees "ready" until then.
+        if (next === 'out' && r.status === 'accepted') await patch('online_orders', `id=eq.${r.id}`, { status: 'ready' }).catch(() => {});
+      }
+    }
   }
 }
 
@@ -236,7 +245,18 @@ export async function acceptRemote(r: RemoteOnlineOrder, minutes: number, cashie
     throw new Error('Another till already took this order, or the customer cancelled it.');
   }
   const res = acceptOnlineOrder({
-    online: { id: r.id, number: r.number, name: r.customer_name, phone: r.phone, mode: r.mode, table: r.table_name ?? undefined, readyMinutes: minutes },
+    online: {
+      id: r.id,
+      number: r.number,
+      name: r.customer_name,
+      phone: r.phone,
+      mode: r.mode,
+      table: r.table_name ?? undefined,
+      readyMinutes: minutes,
+      ...(r.mode === 'delivery'
+        ? { address: r.address ?? '', deliveryFee: Math.max(0, Math.round((Number(r.total) - r.lines.reduce((a, l) => a + l.qty * l.unitPrice, 0)) * 100) / 100) }
+        : {}),
+    },
     lines: r.lines,
     cashierId,
   });

@@ -4,7 +4,7 @@ import { LuCopy, LuExternalLink, LuPrinter, LuGlobe } from 'react-icons/lu';
 import { refreshInfo, saveRestaurantInfo, useOnline, type PublicInfo } from '../cloud/online';
 import { useSyncStatus } from '../cloud/sync';
 import { go } from '../router';
-import { useStore } from '../store/store';
+import { updateSettings, useStore } from '../store/store';
 import QR, { publicUrl } from './QR';
 import { toast } from './ui';
 
@@ -102,6 +102,7 @@ export default function WebsiteSettings() {
           set={(v) => saveInfo({ ...form, tableOrders: v })}
         />
       )}
+      {info.online_orders && <OnlineDelivery />}
 
       <h3 className="cloud-h">Details on your page</h3>
       <div className="form-grid">
@@ -193,5 +194,36 @@ export function PostersScreen() {
         ))}
       </div>
     </div>
+  );
+}
+
+/** Delivery for online orders: on/off, a flat fee, and where you deliver. Published with the menu. */
+function OnlineDelivery() {
+  const d = useStore((s) => s.settings.onlineDelivery) ?? { on: false, fee: 0, area: '' };
+  const base = useStore((s) => s.currencies.find((c) => c.code === s.settings.baseCurrency));
+  const [fee, setFee] = useState(String(d.fee || ''));
+  const [area, setArea] = useState(d.area ?? '');
+  const save = (patch: Partial<typeof d>) => updateSettings({ onlineDelivery: { ...d, ...patch } });
+  return (
+    <>
+      <Switch
+        label="Deliver online orders"
+        sub="Customers can choose delivery, type their address and pay the rider. You send it out from Online orders; their page shows it is on the way."
+        on={d.on}
+        set={(v) => save({ on: v, fee: Number(fee) || 0, area })}
+      />
+      {d.on && (
+        <div className="form-grid web-delivery">
+          <label className="field">
+            Delivery fee ({base?.symbol ?? '$'})
+            <input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value.replace(/[^\d.]/g, ''))} onBlur={() => save({ fee: Math.max(0, Number(fee) || 0) })} />
+          </label>
+          <label className="field">
+            Where you deliver
+            <input value={area} onChange={(e) => setArea(e.target.value)} onBlur={() => save({ area: area.trim() })} placeholder="e.g. Within 5 km of the town centre" />
+          </label>
+        </div>
+      )}
+    </>
   );
 }

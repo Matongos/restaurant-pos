@@ -231,6 +231,11 @@ export interface OnlineOrderInfo {
   mode: 'pickup' | 'delivery' | 'table';
   table?: string;
   readyMinutes?: number;
+  /** Delivery: where to, the fee (part of the total), and when the rider left. */
+  address?: string;
+  deliveryFee?: number;
+  outAt?: string;
+  rider?: string;
 }
 
 /** A dining table set up in Settings → How you serve. */
@@ -381,6 +386,8 @@ export interface Settings {
   customersPerStaffHour: number;
   /** Delivery areas with their fee. The cashier can still type a different fee for an address. */
   deliveryAreas?: DeliveryArea[];
+  /** Delivery for online orders (web page / QR menu): a flat fee and where you deliver. */
+  onlineDelivery?: { on: boolean; fee: number; area?: string };
   /** Counter (pay first, the default), tables (pay at the end) or both. */
   serviceMode?: ServiceMode;
   tables?: DiningTable[];

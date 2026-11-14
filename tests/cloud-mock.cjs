@@ -103,7 +103,7 @@ http.createServer((req, res) => {
       if (!r || !(r.web_page || r.qr_menu)) return send(200, null);
       const m = menuOf(r); const rec = records.get(`${r.id}|public|menu`);
       return send(200, { slug: r.slug, name: r.name, town: r.town, currency: 'USD', info: r.public_info || {}, webPage: r.web_page, qrMenu: r.qr_menu, onlineOrders: r.online_orders, online: live(r), updatedAt: rec?.updated_at ?? null,
-        categories: m.categories || [], items: m.items || [], addOns: m.addOns || [], symbol: m.symbol || '$', tagline: m.tagline ?? null, logo: m.logo ?? null, brandColor: m.brandColor ?? null });
+        categories: m.categories || [], items: m.items || [], addOns: m.addOns || [], symbol: m.symbol || '$', tagline: m.tagline ?? null, logo: m.logo ?? null, brandColor: m.brandColor ?? null, delivery: m.delivery || { on: false } });
     }
     if (p === '/rest/v1/rpc/place_online_order') {
       const r = bySlug(body.p_slug);
@@ -111,7 +111,12 @@ http.createServer((req, res) => {
       if (!live(r)) return send(400, { code: 'P0001', message: 'The restaurant is offline right now — please order at the counter' });
       if (!/^[0-9+ ()-]{7,20}$/.test(body.p_phone || '')) return send(400, { code: '23514', message: 'phone check failed' });
       if (onlineOrders.filter((o) => o.restaurant_id === r.id && o.phone === body.p_phone.trim() && ['new', 'accepted'].includes(o.status)).length >= 5) return send(400, { code: 'P0001', message: 'Too many open orders for this phone number' });
-      const m = menuOf(r); let total = 0; const priced = [];
+      const m = menuOf(r); let total = 0; const priced = []; let fee = 0;
+      if (body.p_mode === 'delivery') {
+        if (!m.delivery?.on) return send(400, { code: 'P0001', message: 'This restaurant does not deliver online orders' });
+        if ((body.p_address || '').trim().length < 5) return send(400, { code: 'P0001', message: 'Type the delivery address' });
+        fee = Math.max(0, Number(m.delivery.fee) || 0);
+      }
       for (const ln of body.p_lines) {
         const it = (m.items || []).find((x) => x.id === ln.itemId);
         if (!it || !it.available) return send(400, { code: 'P0001', message: `Sold out: ${it ? it.name : 'an item'}` });
@@ -120,14 +125,14 @@ http.createServer((req, res) => {
         priced.push({ itemId: it.id, name: it.name, qty, unitPrice: unit, extras: ln.extras || [], without: ln.without || [], note: (ln.note || '').slice(0, 120) }); total += qty * unit;
       }
       const n = onlineOrders.filter((o) => o.restaurant_id === r.id).length + 1;
-      const o = { id: crypto.randomUUID(), restaurant_id: r.id, number: n, customer_name: body.p_name.trim(), phone: body.p_phone.trim(), mode: body.p_mode || 'pickup', table_name: body.p_table, address: null, lines: priced, total: Math.round(total * 100) / 100, status: 'new', ready_minutes: null, public_token: crypto.randomUUID(), created_at: now(), updated_at: now() };
+      const o = { id: crypto.randomUUID(), restaurant_id: r.id, number: n, customer_name: body.p_name.trim(), phone: body.p_phone.trim(), mode: body.p_mode || 'pickup', table_name: body.p_table, address: body.p_mode === 'delivery' ? body.p_address.trim() : null, lines: priced, total: Math.round((total + fee) * 100) / 100, delivery_fee: fee, status: 'new', ready_minutes: null, public_token: crypto.randomUUID(), created_at: now(), updated_at: now() };
       onlineOrders.push(o);
-      return send(200, { number: o.number, token: o.public_token, total: o.total });
+      return send(200, { number: o.number, token: o.public_token, total: o.total, deliveryFee: fee });
     }
     if (p === '/rest/v1/rpc/online_order_status') {
       const o = onlineOrders.find((x) => x.public_token === body.p_token);
       if (!o) return send(200, null);
-      return send(200, { number: o.number, status: o.status, readyMinutes: o.ready_minutes, total: o.total, lines: o.lines, mode: o.mode, restaurant: restaurants.get(o.restaurant_id).name, createdAt: o.created_at, updatedAt: o.updated_at });
+      return send(200, { number: o.number, status: o.status, readyMinutes: o.ready_minutes, total: o.total, lines: o.lines, mode: o.mode, address: o.address, deliveryFee: o.delivery_fee || 0, restaurant: restaurants.get(o.restaurant_id).name, createdAt: o.created_at, updatedAt: o.updated_at });
     }
     if (p === '/rest/v1/rpc/cancel_online_order') { const o = onlineOrders.find((x) => x.public_token === body.p_token && x.status === 'new'); if (o) { o.status = 'cancelled'; o.updated_at = now(); } return send(200, !!o || null); }
     if (!uid) return send(401, { code: '42501', message: 'JWT required' });

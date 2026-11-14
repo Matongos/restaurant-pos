@@ -5,7 +5,7 @@
  *   #/o/<private code>         the customer's order: accepted, ready, collected
  */
 import { useEffect, useMemo, useState } from 'react';
-import { LuClock, LuMapPin, LuMessageCircle, LuMinus, LuPhone, LuPlus, LuShoppingBasket, LuWifiOff, LuX, LuCircleCheck, LuChefHat, LuStore } from 'react-icons/lu';
+import { LuClock, LuMapPin, LuMessageCircle, LuMinus, LuPhone, LuPlus, LuShoppingBasket, LuWifiOff, LuX, LuCircleCheck, LuChefHat, LuStore, LuBike } from 'react-icons/lu';
 import { rpc } from '../cloud/api';
 
 interface PubItem { id: string; name: string; price: number; categoryId: string; emoji: string; photo?: string; available: boolean; addOnIds: string[]; sort?: number }
@@ -15,6 +15,7 @@ interface PubMenu {
   webPage: boolean; qrMenu: boolean; onlineOrders: boolean; online: boolean; updatedAt: string | null;
   categories: { id: string; name: string; sort: number }[]; items: PubItem[]; addOns: PubAddOn[]; symbol: string;
   tagline?: string | null; logo?: string | null; brandColor?: string | null;
+  delivery?: { on: boolean; fee?: number; area?: string };
 }
 interface CartLine { key: string; itemId: string; name: string; qty: number; unit: number; extras: string[] }
 
@@ -200,19 +201,27 @@ function Checkout({ menu, table, cart, setCart, onClose }: { menu: PubMenu; tabl
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const canDeliver = !table && !!menu.delivery?.on;
+  const [mode, setMode] = useState<'pickup' | 'delivery'>('pickup');
+  const [address, setAddress] = useState(() => localStorage.getItem('techplug.address') ?? '');
+  const delivering = canDeliver && mode === 'delivery';
+  const fee = delivering ? Number(menu.delivery?.fee ?? 0) : 0;
   const sym = menu.symbol;
-  const total = cart.reduce((a, l) => a + l.qty * l.unit, 0);
+  const food = cart.reduce((a, l) => a + l.qty * l.unit, 0);
+  const total = food + fee;
   const send = async () => {
     if (!name.trim()) return setError('Type your name, so we can call you.');
     if (phone.replace(/\D/g, '').length < 9) return setError('Type your phone number.');
+    if (delivering && address.trim().length < 5) return setError('Type your address: street, house number and a landmark.');
     setError('');
     setBusy(true);
     try {
       const lines = cart.map((l, i) => ({ itemId: l.itemId, qty: l.qty, extras: l.extras, ...(i === 0 && note.trim() ? { note: note.trim() } : {}) }));
       const r = await rpc<{ number: number; token: string; total: number }>('place_online_order', {
-        p_slug: menu.slug, p_name: name.trim(), p_phone: phone.trim(), p_mode: table ? 'table' : 'pickup', p_lines: lines, p_table: table ?? null, p_address: null,
+        p_slug: menu.slug, p_name: name.trim(), p_phone: phone.trim(), p_mode: table ? 'table' : delivering ? 'delivery' : 'pickup', p_lines: lines, p_table: table ?? null, p_address: delivering ? address.trim() : null,
       });
       try {
+        if (delivering) localStorage.setItem('techplug.address', address.trim());
         localStorage.setItem('techplug.name', name.trim());
         localStorage.setItem('techplug.phone', phone.trim());
         const mine = JSON.parse(localStorage.getItem(MINE_KEY) || '[]');
@@ -248,11 +257,30 @@ function Checkout({ menu, table, cart, setCart, onClose }: { menu: PubMenu; tabl
             </li>
           ))}
         </ul>
+        {canDeliver && (
+          <div className="pub-mode" role="radiogroup" aria-label="Pick-up or delivery">
+            <button role="radio" aria-checked={mode === 'pickup'} className={mode === 'pickup' ? 'on' : ''} onClick={() => setMode('pickup')}>
+              <b>Pick up</b>
+              <small>Pay at the counter</small>
+            </button>
+            <button role="radio" aria-checked={mode === 'delivery'} className={mode === 'delivery' ? 'on' : ''} onClick={() => setMode('delivery')}>
+              <b>Delivery {Number(menu.delivery?.fee) ? `+ ${money(sym, Number(menu.delivery?.fee))}` : '(free)'}</b>
+              <small>{menu.delivery?.area || 'Pay the rider'}</small>
+            </button>
+          </div>
+        )}
+        {delivering && <div className="pub-fee">Food {money(sym, food)} · Delivery {money(sym, fee)}</div>}
         <div className="pub-total">Total <b>{money(sym, total)}</b></div>
         <label className="pub-field">Your name<input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" /></label>
         <label className="pub-field">Phone number<input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="e.g. 0772 123 456" /></label>
+        {delivering && (
+          <label className="pub-field">
+            Delivery address
+            <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} maxLength={200} placeholder="Street, house number, and a landmark" autoComplete="street-address" />
+          </label>
+        )}
         <label className="pub-field">Note for the kitchen (optional)<input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="e.g. no greens" /></label>
-        <p className="muted small">{table ? 'Your food comes to your table. You pay before you leave.' : 'Pick-up: you pay at the counter when you collect.'}</p>
+        <p className="muted small">{table ? 'Your food comes to your table. You pay before you leave.' : delivering ? 'Delivery: you pay the rider when your food arrives.' : 'Pick-up: you pay at the counter when you collect.'}</p>
         {error && <div className="pub-error">{error}</div>}
         <button className="pub-btn" onClick={send} disabled={busy || cart.length === 0}>{busy ? 'Sending…' : `Send order · ${money(sym, total)}`}</button>
       </div>
@@ -260,7 +288,7 @@ function Checkout({ menu, table, cart, setCart, onClose }: { menu: PubMenu; tabl
   );
 }
 
-interface Status { number: number; status: string; readyMinutes: number | null; total: number; lines: { name: string; qty: number; unitPrice: number }[]; mode: string; restaurant: string; createdAt: string; updatedAt: string }
+interface Status { number: number; status: string; readyMinutes: number | null; total: number; lines: { name: string; qty: number; unitPrice: number }[]; mode: string; restaurant: string; createdAt: string; updatedAt: string; address?: string | null; deliveryFee?: number }
 
 export function OrderStatusPage({ token }: { token: string }) {
   const [s, setS] = useState<Status | null | undefined>(undefined);
@@ -288,7 +316,9 @@ export function OrderStatusPage({ token }: { token: string }) {
   if (s === undefined) return <div className="pub"><div className="pub-wait">Loading your order…</div></div>;
   if (!s) return <div className="pub"><div className="pub-wait">Order not found.</div></div>;
   const ready = s.status === 'ready';
-  const step = { new: 0, accepted: 1, ready: 2, collected: 3 }[s.status as 'new'] ?? -1;
+  const delivery = s.mode === 'delivery';
+  const steps = delivery ? ['Sent', 'Accepted', 'Ready', 'On the way', 'Delivered'] : ['Sent', 'Accepted', 'Ready', 'Collected'];
+  const step = (delivery ? { new: 0, accepted: 1, ready: 2, out: 3, collected: 4 } : { new: 0, accepted: 1, ready: 2, collected: 3 })[s.status as 'new'] ?? -1;
   const readyBy = s.readyMinutes ? new Date(Date.parse(s.updatedAt) + s.readyMinutes * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   return (
     <div className="pub">
@@ -297,20 +327,22 @@ export function OrderStatusPage({ token }: { token: string }) {
         <div className="pub-big">WEB {s.number}</div>
         {s.status === 'new' && <><b>Waiting for the restaurant to accept…</b><p>Keep this page open. It updates by itself.</p></>}
         {s.status === 'accepted' && <><LuChefHat aria-hidden="true" /><b>Accepted — being prepared</b>{readyBy && <p>Ready at about <b>{readyBy}</b></p>}</>}
-        {ready && <><LuCircleCheck aria-hidden="true" /><b>Your food is ready!</b><p>{s.mode === 'table' ? 'It is on its way to your table.' : 'Come to the counter, say your order number and pay there.'}</p></>}
-        {s.status === 'collected' && <><LuCircleCheck aria-hidden="true" /><b>Paid and collected. Enjoy your meal!</b></>}
+        {ready && <><LuCircleCheck aria-hidden="true" /><b>Your food is ready!</b><p>{s.mode === 'table' ? 'It is on its way to your table.' : delivery ? 'It leaves with the rider soon.' : 'Come to the counter, say your order number and pay there.'}</p></>}
+        {s.status === 'out' && <><LuBike aria-hidden="true" /><b>On the way!</b><p>The rider is bringing your food. Have {Number(s.total).toFixed(2)} ready.</p></>}
+        {s.status === 'collected' && <><LuCircleCheck aria-hidden="true" /><b>{delivery ? 'Delivered. Enjoy your meal!' : 'Paid and collected. Enjoy your meal!'}</b></>}
         {s.status === 'declined' && <><b>Sorry — the restaurant could not take this order.</b><p>Please order at the counter or try again later.</p></>}
         {s.status === 'cancelled' && <b>This order was cancelled.</b>}
       </div>
       {step >= 0 && (
         <ol className="pub-steps">
-          {['Sent', 'Accepted', 'Ready', 'Collected'].map((l, i) => <li key={l} className={i <= step ? 'on' : ''}>{l}</li>)}
+          {steps.map((l, i) => <li key={l} className={i <= step ? 'on' : ''}>{l}</li>)}
         </ol>
       )}
       <ul className="pub-lines static">
         {s.lines.map((l, i) => <li key={i}><span className="grow">{l.qty} × {l.name}</span><span>{(l.qty * l.unitPrice).toFixed(2)}</span></li>)}
       </ul>
-      <div className="pub-total">Total <b>{Number(s.total).toFixed(2)}</b> · pay at the counter</div>
+      {delivery && s.address && <div className="pub-fee">Delivery to: <b>{s.address}</b>{Number(s.deliveryFee) ? ` · delivery ${Number(s.deliveryFee).toFixed(2)}` : ''}</div>}
+      <div className="pub-total">Total <b>{Number(s.total).toFixed(2)}</b> · {delivery ? 'pay the rider' : 'pay at the counter'}</div>
       {s.status === 'new' && (
         <button className="pub-btn ghost" disabled={cancelling} onClick={async () => { setCancelling(true); await rpc('cancel_online_order', { p_token: token }).catch(() => undefined); setS({ ...s, status: 'cancelled' }); }}>
           Cancel my order

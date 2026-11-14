@@ -111,6 +111,48 @@ const j = async (p) => (await fetch(MOCK + p)).json();
   const oo = (await j('/__online')).onlineOrders[0];
   check('server price used', Math.abs(oo.total - s.orders.find((o) => o.online).total) < 0.001, `${oo.total}`);
 
+  // ---- 4b. Delivery: owner offers it, customer orders with an address, rider takes it, customer follows
+  await a.goto(URL + '#/settings?tab=website'); await a.waitForSelector('button[aria-label="Deliver online orders"]');
+  await a.click('button[aria-label="Deliver online orders"]');
+  await a.locator('label:has-text("Delivery fee") input').fill('2');
+  await a.locator('label:has-text("Where you deliver") input').fill('Kadoma town');
+  await a.locator('label:has-text("Delivery fee") input').focus(); await a.locator('label:has-text("Where you deliver") input').focus(); await a.click('h3.cloud-h');
+  await a.waitForTimeout(9500);
+  m = await j('/__state');
+  await c.goto(URL + '#/r/mama-rudo-eats'); await c.waitForSelector('.pub-item');
+  await c.click('.pub-item:has-text("Water 500ml")'); await c.click('.pub-cartbar');
+  check('customer can choose delivery', await c.isVisible('.pub-mode button:has-text("Delivery")') && /\$2\.00/.test(await c.textContent('.pub-mode')) && /Kadoma town/.test(await c.textContent('.pub-mode')));
+  await c.click('.pub-mode button:has-text("Delivery")');
+  check('total includes delivery', /Total \$3\.00/.test(await c.textContent('.pub-total')));
+  await c.locator('.pub-field:has-text("Delivery address") textarea').fill('');
+  await c.click('.pub-btn:has-text("Send order")');
+  check('address required', /address/.test(await c.textContent('.pub-error')));
+  await c.locator('.pub-field:has-text("Delivery address") textarea').fill('14 Moyo Street, near the clinic');
+  await c.click('.pub-btn:has-text("Send order")');
+  await c.waitForSelector('.pub-status');
+  await a.goto(URL + '#/online'); await a.waitForSelector('.web-card.new', { timeout: 15000 });
+  check('till sees delivery address and fee', /14 Moyo Street/.test(await a.textContent('.web-card.new')) && /includes delivery \$2\.00/.test(await a.textContent('.web-card.new')));
+  await a.click('.web-card.new button:has-text("15 min")'); await a.waitForTimeout(500);
+  s = await st(a);
+  const dl = s.orders.find((o) => o.online && o.online.mode === 'delivery');
+  check('accepted delivery: fee in total, address kept', dl && dl.total === 3 && dl.delivery && dl.delivery.address.includes('Moyo') && dl.delivery.fee === 2, JSON.stringify(dl && { t: dl.total, d: dl.delivery }));
+  check('send out waits for the kitchen', await a.isDisabled('.web-card:has-text("Moyo") button:has-text("Send out")'));
+  await a.goto(URL + '#/kitchen'); await a.waitForSelector('.ocard:has-text("WEB")');
+  await a.locator(`.ocard:has-text("${dl.table.name}") .kitchen-tick`).click();
+  await a.goto(URL + '#/online'); await a.waitForSelector('.web-card:has-text("Moyo")');
+  await a.click('.web-card:has-text("Moyo") button:has-text("Send out")');
+  await a.locator('.web-sendout input').fill('Blessing');
+  await a.click('.web-sendout button:has-text("Rider has left")');
+  await c.waitForSelector('.pub-status.out', { timeout: 20000 });
+  check('customer sees on the way', /On the way/.test(await c.textContent('.pub-status')) && /14 Moyo Street/.test(await c.textContent('.pub')));
+  check('till shows out with rider', /Out for delivery with Blessing/.test(await a.textContent('.web-card:has-text("Moyo")')));
+  await a.click('.web-card:has-text("Moyo") button:has-text("Rider paid in")');
+  await a.click('.dialog button:text-is("Exact")'); await a.locator('.dialog footer button').last().click();
+  await c.waitForSelector('.pub-status.collected', { timeout: 20000 });
+  check('customer sees delivered', /Delivered/.test(await c.textContent('.pub-status')));
+  const od = (await j('/__online')).onlineOrders.find((x) => x.mode === 'delivery');
+  check('server charged the delivery fee', od.total === 3 && od.delivery_fee === 2);
+
   // ---- 5. Decline + customer cancel
   await c.goto(URL + '#/r/mama-rudo-eats'); await c.waitForSelector('.pub-item');
   await c.click('.pub-item:has-text("Water 500ml")'); await c.click('.pub-cartbar'); await c.click('.pub-btn:has-text("Send order")');
