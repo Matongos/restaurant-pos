@@ -1618,3 +1618,22 @@ tr.struck td b { text-decoration: line-through; }
 .pub-add-x { font-weight: 600; }
 .pub-item.in-cart { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
 .pub-powered a { color: inherit; font-weight: 700; }
+
+/* Printer linked to this device (Settings) and the bar when tickets wait for it */
+.printer-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 8px; background: var(--panel); }
+.printer-card.ready { border-color: var(--brand-line); }
+.printer-card .pc-head { display: flex; gap: 12px; align-items: flex-start; }
+.printer-card .pc-icon { width: 42px; height: 42px; border-radius: 10px; background: var(--soft); display: flex; align-items: center; justify-content: center; font-size: 22px; flex: none; }
+.printer-card.ready .pc-icon { background: var(--brand-soft); color: var(--brand); }
+.printer-card .pc-status { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.printer-card.ready .pc-status { color: var(--good, #1d7a46); }
+.printer-card .pc-err { font-size: 13px; color: var(--warn); margin-top: 4px; }
+.pc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; font-weight: 600; }
+.pc-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.printer-ways { display: flex; gap: 8px; flex-wrap: wrap; }
+.printer-ways .btn { display: inline-flex; align-items: center; gap: 8px; }
+.printer-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 55; width: min(640px, calc(100vw - 24px)); display: flex; align-items: center; gap: 12px; background: var(--warn-soft); border: 1px solid var(--warn); color: var(--ink); border-radius: 14px; padding: 10px 12px; box-shadow: var(--shadow-pop); flex-wrap: wrap; }
+.printer-bar > svg { font-size: 24px; color: var(--warn); flex: none; }
+.printer-bar .grow { flex: 1; min-width: 160px; font-size: 13px; }
+.printer-bar b { display: block; font-size: 15px; }
+@media (max-width: 599px) { .printer-bar { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); } }

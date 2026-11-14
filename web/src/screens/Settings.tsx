@@ -16,6 +16,7 @@ import AddOnEditor from '../components/AddOnEditor';
 import DeliverySettings from '../components/DeliverySettings';
 import ServiceSettings from '../components/ServiceSettings';
 import RecipeEditor from '../components/RecipeEditor';
+import { PrinterSettings } from '../components/PrinterLink';
 
 type Tab = 'general' | 'online' | 'website' | 'service' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'delivery' | 'kitchen' | 'plan' | 'backup' | 'demo';
 
@@ -152,6 +153,7 @@ function Printing() {
   const slip = s.numberMode !== 'card';
   return (
     <>
+      <PrinterSettings />
       <div className="section-title">After a payment</div>
       <div className="toggle-list" role="radiogroup" aria-label="When tickets print">
         {PRINT_WHEN.map(([k, title, desc]) => (

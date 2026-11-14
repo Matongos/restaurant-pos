@@ -8,6 +8,7 @@ import { takeSessionFromLink } from './cloud/api';
 import { startSync } from './cloud/sync';
 import { startOnline } from './cloud/online';
 import { initStore } from './store/store';
+import { startPrinter } from './print/printer';
 
 // First-time visitors to pos.techplug.co.zw see the product website. Devices that already use the app
 // (tills, the Windows app, the installed app, anyone who opened the app once) go straight to it.
@@ -44,6 +45,7 @@ function start() {
   if (linkType) sessionStorage.setItem('restaurant-pos.link-type', linkType);
   startOnline();
   startSync();
+  startPrinter();
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

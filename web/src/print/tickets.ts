@@ -2,13 +2,14 @@ import type { AppState, CreditEntry, Customer, Order } from '../domain/types';
 import { CREDIT_METHOD } from '../domain/types';
 import { fmt } from '../domain/money';
 import { lineLabel } from '../domain/rules';
+import { addWaiting, hasLinkedPrinter, printDirect } from './printer';
 
 /**
  * Ticket layouts for 80 mm thermal printers.
  *
- * Prototype: rendered as HTML and printed through the browser's print dialog.
- * Desktop app: the same content is sent as ESC/POS commands straight to the
- * printer (no dialog) — see docs/ARCHITECTURE.md.
+ * With a printer linked on the device (Settings → Numbers & printing) the same HTML is
+ * turned into ESC/POS commands (print/escpos.ts) and sent straight to it, no dialog.
+ * Otherwise it goes through the browser's print screen.
  */
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -197,8 +198,22 @@ export const TICKET_CSS = `
   table{width:100%;border-collapse:collapse} td{padding:1px 0} .r{text-align:right} .tot td{font-weight:800;border-top:1px solid #000}
 `;
 
-/** Prints one or more tickets via a hidden iframe (prototype). */
+/**
+ * Prints tickets. With a printer linked on this device they go straight to it (no print
+ * screen); if it cannot be reached they wait (see PrinterBar) instead of being lost.
+ * With no printer linked, the browser's print screen opens as before.
+ */
 export function printTickets(htmlParts: string[]) {
+  const parts = htmlParts.filter(Boolean);
+  if (!parts.length) return;
+  if (!hasLinkedPrinter()) return printWithBrowser(parts);
+  printDirect(parts).then((ok) => {
+    if (!ok) addWaiting(parts);
+  });
+}
+
+/** The browser's own print screen, through a hidden frame. */
+export function printWithBrowser(htmlParts: string[]) {
   const iframe = document.createElement('iframe');
   iframe.style.position = 'fixed';
   iframe.style.width = '0';
