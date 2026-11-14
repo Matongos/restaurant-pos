@@ -11,7 +11,7 @@ import { changeMyPin, updateStaff, useCurrentUser } from '../store/store';
 import { can, ROLE_LABEL } from '../domain/rules';
 import { go } from '../router';
 import { WEB_PREFIX } from './CloudAccount';
-import { SUPPORT_WHATSAPP } from '../cloudConfig';
+import { supportWhatsapp, usePlatform } from '../cloud/platform';
 
 export default function MyAccount({ onClose }: { onClose: () => void }) {
   const user = useCurrentUser();
@@ -194,6 +194,7 @@ function OnlineAccount({ onClose }: { onClose: () => void }) {
 /** Change password / change email for the restaurant's online account (owner). Also used in Settings → Online account. */
 export function AccountSecurity() {
   const [open, setOpen] = useState<'' | 'password' | 'email'>('');
+  const wa = supportWhatsapp(usePlatform());
   const signedIn = !!getSession();
   if (!signedIn) return <p className="hint">Sign in again under Settings → Online account to change the email or password.</p>;
   return (
@@ -225,7 +226,7 @@ export function AccountSecurity() {
       </div>
       {open === 'email' && <EmailForm onDone={() => setOpen('')} />}
       <p className="hint">
-        Forgot the password? {SUPPORT_WHATSAPP ? <a href={`https://wa.me/${SUPPORT_WHATSAPP}`} target="_blank" rel="noreferrer">Message TechPlug on WhatsApp</a> : 'Contact TechPlug'} and we will reset it for you.
+        Forgot the password? {wa ? <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer">Message TechPlug on WhatsApp</a> : 'Contact TechPlug'} and we will reset it for you.
       </p>
     </div>
   );

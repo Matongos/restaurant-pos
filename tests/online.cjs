@@ -1,5 +1,10 @@
 // New-restaurant wizard, web page + QR menu, online pick-up orders end to end, posters, console, connecting a device.
 // Needs tests/cloud-mock.cjs running on :54321 and the app on :8765.
+const PK = require('./pinkey.cjs');
+const crypto = require('crypto');
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const b32decode = (t) => { let bits = ''; for (const c of t.toUpperCase()) bits += B32.indexOf(c).toString(2).padStart(5, '0'); const out = []; for (let i = 0; i + 8 <= bits.length; i += 8) out.push(parseInt(bits.slice(i, i + 8), 2)); return Buffer.from(out); };
+const totp = (secret) => { const msg = Buffer.alloc(8); msg.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000))); const h = crypto.createHmac('sha1', b32decode(secret)).update(msg).digest(); const o = h[h.length - 1] & 15; return String(((h.readUInt32BE(o) & 0x7fffffff) % 1e6)).padStart(6, '0'); };
 const { chromium } = require('/opt/npm-tools/node_modules/playwright');
 const URL = process.env.POS_URL || 'http://localhost:8765/';
 const MOCK = 'http://localhost:54321';
@@ -38,7 +43,7 @@ const j = async (p) => (await fetch(MOCK + p)).json();
   await a.click('button:has-text("Create my restaurant")');
   await a.waitForSelector('.topbar', { timeout: 20000 });
   let s = await st(a);
-  check('wizard: owner signed in, no demo data', s.staff.length === 1 && s.staff[0].name === 'Rudo Moyo' && s.staff[0].pin === '2468' && s.customers.length === 0 && s.orders.length === 0 && !s.settings.trainingMode, JSON.stringify({ staff: s.staff.length, c: s.customers.length }));
+  check('wizard: owner signed in, no demo data', s.staff.length === 1 && s.staff[0].name === 'Rudo Moyo' && s.staff[0].pin === PK('2468') && s.customers.length === 0 && s.orders.length === 0 && !s.settings.trainingMode, JSON.stringify({ staff: s.staff.length, c: s.customers.length }));
   check('wizard: name set, sample menu kept', s.settings.restaurantName === 'Mama Rudo Eats' && s.menu.length > 5);
   let m = await j('/__state');
   check('wizard: restaurant online', m.restaurants.some((r) => r.slug === 'mama-rudo-eats') && m.records.some((r) => r.kind === 'menu'));
@@ -176,11 +181,51 @@ const j = async (p) => (await fetch(MOCK + p)).json();
   const K = await ctxFor(); const k = K.page;
   await k.goto(URL + '#/console'); await k.locator('label:has-text("Email") input').fill('rudo@example.com');
   await k.locator('label:has-text("Password") input').fill('rudo-password-1'); await k.click('button:has-text("Sign in")');
+  // Two-step login: first time the console asks to set up an authenticator app
+  await k.waitForSelector('.console-enroll .enroll-secret');
+  check('console needs two-step login', /Set up two-step login/.test(await k.textContent('.console-enroll')));
+  const secret = (await k.textContent('.enroll-secret')).trim();
+  await k.locator('.console-enroll label:has-text("6-digit code") input').fill('000000');
+  await k.click('button:has-text("Turn on two-step login")');
+  await k.waitForSelector('.console-enroll .error-text');
+  check('wrong code refused', /not right/.test(await k.textContent('.console-enroll .error-text')));
+  await k.locator('.console-enroll label:has-text("6-digit code") input').fill(totp(secret));
+  await k.click('button:has-text("Turn on two-step login")');
   await k.waitForSelector('.console-table td');
   check('console lists restaurant', /Mama Rudo Eats/.test(await k.textContent('.console-table')) && /rudo@example.com/.test(await k.textContent('.console-table')));
   check('console tiles', (await k.locator('.console-tile').count()) === 8);
   await k.click('.console-table button:has-text("+30 days")'); await k.waitForTimeout(500);
   check('trial extended', /(5[89]|60) days left/.test(await k.textContent('.console-table')), await k.textContent('.console-table td:nth-child(3)'));
+  // Payments: record one, the owner sees it; TechPlug details reach the till
+  await k.click('.console-table tr:has-text("Mama Rudo Eats") button:has-text("Payment")');
+  await k.selectOption('.dialog label:has-text("Plan") select', 'restaurant');
+  await k.selectOption('.dialog label:has-text("Months paid") select', '3');
+  check('amount follows plan and months', (await k.inputValue('.dialog label:has-text("Amount") input')) === '45');
+  await k.selectOption('.dialog label:has-text("Paid by") select', 'ecocash');
+  await k.locator('.dialog label:has-text("Reference") input').fill('MP251114.0001');
+  await k.click('.dialog button:has-text("Record payment")'); await k.waitForSelector('.dialog', { state: 'detached' });
+  await k.waitForTimeout(400);
+  check('console shows paid-to date', /paid to/.test(await k.textContent('.console-table tr:has-text("Mama Rudo Eats")')) && /Received this month/.test(await k.textContent('.console-tiles')) && /\$45/.test(await k.textContent('.console-tiles')));
+  await k.click('button:has-text("TechPlug details")');
+  await k.locator('.dialog label:has-text("WhatsApp") input').fill('263 77 123 4567');
+  await k.locator('.dialog label:has-text("How to pay") textarea').fill('EcoCash merchant 123456 (TechPlug)');
+  await k.click('.dialog button:has-text("Save")'); await k.waitForSelector('.dialog', { state: 'detached' });
+  await k.click('button:has-text("Log")'); await k.waitForSelector('.console-log li');
+  check('admin log records the payment', /Payment \$45 by ecocash/.test(await k.textContent('.console-log')));
+  await k.click('.dialog header button[aria-label="Close"]');
+  await a.goto(URL + '#/settings?tab=plan'); await a.waitForSelector('.plan-card');
+  await a.waitForSelector('.pay-row', { timeout: 15000 });
+  const plan = await a.textContent('.page');
+  check('owner sees plan, paid-until and payment', /Restaurant/.test(plan) && /Paid until/.test(plan) && /\$45\.00 · EcoCash/.test(plan) && /MP251114\.0001/.test(plan), plan.slice(0, 300));
+  check('owner sees how to pay', /EcoCash merchant 123456/.test(plan) && await a.isVisible('a:has-text("WhatsApp TechPlug")'));
+  // Sign out and back in: now the console asks for the code, not set-up
+  await k.click('button:has-text("Sign out")'); await k.waitForSelector('.console-signin');
+  await k.locator('label:has-text("Email") input').fill('rudo@example.com');
+  await k.locator('label:has-text("Password") input').fill('rudo-password-1'); await k.click('button:has-text("Sign in")');
+  await k.waitForSelector('text=Your code');
+  await k.locator('label:has-text("6-digit code") input').fill(totp(secret)); await k.click('button:has-text("Open the console")');
+  await k.waitForSelector('.console-table td');
+  check('second sign-in asks for the code', true);
   const ev = (await j('/__online')).events;
   check('first opens counted (not customers or console)', ev.filter((e) => e.kind === 'first_open').length === 1, ev.length);
 

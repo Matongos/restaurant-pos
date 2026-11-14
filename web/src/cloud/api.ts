@@ -73,6 +73,8 @@ function messageOf(j: any, status: number): string {
   const code: string = j?.error_code || j?.code || '';
   if (code === 'invalid_credentials' || /invalid login credentials/i.test(raw)) return 'Wrong email or password.';
   if (code === 'email_not_confirmed' || /email not confirmed/i.test(raw)) return 'Please confirm your email first: open the link we emailed you.';
+  if (code === 'mfa_verification_failed' || /invalid totp|mfa verification/i.test(raw)) return 'That code is not right. Type the 6 numbers your authenticator app shows now (check the phone’s time is correct).';
+  if (code === 'mfa_totp_enroll_not_enabled' || /mfa.*(disabled|not enabled)/i.test(raw)) return 'Two-step login is switched off in Supabase: Authentication → Multi-Factor → enable TOTP.';
   if (code === 'email_exists' || /already been registered/i.test(raw)) return 'Another account already uses that email. Choose a different one.';
   if (code === 'same_password' || /should be different from the old/i.test(raw)) return 'The new password is the same as the old one.';
   if (code === 'reauthentication_needed' || /reauthentication/i.test(raw)) return 'For safety, sign out and sign in again, then change the password.';
@@ -311,4 +313,48 @@ export function groupSummary(): Promise<BranchSummary[]> {
 /** Add a branch to the group of `mainId` (the owner only; Group plan or trial; 5 at most). */
 export function createBranch(mainId: string, name: string, slug: string, town: string): Promise<string> {
   return rpc<string>('create_branch', { p_main: mainId, p_name: name.trim(), p_slug: slug, p_town: town.trim() || null });
+}
+
+/* ------------------------------------------------------------------ two-step login (console) */
+
+export interface Factor {
+  id: string;
+  factor_type: string;
+  status: 'verified' | 'unverified';
+  friendly_name?: string;
+}
+
+/** How strongly this login was checked: 'aal2' = password and authenticator code. */
+export function sessionLevel(): 'aal1' | 'aal2' {
+  try {
+    const p = JSON.parse(atob((session?.accessToken ?? '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return p.aal === 'aal2' ? 'aal2' : 'aal1';
+  } catch {
+    return 'aal1';
+  }
+}
+
+export async function myFactors(): Promise<Factor[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const u = (await call('/auth/v1/user')) as any;
+  return (u?.factors ?? []).filter((f: Factor) => f.factor_type === 'totp');
+}
+
+/** Start adding an authenticator app: gives the QR code (an image address) and the secret to type in by hand. */
+export async function enrollTotp(): Promise<{ id: string; qr: string; secret: string }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const j = (await call('/auth/v1/factors', { method: 'POST', body: JSON.stringify({ factor_type: 'totp', friendly_name: `TechPlug console ${new Date().toISOString().slice(0, 16)}` }) })) as any;
+  return { id: j.id, qr: j.totp?.qr_code ?? '', secret: j.totp?.secret ?? '' };
+}
+
+/** Check a 6-digit code; on success this login becomes 'aal2'. */
+export async function verifyTotp(factorId: string, code: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c = (await call(`/auth/v1/factors/${factorId}/challenge`, { method: 'POST', body: '{}' })) as any;
+  const j = await call(`/auth/v1/factors/${factorId}/verify`, { method: 'POST', body: JSON.stringify({ challenge_id: c.id, code: code.replace(/\s/g, '') }) });
+  saveSession(sessionFrom(j));
+}
+
+export async function removeFactor(factorId: string): Promise<void> {
+  await call(`/auth/v1/factors/${factorId}`, { method: 'DELETE' });
 }

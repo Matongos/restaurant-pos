@@ -13,6 +13,7 @@ import { outOfStockIds, stockLevels } from '../domain/stock';
 import { acceptOnlineOrder, setSalesLock, getState, useStore } from '../store/store';
 import { insertQuiet, patch, rpc, select } from './api';
 import { inDesktopApp, isInstalled } from '../pwa';
+import { refreshPlatform } from './platform';
 import { deviceId, getLink, isSyncLeader, onSyncTick } from './sync';
 
 /* ------------------------------------------------------------------ restaurant details */
@@ -28,6 +29,8 @@ export interface RestaurantInfo {
   public_info: PublicInfo;
   /** The main restaurant of this one's group (branches). Missing until database step 3 is run. */
   group_id?: string | null;
+  /** A paid plan runs to here (database step 4). */
+  paid_until?: string | null;
 }
 export interface PublicInfo {
   phone?: string;
@@ -99,12 +102,15 @@ export async function refreshInfo(force = false): Promise<RestaurantInfo | null>
   if (!link) return null;
   if (!force && Date.now() - infoAt < 5 * 60_000 && st.info) return st.info;
   let rows: RestaurantInfo[];
-  try {
-    rows = await select<RestaurantInfo[]>('restaurants', `select=${INFO_FIELDS},group_id&id=eq.${link.restaurantId}`);
-  } catch (e) {
-    // Database step 3 not run yet: no branches column.
-    if (!/group_id/.test(e instanceof Error ? e.message : '')) throw e;
-    rows = await select<RestaurantInfo[]>('restaurants', `select=${INFO_FIELDS}&id=eq.${link.restaurantId}`);
+  // Newer columns come with database steps 3 (group_id) and 4 (paid_until); ask for less if they are not there yet.
+  rows = [];
+  for (const extra of [',group_id,paid_until', ',group_id', '']) {
+    try {
+      rows = await select<RestaurantInfo[]>('restaurants', `select=${INFO_FIELDS}${extra}&id=eq.${link.restaurantId}`);
+      break;
+    } catch (e) {
+      if (!extra || !/group_id|paid_until|column/i.test(e instanceof Error ? e.message : '')) throw e;
+    }
   }
   infoAt = Date.now();
   if (rows[0]) update({ info: { ...rows[0], public_info: rows[0].public_info ?? {} } });
@@ -130,6 +136,8 @@ export function lockReason(info: RestaurantInfo | null): string | null {
   if (info.plan === 'closed') return 'This restaurant’s account is closed, so new sales are paused. Contact TechPlug to reopen it.';
   if (info.plan === 'trial' && Date.parse(info.trial_ends_at) + GRACE_DAYS * 86_400_000 < Date.now())
     return 'The free trial has ended, so new sales are paused. Your sales, reports and books are all kept. Contact TechPlug to choose a plan.';
+  if ((info.plan === 'restaurant' || info.plan === 'group') && info.paid_until && Date.parse(info.paid_until) + GRACE_DAYS * 86_400_000 < Date.now())
+    return 'The subscription is overdue, so new sales are paused. Your sales, reports and books are all kept. Pay TechPlug to carry on (Settings → Plan & payments).';
   return null;
 }
 
@@ -338,6 +346,7 @@ export function startOnline() {
       return;
     }
     await refreshInfo(!!lockReason(st.info));
+    void refreshPlatform();
     await publishMenu();
     await pollOrders();
   });

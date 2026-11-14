@@ -4,12 +4,12 @@ import { LuPause } from 'react-icons/lu';
 import { GRACE_DAYS, trialDaysLeft, useOnline } from '../cloud/online';
 import { useSyncStatus } from '../cloud/sync';
 import { useCurrentUser, useSalesLock } from '../store/store';
-import { SUPPORT_WHATSAPP } from '../cloudConfig';
+import { whatsappLink } from '../cloud/platform';
 import { TopBar } from './ui';
 
 /** WhatsApp link to TechPlug about this restaurant's plan (when TechPlug's number is set). */
 export function contactLink(name: string, slug: string) {
-  return SUPPORT_WHATSAPP ? `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(`TechPlug POS subscription — ${name} (${slug})`)}` : null;
+  return whatsappLink(`TechPlug POS subscription — ${name} (${slug})`);
 }
 
 /** Selling is paused (trial over or account closed): what the Sell, Tables and Online orders screens show instead. */
@@ -61,6 +61,26 @@ export function TrialBar() {
   if (!sync.link || !info || !user) return null;
   if (paused) return null; // the selling screens explain it
   if (hidden || (user.role !== 'super_admin' && user.role !== 'manager')) return null;
+  const paidLeft = (info.plan === 'restaurant' || info.plan === 'group') && info.paid_until ? Math.ceil((Date.parse(info.paid_until) - Date.now()) / 86_400_000) : null;
+  if (paidLeft !== null) {
+    if (paidLeft > 7) return null;
+    const until = new Date(Date.parse(info.paid_until!) + GRACE_DAYS * 86_400_000).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+    const msg =
+      paidLeft > 1
+        ? `Your subscription is paid until ${new Date(info.paid_until!).toLocaleDateString()}. Pay before then to keep selling.`
+        : paidLeft >= 0
+          ? 'Your subscription runs out today or tomorrow. Pay to keep selling.'
+          : `Your subscription is overdue. New sales pause on ${until} unless it is paid.`;
+    return (
+      <div className={`trial-bar ${paidLeft < 0 ? 'over' : ''}`} role="status">
+        <LuClock aria-hidden="true" />
+        <span>{msg}</span>
+        <a className="btn small" href="#/settings?tab=plan">
+          How to pay
+        </a>
+      </div>
+    );
+  }
   const left = trialDaysLeft(info);
   const closed = info.plan === 'closed';
   if (!closed && (left === null || left > 7)) return null;

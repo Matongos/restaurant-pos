@@ -7,6 +7,8 @@ import { createRestaurant, getSession, sendPasswordReset, setNewPassword, signIn
 import { linkAndDownload, linkAndUpload, loadOlderHistory, myRestaurants, restaurantHasData, syncNow, unlink, useSyncStatus } from '../cloud/sync';
 import { Dialog, toast } from './ui';
 import { AccountSecurity } from './MyAccount';
+import { hasPendingSetup } from '../screens/Setup';
+import { go } from '../router';
 
 const PENDING_KEY = 'restaurant-pos.signup-pending';
 type Pending = { name: string; slug: string; town: string };
@@ -573,13 +575,25 @@ export function LinkNotice() {
         </form>
       ) : (
         <>
-          <p>
-            Thank you — your email is confirmed. Sign in with the owner PIN and open <b>Settings → Online account</b> to finish setting up your
-            restaurant.
-          </p>
-          <button className="btn primary" onClick={close}>
-            OK
-          </button>
+          <p>Thank you — your email is confirmed.</p>
+          {hasPendingSetup() ? (
+            <button
+              className="btn primary"
+              onClick={() => {
+                close();
+                go('/setup');
+              }}
+            >
+              Finish setting up the restaurant
+            </button>
+          ) : (
+            <>
+              <p className="muted">Go back to the till where you were setting up and press <b>Continue</b>.</p>
+              <button className="btn primary" onClick={close}>
+                OK
+              </button>
+            </>
+          )}
         </>
       )}
     </Dialog>

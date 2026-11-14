@@ -1,5 +1,6 @@
 // Website for first-time visitors, moving old saved data to IndexedDB, and the other November features.
 // Needs the app on :8765 (with the short-link rewrite) and tests/cloud-mock.cjs on :54321.
+const PK = require('./pinkey.cjs');
 const { chromium } = require('/opt/npm-tools/node_modules/playwright');
 const URL = process.env.POS_URL || 'http://localhost:8765/';
 const MOCK = 'http://localhost:54321';
@@ -151,7 +152,7 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
     await B.p.waitForSelector('button:has-text("Go to sign in"), button:has-text("Done")', { timeout: 20000 }).catch(async () => { await B.p.screenshot({ path: '/tmp/claude-0/-home-claude/12c690c4-35da-5133-8bd0-05d676f81acb/scratchpad/bfail.png' }); throw new Error('connect stuck: ' + (await B.p.textContent('body')).slice(0, 400)); });
     const bs = await B.p.evaluate(() => window.__pos.state());
     const as = await A.p.evaluate(() => window.__pos.state());
-    check('branch got the same menu and owner, no sales', bs.menu.length === as.menu.length && bs.staff.length === 1 && bs.staff[0].pin === '1234' && bs.orders.length === 0 && bs.settings.restaurantName === 'Tete Foods Mbare', `${bs.menu.length}/${as.menu.length} staff ${bs.staff.length} orders ${bs.orders.length} ${bs.settings.restaurantName}`);
+    check('branch got the same menu and owner, no sales', bs.menu.length === as.menu.length && bs.staff.length === 1 && bs.staff[0].pin === PK('1234') && bs.orders.length === 0 && bs.settings.restaurantName === 'Tete Foods Mbare', `${bs.menu.length}/${as.menu.length} staff ${bs.staff.length} orders ${bs.orders.length} ${bs.settings.restaurantName}`);
     await B.p.goto(URL); await B.p.waitForSelector('.keypad'); await pin(B.p, '1234');
     await sell(B.p, ['Sadza & Beef']); await sell(B.p, ['Rice & Chicken']);
     await sell(A.p, ['Water 500ml']);
@@ -218,6 +219,72 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
     await p.goto(URL + '#/till'); await p.waitForSelector('.items', { timeout: 30000 });
     check('plan switched on: selling back by itself', !(await p.isVisible('.paused-card')));
     await c.close();
+  }
+
+  // ---- 6. Security: PINs scrambled, PIN pad locks after wrong tries, backup and restore, email confirmation in set-up
+  {
+    await fetch(MOCK + '/__reset');
+    const c = await b.newContext({ viewport: { width: 1280, height: 860 } }); await c.addInitScript((m) => localStorage.setItem('restaurant-pos.cloud-url', m), MOCK);
+    const p = await c.newPage(); p.on('pageerror', (e) => errors.push(e.message));
+    const pin = async (code) => { for (const d of code) await p.click(`.keypad button:text-is("${d}")`); await p.waitForTimeout(250); };
+    await p.goto(URL); await p.waitForSelector('.keypad');
+    let st = await p.evaluate(() => window.__pos.state());
+    check('PINs stored scrambled', st.staff.every((x) => /^h1:[0-9a-f]{64}$/.test(x.pin)) && st.staff.find((x) => x.id === 'u-owner').pin === PK('1234'));
+    // an older version's plain PIN (e.g. from another till) is scrambled on arrival
+    await p.evaluate(async () => { const s = window.__pos.state(); s.staff = s.staff.map((x) => (x.id === 'u-cashier' ? { ...x, pin: '1111' } : x)); await window.__pos.put(s); });
+    st = await p.evaluate(() => window.__pos.state());
+    check('plain PIN from an older version scrambled', st.staff.find((x) => x.id === 'u-cashier').pin === PK('1111'));
+    await pin('1111'); await p.waitForSelector('.topbar');
+    check('scrambled PIN still logs in', true);
+    await p.evaluate(() => sessionStorage.clear()); await p.reload(); await p.waitForSelector('.keypad');
+    for (let i = 0; i < 5; i++) await pin('9876');
+    check('PIN pad locks after 5 wrong PINs', /Too many wrong PINs/.test(await p.textContent('.login .error')) && (await p.getAttribute('.keypad', 'aria-disabled')) === 'true');
+    await p.reload(); await p.waitForSelector('.keypad');
+    check('lock survives a reload', /Too many wrong PINs/.test(await p.textContent('.login .error')));
+    await p.evaluate(() => localStorage.removeItem('restaurant-pos.pin-guard')); await p.reload(); await p.waitForSelector('.keypad');
+    await pin('1234'); await p.waitForSelector('.topbar');
+    // backup: download, change something, put it back
+    await p.goto(URL + '#/settings?tab=backup'); await p.waitForSelector('button:has-text("Download backup")');
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click('button:has-text("Download backup")')]);
+    const fp = await dl.path(); const bk = JSON.parse(require('fs').readFileSync(fp, 'utf8'));
+    check('backup file has everything', bk.kind === 'techplug-pos-backup' && bk.state.menu.length > 5 && bk.state.staff.length === 5 && /techplug-backup-.*\.json/.test(dl.suggestedFilename()));
+    await p.evaluate(async () => { const s = window.__pos.state(); s.settings.restaurantName = 'Changed After Backup'; await window.__pos.put(s); });
+    await p.setInputFiles('input[type=file]', fp);
+    await p.locator('label:has-text("Type RESTORE") input').fill('restore');
+    await p.click('button:has-text("Put this backup back")');
+    await p.waitForSelector('.keypad');
+    check('backup put back', (await p.evaluate(() => window.__pos.state().settings.restaurantName)) !== 'Changed After Backup');
+    // set-up wizard when email confirmation is on
+    await fetch(MOCK + '/__confirmmode?on=1');
+    const q = await (await b.newContext({ viewport: { width: 1280, height: 860 } })).newPage();
+    await q.context().addInitScript((m) => localStorage.setItem('restaurant-pos.cloud-url', m), MOCK);
+    q.on('pageerror', (e) => errors.push(e.message));
+    await q.goto(URL); await q.waitForSelector('.keypad');
+    await q.click('a:has-text("New restaurant? Set it up")');
+    await q.locator('label:has-text("Restaurant name") input').fill('Confirm Cafe');
+    await q.waitForSelector('.slug-state.good');
+    await q.click('.setup-nav button:has-text("Next")');
+    await q.locator('label:has-text("Your name") input').fill('Nyasha Moyo');
+    await q.locator('label:has-text("Choose your 4-digit PIN") input').fill('3579');
+    await q.locator('label:has-text("Type it again") input').fill('3579');
+    await q.click('.setup-nav button:has-text("Next")');
+    await q.locator('label:has-text("Email") input').fill('nyasha@example.com');
+    await q.locator('label:has-text("password") input').fill('nyasha-pass-1');
+    await q.click('button:has-text("Create my restaurant")');
+    await q.waitForSelector('text=Check your email');
+    await q.reload(); await q.waitForSelector('text=Check your email');
+    check('wizard waits for the email (survives reload)', /nyasha@example.com/.test(await q.textContent('.setup')));
+    await q.locator('label:has-text("Your password") input').fill('nyasha-pass-1');
+    await q.click('button:has-text("Continue")');
+    await q.waitForSelector('.error-text');
+    check('continue before confirming says so', /confirm your email/i.test(await q.textContent('.error-text')));
+    await fetch(MOCK + '/__confirm?email=nyasha@example.com');
+    await q.click('button:has-text("Continue")');
+    await q.waitForSelector('.topbar', { timeout: 20000 });
+    const m = await (await fetch(MOCK + '/__state')).json();
+    check('restaurant created after confirming', m.restaurants.some((r) => r.slug === 'confirm-cafe'));
+    await fetch(MOCK + '/__confirmmode?on=0');
+    await c.close(); await q.context().close();
   }
 
   check('no page errors', errors.length === 0, errors.join(' | '));

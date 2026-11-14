@@ -1,4 +1,5 @@
 // Online account + sync between two devices, against tests/cloud-mock.cjs (start it first on :54321).
+const PK = require('./pinkey.cjs');
 const { chromium } = require('/opt/npm-tools/node_modules/playwright');
 const URL = process.env.POS_URL || 'http://localhost:8765/';
 const MOCK = 'http://localhost:54321';
@@ -154,7 +155,7 @@ const mock = async () => (await fetch(MOCK + '/__state')).json();
   check('still signed in after fresh start', await A.page.isVisible('.topbar'));
   await B.page.waitForFunction(() => { const s = (window.__pos ? window.__pos.state() : null); return s.customers.length === 0 && s.staff.length === 1 && s.orders.length === 0 && s.credit.length === 0; }, null, { timeout: 20000 });
   const bs = await B.page.evaluate(() => (window.__pos ? window.__pos.state() : null));
-  check('fresh start reaches B', bs.staff[0].pin === '2580' && bs.menu.length > 0 && !bs.settings.trainingMode && bs.stockMoves.length === 0, JSON.stringify({ s: bs.staff.length, m: bs.menu.length }));
+  check('fresh start reaches B', bs.staff[0].pin === PK('2580') && bs.menu.length > 0 && !bs.settings.trainingMode && bs.stockMoves.length === 0, JSON.stringify({ s: bs.staff.length, m: bs.menu.length }));
   await B.page.evaluate(() => sessionStorage.clear()); await B.page.goto(URL); await B.page.waitForSelector('.keypad');
   await pin(B.page, '1234'); check('old PIN no longer works', await B.page.isVisible('.keypad'));
   await pin(B.page, '2580'); await B.page.waitForSelector('.topbar'); check('new owner PIN works on B', true);

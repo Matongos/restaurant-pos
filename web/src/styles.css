@@ -1571,3 +1571,28 @@ tr.struck td b { text-decoration: line-through; }
 .paused-card { padding: 28px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .paused-card > svg { width: 44px; height: 44px; color: #b45309; }
 .paused-card h2, .paused-card p { margin: 0; max-width: 520px; }
+.keypad.locked { opacity: 0.45; pointer-events: none; }
+
+/* Plan & payments */
+.plan-card { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.plan-card > div { display: flex; flex-direction: column; gap: 4px; }
+.plan-card b { font-size: 20px; }
+.plan-card .bad { color: var(--bad); font-weight: 700; }
+.plan-card .warn { color: #b45309; font-weight: 700; }
+.pay-steps { white-space: pre-line; padding: 12px 14px; background: var(--soft); border-radius: 10px; font-weight: 600; }
+.pay-list { display: flex; flex-direction: column; gap: 8px; }
+.pay-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.pay-row > svg { flex: none; margin-top: 3px; color: var(--muted); }
+.pay-row .grow { flex: 1 1 auto; min-width: 0; }
+/* Console: two-step login, payments */
+.console-enroll { max-width: 460px; }
+.console-enroll h1, .console-signin h1 { display: flex; align-items: center; gap: 8px; }
+.enroll-steps { margin: 4px 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.enroll-qr { width: 200px; height: 200px; align-self: center; background: #fff; padding: 8px; border-radius: 12px; border: 1px solid var(--line); }
+.enroll-secret { word-break: break-all; font-size: 13px; }
+.console-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.warn-box { display: flex; gap: 8px; align-items: center; border-color: #f59e0b; }
+.console-mini { width: 100%; border-collapse: collapse; }
+.console-mini th, .console-mini td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; font-size: 14px; }
+.console-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.console-log li { display: flex; flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }

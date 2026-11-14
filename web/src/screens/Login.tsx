@@ -6,6 +6,8 @@ import { BrandMark, Dialog } from '../components/ui';
 import { getLink, syncNow, syncStatusNow, unlink, useSyncStatus } from '../cloud/sync';
 import { signIn } from '../cloud/api';
 import { go } from '../router';
+import { pinMatches } from '../domain/pinhash';
+import { pinFailed, pinLockedFor, pinOk, waitText } from '../store/pinGuard';
 
 export default function Login() {
   const [pin, setPin] = useState('');
@@ -13,7 +15,15 @@ export default function Login() {
   const [switching, setSwitching] = useState(false);
   const settings = useStore((s) => s.settings);
 
+  const [lockedMs, setLockedMs] = useState(() => pinLockedFor());
+  useEffect(() => {
+    if (!lockedMs) return;
+    const t = setInterval(() => setLockedMs(pinLockedFor()), 1000);
+    return () => clearInterval(t);
+  }, [lockedMs > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const press = (d: string) => {
+    if (pinLockedFor()) return;
     setError('');
     setPin((p) => (p.length < 4 ? p + d : p));
   };
@@ -21,8 +31,11 @@ export default function Login() {
   useEffect(() => {
     if (pin.length === 4) {
       const u = login(pin);
-      if (!u) {
-        setError('Wrong PIN');
+      if (u) pinOk();
+      else {
+        const lock = pinFailed();
+        setLockedMs(lock);
+        setError(lock ? '' : 'Wrong PIN');
         setPin('');
       }
     }
@@ -53,8 +66,8 @@ export default function Login() {
               <span key={i} className={i < pin.length ? 'on' : ''} />
             ))}
           </div>
-          <div className="error">{error}</div>
-          <div className="keypad">
+          <div className="error" role="alert">{lockedMs ? `Too many wrong PINs. Try again in ${waitText(lockedMs)}.` : error}</div>
+          <div className={`keypad ${lockedMs ? 'locked' : ''}`} aria-disabled={lockedMs > 0}>
             {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
               <button key={d} onClick={() => press(d)}>
                 {d}
@@ -110,8 +123,14 @@ function SwitchRestaurant({ onClose }: { onClose: () => void }) {
   const check = async () => {
     setError('');
     if (how === 'pin') {
-      const owner = getState().staff.find((s) => s.role === 'super_admin' && s.active && !s.deletedAt && s.pin === pin);
-      if (!owner) return setError("That is not the owner's PIN.");
+      const wait = pinLockedFor();
+      if (wait) return setError(`Too many wrong PINs. Try again in ${waitText(wait)}.`);
+      const owner = getState().staff.find((s) => s.role === 'super_admin' && s.active && !s.deletedAt && pinMatches(s.pin, pin));
+      if (!owner) {
+        pinFailed();
+        return setError("That is not the owner's PIN.");
+      }
+      pinOk();
       setOk(true);
     } else {
       try {

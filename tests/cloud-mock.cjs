@@ -14,12 +14,21 @@ const records = new Map(); // rid|kind|id -> row
 let lastMs = 0;
 const now = () => { let t = Date.now(); if (t <= lastMs) t = lastMs + 1; lastMs = t; return new Date(t).toISOString(); };
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
-function session(u) {
-  const access = `${b64({ alg: 'none' })}.${b64({ sub: u.id, email: u.email })}.${crypto.randomBytes(8).toString('hex')}`;
+const aalOf = new Map(); // access token -> 'aal1' | 'aal2'
+const refreshAal = new Map();
+function session(u, aal = 'aal1') {
+  const access = `${b64({ alg: 'none' })}.${b64({ sub: u.id, email: u.email, aal })}.${crypto.randomBytes(8).toString('hex')}`;
   const refresh = crypto.randomBytes(12).toString('hex');
-  tokens.set(access, u.id); refreshTokens.set(refresh, u.id);
+  tokens.set(access, u.id); refreshTokens.set(refresh, u.id); aalOf.set(access, aal); refreshAal.set(refresh, aal);
   return { access_token: access, refresh_token: refresh, expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: u.id, email: u.email } };
 }
+// Authenticator codes (RFC 6238), like Supabase's two-step login.
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const b32decode = (t) => { let bits = ''; for (const c of t.replace(/=+$/, '').toUpperCase()) bits += B32.indexOf(c).toString(2).padStart(5, '0'); const out = []; for (let i = 0; i + 8 <= bits.length; i += 8) out.push(parseInt(bits.slice(i, i + 8), 2)); return Buffer.from(out); };
+const totp = (secret, step = Math.floor(Date.now() / 30000)) => { const msg = Buffer.alloc(8); msg.writeBigUInt64BE(BigInt(step)); const h = crypto.createHmac('sha1', b32decode(secret)).update(msg).digest(); const o = h[h.length - 1] & 15; return String(((h.readUInt32BE(o) & 0x7fffffff) % 1e6)).padStart(6, '0'); };
+const factors = new Map(); // factor id -> { id, uid, secret, status }
+const challenges = new Map();
+const payments = []; const adminLog = []; let platform = {};
 const isMember = (rid, uid) => members.some((m) => m.restaurant_id === rid && m.user_id === uid);
 const isOwner = (rid, uid) => members.some((m) => m.restaurant_id === rid && m.user_id === uid && m.role !== 'device');
 const admins = new Set();
@@ -57,6 +66,7 @@ http.createServer((req, res) => {
     if (p === '/__state') return send(200, { users: users.size, restaurants: [...restaurants.values()], members, records: [...records.values()].map((r) => ({ kind: r.kind, id: r.id, deleted: r.deleted, device_id: r.device_id })), stats });
     if (p === '/__backdate') { let n = 0; for (const r of records.values()) if (r.kind === 'orders' && r.data?.createdAt && Date.parse(r.data.createdAt) < Date.now() - 200 * 864e5) { r.updated_at = r.data.createdAt; n++; } return send(200, { n }); }
     if (p === '/__plan') { for (const r of restaurants.values()) if (r.slug === url.searchParams.get('slug')) { r.plan = url.searchParams.get('plan'); if (url.searchParams.get('ended')) r.trial_ends_at = new Date(Date.now() - 10 * 864e5).toISOString(); } return send(200, {}); }
+    if (p === '/__confirmmode') { if (url.searchParams.get('on') === '1') process.env.CONFIRM = '1'; else delete process.env.CONFIRM; return send(200, {}); }
     if (p === '/__reset') { users.clear(); tokens.clear(); refreshTokens.clear(); restaurants.clear(); members.length = 0; records.clear(); admins.clear(); onlineOrders.length = 0; events.length = 0; return send(200, {}); }
     if (p === '/__admin') { const u = users.get(url.searchParams.get('email')); if (u) admins.add(u.id); return send(200, { ok: !!u }); }
     if (p === '/__age') { for (const r of restaurants.values()) r.last_seen_at = new Date(Date.now() - 10 * 60000).toISOString(); return send(200, {}); }
@@ -81,10 +91,35 @@ http.createServer((req, res) => {
       const id = refreshTokens.get(body.refresh_token);
       if (!id) return send(400, { error_code: 'refresh_token_not_found', msg: 'Invalid Refresh Token' });
       refreshTokens.delete(body.refresh_token);
-      return send(200, session([...users.values()].find((u) => u.id === id)));
+      return send(200, session([...users.values()].find((u) => u.id === id), refreshAal.get(body.refresh_token) || 'aal1'));
     }
     if (p === '/auth/v1/logout') { tokens.delete(auth); return send(204); }
     if (p === '/auth/v1/recover') return send(200, {});
+    if (p === '/auth/v1/user' && req.method === 'GET') {
+      const u = [...users.values()].find((x) => x.id === uid);
+      if (!u) return send(401, { msg: 'Invalid JWT' });
+      return send(200, { id: u.id, email: u.email, factors: [...factors.values()].filter((f) => f.uid === uid).map((f) => ({ id: f.id, factor_type: 'totp', status: f.status })) });
+    }
+    if (p === '/auth/v1/factors' && req.method === 'POST') {
+      if (!uid) return send(401, { msg: 'Invalid JWT' });
+      const secret = Array.from(crypto.randomBytes(20), (b) => B32[b % 32]).join('');
+      const f = { id: crypto.randomUUID(), uid, secret, status: 'unverified' }; factors.set(f.id, f);
+      return send(200, { id: f.id, type: 'totp', totp: { qr_code: 'data:image/svg+xml;utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>', secret, uri: 'otpauth://totp/x?secret=' + secret } });
+    }
+    let fm;
+    if ((fm = p.match(/^\/auth\/v1\/factors\/([^/]+)(\/challenge|\/verify)?$/))) {
+      const f = factors.get(fm[1]);
+      if (!uid || !f || f.uid !== uid) return send(404, { msg: 'Factor not found' });
+      if (req.method === 'DELETE') { factors.delete(f.id); return send(200, {}); }
+      if (fm[2] === '/challenge') { const c = { id: crypto.randomUUID(), factor: f.id }; challenges.set(c.id, c); return send(200, { id: c.id, expires_at: Date.now() / 1000 + 300 }); }
+      if (fm[2] === '/verify') {
+        const c = challenges.get(body.challenge_id);
+        const step = Math.floor(Date.now() / 30000);
+        if (!c || c.factor !== f.id || ![step - 1, step, step + 1].some((t) => totp(f.secret, t) === String(body.code))) return send(422, { error_code: 'mfa_verification_failed', msg: 'Invalid TOTP code entered' });
+        challenges.delete(c.id); f.status = 'verified';
+        return send(200, session([...users.values()].find((u) => u.id === uid), 'aal2'));
+      }
+    }
     if (p === '/auth/v1/user' && req.method === 'PUT') {
       const u = [...users.values()].find((x) => x.id === uid);
       if (!u) return send(401, { msg: 'Invalid JWT' });
@@ -135,23 +170,52 @@ http.createServer((req, res) => {
       return send(200, { number: o.number, status: o.status, readyMinutes: o.ready_minutes, total: o.total, lines: o.lines, mode: o.mode, address: o.address, deliveryFee: o.delivery_fee || 0, restaurant: restaurants.get(o.restaurant_id).name, createdAt: o.created_at, updatedAt: o.updated_at });
     }
     if (p === '/rest/v1/rpc/cancel_online_order') { const o = onlineOrders.find((x) => x.public_token === body.p_token && x.status === 'new'); if (o) { o.status = 'cancelled'; o.updated_at = now(); } return send(200, !!o || null); }
+    if (p === '/rest/v1/platform_settings') return send(200, [{ data: platform }]);
     if (!uid) return send(401, { code: '42501', message: 'JWT required' });
+    const isAdmin = () => admins.has(uid) && aalOf.get(auth) === 'aal2';
+    const groupOf = (id) => { const r = restaurants.get(id); return r ? r.group_id || r.id : null; };
+    const log = (action, restaurant, detail) => adminLog.unshift({ id: adminLog.length + 1, at: now(), action, restaurant, detail });
+    if (p === '/rest/v1/rpc/admin_status') return send(200, { admin: admins.has(uid), aal2: aalOf.get(auth) === 'aal2' });
+    if (p === '/rest/v1/rpc/record_payment') {
+      if (!isAdmin()) return send(403, { code: '42501', message: 'not allowed' });
+      const g = groupOf(body.p_restaurant); const main = restaurants.get(g);
+      const cur = main.paid_until ? Date.parse(main.paid_until) : 0;
+      const until = body.p_plan === 'free' ? null : new Date(Math.max(cur, Date.now()) + body.p_months * 30.44 * 864e5).toISOString();
+      payments.unshift({ id: crypto.randomUUID(), restaurant_id: g, amount: body.p_amount, currency: body.p_currency || 'USD', method: body.p_method, reference: body.p_reference, plan: body.p_plan, months: body.p_months, paid_until: until, note: body.p_note, created_at: now() });
+      for (const r of restaurants.values()) if (r.id === g || r.group_id === g) { r.plan = body.p_plan; r.paid_until = until; }
+      log('payment', g, { amount: body.p_amount, method: body.p_method, plan: body.p_plan, months: body.p_months, reference: body.p_reference });
+      return send(200, until);
+    }
+    if (p === '/rest/v1/payments') {
+      const want = (url.searchParams.get('restaurant_id') || '').replace(/^eq\./, '');
+      const mine = new Set([...restaurants.values()].filter((r) => members.some((m) => m.restaurant_id === r.id && m.user_id === uid && m.role !== 'device')).map((r) => r.group_id || r.id));
+      return send(200, payments.filter((x) => (isAdmin() || mine.has(x.restaurant_id)) && (!want || x.restaurant_id === want)));
+    }
+    if (p === '/rest/v1/rpc/admin_set_platform') { if (!isAdmin()) return send(403, { code: '42501', message: 'not allowed' }); platform = body.p_data || {}; log('platform_settings', null, platform); return send(200, null); }
+    if (p === '/rest/v1/admin_log') return send(200, isAdmin() ? adminLog : []);
+    if (p === '/rest/v1/rpc/admin_delete_restaurant') {
+      if (!isAdmin()) return send(403, { code: '42501', message: 'not allowed' });
+      const r = restaurants.get(body.p_restaurant);
+      if (!r || (body.p_confirm_name || '').trim() !== r.name) return send(400, { code: 'P0001', message: 'The name does not match' });
+      log('delete_restaurant', r.id, { name: r.name, slug: r.slug }); restaurants.delete(r.id);
+      return send(200, null);
+    }
     if (p === '/rest/v1/rpc/console_overview') {
-      if (!admins.has(uid)) return send(403, { code: '42501', message: 'not allowed' });
+      if (!isAdmin()) return send(403, { code: '42501', message: 'not allowed' });
       const rs = [...restaurants.values()];
-      return send(200, { visits: events.filter((e) => e.kind === 'site_visit').length, downloads: events.filter((e) => e.kind === 'download_click').length, firstOpens: events.filter((e) => e.kind === 'first_open').length, signups: rs.length, restaurants: rs.filter((r) => r.plan !== 'closed').length, activeWeek: rs.filter((r) => r.last_seen_at).length, paying: rs.filter((r) => ['restaurant', 'group'].includes(r.plan)).length, monthlyIncome: rs.reduce((t, r) => t + (r.plan === 'restaurant' ? 15 : r.plan === 'group' ? 35 : 0), 0), perDay: [{ day: new Date().toISOString().slice(0, 10), downloads: 2, signups: rs.length }], countries: { ZW: rs.length } });
+      return send(200, { visits: events.filter((e) => e.kind === 'site_visit').length, downloads: events.filter((e) => e.kind === 'download_click').length, firstOpens: events.filter((e) => e.kind === 'first_open').length, signups: rs.length, restaurants: rs.filter((r) => r.plan !== 'closed').length, activeWeek: rs.filter((r) => r.last_seen_at).length, paying: rs.filter((r) => ['restaurant', 'group'].includes(r.plan)).length, monthlyIncome: rs.reduce((t, r) => t + (r.plan === 'restaurant' ? 15 : r.plan === 'group' ? 35 : 0), 0), paidThisMonth: payments.reduce((t, x) => t + Number(x.amount), 0), overdue: rs.filter((r) => r.paid_until && Date.parse(r.paid_until) < Date.now()).length, perDay: [{ day: new Date().toISOString().slice(0, 10), downloads: 2, signups: rs.length }], countries: { ZW: rs.length } });
     }
     if (p === '/rest/v1/rpc/console_restaurants') {
-      if (!admins.has(uid)) return send(403, { code: '42501', message: 'not allowed' });
-      return send(200, [...restaurants.values()].map((r) => ({ ...r, owner_email: [...users.values()].find((u) => members.some((m) => m.restaurant_id === r.id && m.user_id === u.id && m.role === 'owner'))?.email, devices: new Set([...records.values()].filter((x) => x.restaurant_id === r.id).map((x) => x.device_id)).size, orders: [...records.values()].filter((x) => x.restaurant_id === r.id && x.kind === 'orders' && !x.deleted).length, online_orders_count: onlineOrders.filter((o) => o.restaurant_id === r.id).length, web_page: !!r.web_page, qr_menu: !!r.qr_menu, online_orders: !!r.online_orders })));
+      if (!isAdmin()) return send(403, { code: '42501', message: 'not allowed' });
+      return send(200, [...restaurants.values()].map((r) => ({ ...r, owner_email: [...users.values()].find((u) => members.some((m) => m.restaurant_id === r.id && m.user_id === u.id && m.role === 'owner'))?.email, devices: new Set([...records.values()].filter((x) => x.restaurant_id === r.id).map((x) => x.device_id)).size, orders: [...records.values()].filter((x) => x.restaurant_id === r.id && x.kind === 'orders' && !x.deleted).length, online_orders_count: onlineOrders.filter((o) => o.restaurant_id === r.id).length, web_page: !!r.web_page, qr_menu: !!r.qr_menu, online_orders: !!r.online_orders, paid_until: r.paid_until || null, last_payment: payments.find((x) => x.restaurant_id === (r.group_id || r.id))?.created_at || null })));
     }
     if (p === '/rest/v1/rpc/admin_set_plan') {
-      if (!admins.has(uid)) return send(403, { code: '42501', message: 'not allowed' });
+      if (!isAdmin()) return send(403, { code: '42501', message: 'not allowed' });
       const r = restaurants.get(body.p_restaurant); r.plan = body.p_plan; if (body.p_trial_days != null) r.trial_ends_at = new Date(Date.now() + body.p_trial_days * 864e5).toISOString();
       return send(200, null);
     }
     if (p === '/rest/v1/restaurants') {
-      const pick = (r) => ({ name: r.name, slug: r.slug, plan: r.plan, trial_ends_at: r.trial_ends_at, web_page: !!r.web_page, qr_menu: !!r.qr_menu, online_orders: !!r.online_orders, public_info: r.public_info || {}, group_id: r.group_id || null });
+      const pick = (r) => ({ name: r.name, slug: r.slug, plan: r.plan, trial_ends_at: r.trial_ends_at, web_page: !!r.web_page, qr_menu: !!r.qr_menu, online_orders: !!r.online_orders, public_info: r.public_info || {}, group_id: r.group_id || null, paid_until: r.paid_until || null });
       let rows = filterRows([...restaurants.values()].filter((r) => isMember(r.id, uid) || admins.has(uid)), url);
       if (req.method === 'PATCH') {
         const allowed = ['name', 'town', 'web_page', 'qr_menu', 'online_orders', 'public_info'];

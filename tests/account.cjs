@@ -1,5 +1,6 @@
 // "My account": the owner sees the account email, changes PIN, password and email; a cashier changes only their own PIN.
 // Needs tests/cloud-mock.cjs running on :54321 and the app on :8765.
+const PK = require('./pinkey.cjs');
 const { chromium } = require('/opt/npm-tools/node_modules/playwright');
 const URL = process.env.POS_URL || 'http://localhost:8765/';
 const MOCK = 'http://localhost:54321';
@@ -50,7 +51,7 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
   await a.click('.acct-form button:has-text("Change PIN")');
   await a.waitForTimeout(300);
   let s = await a.evaluate(() => (window.__pos ? window.__pos.state() : null));
-  check('PIN changed', s.staff[0].pin === '3691');
+  check('PIN changed', s.staff[0].pin === PK('3691'));
 
   // Change password: wrong current refused; right one works on the server
   await a.click('button:has-text("Change password")');
@@ -106,7 +107,7 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
   await a.click('.acct-form button:has-text("Change PIN")');
   await a.waitForTimeout(300);
   s = await a.evaluate(() => (window.__pos ? window.__pos.state() : null));
-  check('cashier changed own PIN', s.staff.find((x) => x.id === 'u-cash1').pin === '8024');
+  check('cashier changed own PIN', s.staff.find((x) => x.id === 'u-cash1').pin === PK('8024'));
 
   check('no page errors', errors.length === 0, errors.join(' | '));
   console.log(JSON.stringify(out, null, 1));

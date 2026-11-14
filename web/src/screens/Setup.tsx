@@ -8,7 +8,7 @@ import { useState, type ReactNode } from 'react';
 import { LuArrowLeft, LuStore, LuLink } from 'react-icons/lu';
 import { toast } from '../components/ui';
 import { ChooseRestaurant, SignIn, SlugField, createAndUpload } from '../components/CloudAccount';
-import { getSession, signUp } from '../cloud/api';
+import { getSession, signIn, signUp } from '../cloud/api';
 import { useSyncStatus } from '../cloud/sync';
 import { go } from '../router';
 import { getState, startFresh } from '../store/store';
@@ -72,17 +72,37 @@ function AfterConnect() {
   );
 }
 
+/** A set-up waiting for the owner to confirm their email (kept so a reload or the email link does not lose it). */
+const PENDING_KEY = 'restaurant-pos.setup-pending';
+const PIN_KEY = 'restaurant-pos.setup-pin'; // this tab only
+interface Pending { name: string; town: string; slug: string; keepMenu: boolean; owner: string; email: string }
+function readPending(): Pending | null {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+export const hasPendingSetup = () => !!readPending();
+
 function NewRestaurant() {
-  const [step, setStep] = useState(1);
-  const [name, setName] = useState('');
-  const [town, setTown] = useState('');
-  const [slug, setSlug] = useState('');
-  const [slugOk, setSlugOk] = useState<boolean | null>(null);
-  const [keepMenu, setKeepMenu] = useState(true);
-  const [owner, setOwner] = useState('');
-  const [pin, setPin] = useState('');
-  const [pin2, setPin2] = useState('');
-  const [email, setEmail] = useState('');
+  const pending = readPending();
+  const [step, setStep] = useState(pending ? (getSession() ? 3 : 4) : 1);
+  const [name, setName] = useState(pending?.name ?? '');
+  const [town, setTown] = useState(pending?.town ?? '');
+  const [slug, setSlug] = useState(pending?.slug ?? '');
+  const [slugOk, setSlugOk] = useState<boolean | null>(pending ? true : null);
+  const [keepMenu, setKeepMenu] = useState(pending?.keepMenu ?? true);
+  const [owner, setOwner] = useState(pending?.owner ?? '');
+  const [pin, setPin] = useState(() => {
+    try {
+      return sessionStorage.getItem(PIN_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const [pin2, setPin2] = useState(pin);
+  const [email, setEmail] = useState(pending?.email ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
@@ -105,17 +125,31 @@ function NewRestaurant() {
   const finish = async () => {
     setError('');
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError('Type your email address.');
-    if (password.length < 8) return setError('Choose a password of at least 8 characters.');
+    if (!getSession() && password.length < 8) return setError('Choose a password of at least 8 characters.');
+    if (!/^\d{4}$/.test(pin) || pin !== pin2) return setError('Type your 4-digit PIN twice.');
     try {
       setBusy('Creating your account…');
       const r = getSession() ? 'signed-in' : await signUp(email, password);
       if (r === 'confirm') {
-        setError('Please confirm your email: open the link we sent, then come back and choose "Connect this device".');
+        // Email confirmation is on: keep everything until the owner has opened the link.
+        try {
+          localStorage.setItem(PENDING_KEY, JSON.stringify({ name, town, slug, keepMenu, owner, email: email.trim() } satisfies Pending));
+          sessionStorage.setItem(PIN_KEY, pin);
+        } catch {
+          /* ignore */
+        }
+        setStep(4);
         return;
       }
       const res = startFresh({ ownerPin: pin, keepMenu, ownerName: owner, restaurantName: name, town });
       if (!res.ok) throw new Error(res.error);
       await createAndUpload({ name: name.trim(), slug, town: town.trim() }, getState().settings.baseCurrency, setBusy);
+      try {
+        localStorage.removeItem(PENDING_KEY);
+        sessionStorage.removeItem(PIN_KEY);
+      } catch {
+        /* ignore */
+      }
       toast(`Welcome to TechPlug POS, ${owner.trim().split(' ')[0]}!`);
       go('/');
     } catch (e) {
@@ -124,6 +158,72 @@ function NewRestaurant() {
       setBusy('');
     }
   };
+
+  /** After opening the email link (on this or another device): sign in here and create the restaurant. */
+  const continueAfterEmail = async () => {
+    setError('');
+    if (!/^\d{4}$/.test(pin) || pin !== pin2) return setError('Type your 4-digit PIN twice.');
+    try {
+      setBusy('Checking…');
+      if (!getSession()) await signIn(email, password);
+    } catch (e) {
+      setBusy('');
+      return setError(e instanceof Error ? e.message : String(e));
+    }
+    setBusy('');
+    await finish();
+  };
+
+  if (step === 4)
+    return (
+      <Shell>
+        <div className="cloud-form">
+          <h2>Check your email</h2>
+          <p>
+            We sent a link to <b>{email}</b>. Open it — on your phone is fine — to confirm the address. Then come back here and press <b>Continue</b>.
+          </p>
+          <p className="muted small">No email after a few minutes? Look in Spam or Promotions.</p>
+          {!getSession() && (
+            <label className="field">
+              Your password
+              <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </label>
+          )}
+          {!pin && (
+            <div className="form-grid">
+              <label className="field">
+                Your 4-digit PIN
+                <input inputMode="numeric" maxLength={4} type="password" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} />
+              </label>
+              <label className="field">
+                Type it again
+                <input inputMode="numeric" maxLength={4} type="password" value={pin2} onChange={(e) => setPin2(e.target.value.replace(/\D/g, ''))} />
+              </label>
+            </div>
+          )}
+          {error && <div className="error-text">{error}</div>}
+          <div className="row wrap setup-nav">
+            <button
+              className="btn"
+              onClick={() => {
+                try {
+                  localStorage.removeItem(PENDING_KEY);
+                } catch {
+                  /* ignore */
+                }
+                setStep(3);
+              }}
+              disabled={!!busy}
+            >
+              Use another email
+            </button>
+            <button className="btn primary" onClick={continueAfterEmail} disabled={!!busy}>
+              {busy || 'Continue'}
+            </button>
+          </div>
+        </div>
+      </Shell>
+    );
 
   return (
     <Shell>

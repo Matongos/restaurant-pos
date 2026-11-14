@@ -1,4 +1,6 @@
 import { flushDisk, onOtherWindowSaved, readDisk, saveDisk } from './disk';
+import { isPinKey, pinKey, pinMatches } from '../domain/pinhash';
+import { pinFailed, pinLockedFor, pinOk, waitText } from './pinGuard';
 import { useMemo, useSyncExternalStore } from 'react';
 import type {
   DiningTable,
@@ -195,17 +197,23 @@ function stripExamples(st: AppState): AppState {
   };
 }
 
+/** Any PIN still stored as the plain number (demo data, an older version, another till) is scrambled. */
+function scramblePins(st: AppState): AppState {
+  if (!st.staff.some((s) => s.pin && !isPinKey(s.pin))) return st;
+  return { ...st, staff: st.staff.map((s) => (s.pin && !isPinKey(s.pin) ? { ...s, pin: pinKey(s.pin) } : s)) };
+}
+
 function load(): AppState {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const migrated = migrate(JSON.parse(raw));
-      if (migrated) return withExamples(migrated);
+      if (migrated) return withExamples(scramblePins(migrated));
     }
   } catch {
     /* ignore and fall back to demo data */
   }
-  return withExamples(seedState());
+  return withExamples(scramblePins(seedState()));
 }
 
 let state: AppState = load();
@@ -235,19 +243,22 @@ export async function initStore(): Promise<void> {
       state: () => stripExamples(state),
       put: async (next: AppState) => {
         const prev = state;
-        state = withExamples(next);
+        state = withExamples(scramblePins(next));
         persist();
         emit();
         changeHook?.(prev, state);
         await flushDisk();
       },
       flush: flushDisk,
+      pinKey,
     };
   const fromDisk = await readDisk();
   if (fromDisk) {
     const migrated = migrate(fromDisk);
     if (migrated) {
-      state = withExamples(migrated);
+      const plain = scramblePins(migrated) !== migrated;
+      state = withExamples(scramblePins(migrated));
+      if (plain) persist();
       dropEndedSession();
       emit();
     }
@@ -273,7 +284,7 @@ export async function initStore(): Promise<void> {
     const migrated = v ? migrate(v) : null;
     if (!migrated) return;
     const prev = state;
-    state = withExamples(migrated);
+    state = withExamples(scramblePins(migrated));
     dropEndedSession();
     emit();
     changeHook?.(prev, state); // another window of this app changed something: send it too
@@ -293,7 +304,7 @@ export function onLocalChange(hook: ChangeHook | null) {
 
 function set(updater: (s: AppState) => AppState) {
   const prev = state;
-  state = updater(state);
+  state = scramblePins(updater(state));
   persist();
   emit();
   changeHook?.(prev, state);
@@ -303,7 +314,10 @@ function set(updater: (s: AppState) => AppState) {
 export function applyRemote(updater: (s: AppState) => AppState) {
   const next = updater(state);
   if (next === state) return;
-  state = next;
+  const scrambled = scramblePins(next);
+  state = scrambled;
+  // A plain PIN came from a till still on an older version: send the scrambled one back.
+  if (scrambled !== next) changeHook?.(next, scrambled);
   persist();
   dropEndedSession();
   emit();
@@ -311,10 +325,23 @@ export function applyRemote(updater: (s: AppState) => AppState) {
 
 /** Replace everything on this device with the restaurant's data from the online account. */
 export function replaceAll(next: AppState) {
-  state = withExamples(next);
+  state = withExamples(scramblePins(next));
   persist();
   dropEndedSession();
   emit();
+}
+
+/** Put a downloaded backup back on this till (not used while connected to the online account). */
+export function restoreBackup(raw: unknown): { ok: true } | { ok: false; error: string } {
+  const migrated = migrate(raw);
+  if (!migrated || !Array.isArray(migrated.staff) || !migrated.staff.some((s) => s.role === 'super_admin')) return { ok: false, error: 'This backup cannot be read by this version.' };
+  const prev = state;
+  state = withExamples(scramblePins(migrated));
+  persist();
+  writeSession(null);
+  emit();
+  changeHook?.(prev, state);
+  return { ok: true };
 }
 
 /** An empty restaurant (no menu, orders or staff) with this version's default settings, to fill from the online account. */
@@ -451,7 +478,7 @@ export function nextSlip(s: AppState, tillNo: number): { number: number; dayCoun
 }
 
 export function login(pin: string): Staff | null {
-  const user = state.staff.find((s) => canSignIn(s) && s.pin === pin) ?? null;
+  const user = state.staff.find((s) => canSignIn(s) && pinMatches(s.pin, pin)) ?? null;
   if (user) writeSession(user.id);
   emit();
   return user;
@@ -1139,7 +1166,7 @@ export function startFresh(opts: { ownerPin: string; keepMenu: boolean; byId?: s
   set((st0) => {
     const st = stripExamples(st0);
     const me = st.staff.find((x) => x.id === opts.byId && x.role === 'super_admin') ?? st.staff.find((x) => x.role === 'super_admin' && !x.deletedAt);
-    const owner: Staff = { ...(me ?? { id: uid('u-'), name: 'Owner', role: 'super_admin', active: true }), pin, active: true, pinChangedAt: now, createdAt: now };
+    const owner: Staff = { ...(me ?? { id: uid('u-'), name: 'Owner', role: 'super_admin', active: true }), pin: pinKey(pin), active: true, pinChangedAt: now, createdAt: now };
     if (opts.ownerName?.trim()) owner.name = tidyName(opts.ownerName);
     const demoSettings = seedState().settings;
     return {
@@ -1179,7 +1206,7 @@ export function startFresh(opts: { ownerPin: string; keepMenu: boolean; byId?: s
 
 /** A manager or owner PIN, used to approve cancellations. */
 export function verifyManagerPin(pin: string): Staff | null {
-  return state.staff.find((s) => canSignIn(s) && s.pin === pin && (s.role === 'manager' || s.role === 'super_admin')) ?? null;
+  return state.staff.find((s) => canSignIn(s) && pinMatches(s.pin, pin) && (s.role === 'manager' || s.role === 'super_admin')) ?? null;
 }
 
 export interface CancelInput {
@@ -1196,8 +1223,14 @@ export interface CancelInput {
  * or kept on this sale is put back; a refund can be paid in cash or added to the customer's change.
  */
 export function cancelOrder(input: CancelInput): { ok: true; cancellation: Cancellation } | { ok: false; error: string } {
+  const wait = pinLockedFor();
+  if (wait) return { ok: false, error: `Too many wrong PINs. Try again in ${waitText(wait)}.` };
   const approver = verifyManagerPin(input.approverPin);
-  if (!approver) return { ok: false, error: 'That is not a manager or owner PIN.' };
+  if (!approver) {
+    pinFailed();
+    return { ok: false, error: 'That is not a manager or owner PIN.' };
+  }
+  pinOk();
   if (!input.reason.trim()) return { ok: false, error: 'Give a reason.' };
   const order = state.orders.find((o) => o.id === input.orderId);
   if (!order) return { ok: false, error: 'Sale not found.' };
@@ -1456,7 +1489,7 @@ export function addStaff(input: NewStaff, byId: string): StaffResult {
   const bad = pinProblem(input.pin, state.staff);
   if (bad) return { ok: false, error: bad };
   const now = new Date().toISOString();
-  const staff: Staff = { id: uid('u-'), name, role: input.role, pin: input.pin, phone: input.phone?.trim() || undefined, active: true, createdAt: now, pinChangedAt: now };
+  const staff: Staff = { id: uid('u-'), name, role: input.role, pin: pinKey(input.pin), phone: input.phone?.trim() || undefined, active: true, createdAt: now, pinChangedAt: now };
   set((st) => logStaff({ ...st, staff: [...st.staff, staff] }, byId, staff.id, 'added', ROLE_LABEL[staff.role]));
   return { ok: true, staff };
 }
@@ -1491,7 +1524,7 @@ export function setStaffPin(id: string, pin: string, byId: string): StaffResult 
   if (!actor || !target || !rights?.pin) return { ok: false, error: "You can't change this person's PIN" };
   const bad = pinProblem(pin, state.staff, id);
   if (bad) return { ok: false, error: bad };
-  const updated = { ...target, pin, pinChangedAt: new Date().toISOString() };
+  const updated = { ...target, pin: pinKey(pin), pinChangedAt: new Date().toISOString() };
   set((st) => logStaff({ ...st, staff: st.staff.map((s) => (s.id === id ? updated : s)) }, byId, id, 'pin_changed'));
   return { ok: true, staff: updated };
 }
@@ -1500,11 +1533,11 @@ export function setStaffPin(id: string, pin: string, byId: string): StaffResult 
 export function changeMyPin(id: string, currentPin: string, pin: string): StaffResult {
   const me = state.staff.find((s) => s.id === id && canSignIn(s));
   if (!me) return { ok: false, error: 'Log in again first' };
-  if (me.pin !== currentPin) return { ok: false, error: 'Your current PIN is not right' };
+  if (!pinMatches(me.pin, currentPin)) return { ok: false, error: 'Your current PIN is not right' };
   if (pin === currentPin) return { ok: false, error: 'The new PIN is the same as the old one' };
   const bad = pinProblem(pin, state.staff, id);
   if (bad) return { ok: false, error: bad };
-  const updated = { ...me, pin, pinChangedAt: new Date().toISOString() };
+  const updated = { ...me, pin: pinKey(pin), pinChangedAt: new Date().toISOString() };
   set((st) => logStaff({ ...st, staff: st.staff.map((s) => (s.id === id ? updated : s)) }, id, id, 'pin_changed'));
   return { ok: true, staff: updated };
 }

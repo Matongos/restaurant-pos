@@ -1,3 +1,4 @@
+import { pinMatches } from './pinhash';
 import type { AddOn, AppState, Component, CreditEntry, Customer, LineExtra, MenuItem, Order, Role, Staff } from './types';
 
 /** A meal can be sold only if it is switched on AND every component it uses is available. */
@@ -267,7 +268,7 @@ export function staffRights(actor: Staff, target: Staff): StaffRights {
 export function pinProblem(pin: string, staff: Staff[], forId?: string): string | null {
   if (!/^\d{4}$/.test(pin)) return 'PIN must be 4 digits';
   if (/^(\d)\1{3}$/.test(pin)) return 'Too easy to guess — avoid four of the same digit';
-  if (staff.some((s) => !s.deletedAt && s.id !== forId && s.pin === pin)) return 'Someone else already uses this PIN';
+  if (staff.some((s) => !s.deletedAt && s.id !== forId && pinMatches(s.pin, pin))) return 'Someone else already uses this PIN';
   return null;
 }
 

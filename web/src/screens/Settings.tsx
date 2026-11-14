@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import CloudAccount from '../components/CloudAccount';
+import Backup from '../components/Backup';
+import PlanPayments from '../components/PlanPayments';
 import WebsiteSettings from '../components/WebsiteSettings';
 import { useSyncStatus } from '../cloud/sync';
 import { addComponent, getTillNo, setTillNo, TILL_RANGE, setExampleHistory, resetDemo, startFresh, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
@@ -15,7 +17,7 @@ import DeliverySettings from '../components/DeliverySettings';
 import ServiceSettings from '../components/ServiceSettings';
 import RecipeEditor from '../components/RecipeEditor';
 
-type Tab = 'general' | 'online' | 'website' | 'service' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'delivery' | 'kitchen' | 'demo';
+type Tab = 'general' | 'online' | 'website' | 'service' | 'numbers' | 'payments' | 'currencies' | 'menu' | 'delivery' | 'kitchen' | 'plan' | 'backup' | 'demo';
 
 /** Tabs a manager may change: how the till runs day to day. Everything else is the owner's. */
 const MANAGER_TABS: Tab[] = ['numbers', 'delivery', 'kitchen'];
@@ -36,6 +38,8 @@ export default function SettingsScreen() {
     ['menu', 'Menu & categories'],
     ['delivery', 'Delivery'],
     ['kitchen', 'Serving times'],
+    ['plan', 'Plan & payments'],
+    ['backup', 'Backup'],
     ['demo', 'Start fresh'],
   ];
   const tabs = owner ? allTabs : allTabs.filter(([k]) => MANAGER_TABS.includes(k));
@@ -62,6 +66,8 @@ export default function SettingsScreen() {
             {tab === 'menu' && <MenuEditor />}
             {tab === 'delivery' && <DeliverySettings />}
             {tab === 'kitchen' && <KitchenSettings />}
+            {tab === 'plan' && <PlanPayments />}
+            {tab === 'backup' && <Backup />}
             {tab === 'demo' && <Demo />}
           </div>
         </div>
