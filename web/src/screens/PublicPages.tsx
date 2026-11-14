@@ -5,7 +5,7 @@
  *   #/o/<private code>         the customer's order: accepted, ready, collected
  */
 import { useEffect, useMemo, useState } from 'react';
-import { LuClock, LuMapPin, LuMessageCircle, LuMinus, LuPhone, LuPlus, LuShoppingBasket, LuWifiOff, LuX, LuCircleCheck, LuChefHat, LuStore, LuBike } from 'react-icons/lu';
+import { LuClock, LuMapPin, LuMessageCircle, LuMinus, LuPhone, LuPlus, LuShoppingBasket, LuWifiOff, LuX, LuCircleCheck, LuChefHat, LuStore, LuBike, LuUtensils, LuCoffee, LuCupSoda, LuSoup, LuCakeSlice, LuSandwich } from 'react-icons/lu';
 import { rpc } from '../cloud/api';
 
 interface PubItem { id: string; name: string; price: number; categoryId: string; emoji: string; photo?: string; available: boolean; addOnIds: string[]; sort?: number }
@@ -18,6 +18,17 @@ interface PubMenu {
   delivery?: { on: boolean; fee?: number; area?: string };
 }
 interface CartLine { key: string; itemId: string; name: string; qty: number; unit: number; extras: string[] }
+
+/** A plain outline icon for a menu section, from its name. */
+function catIcon(name: string) {
+  const n = name.toLowerCase();
+  if (/drink|juice|soda|beverage|water/.test(n)) return LuCupSoda;
+  if (/breakfast|tea|coffee/.test(n)) return LuCoffee;
+  if (/side|soup|extra/.test(n)) return LuSoup;
+  if (/dessert|cake|sweet/.test(n)) return LuCakeSlice;
+  if (/snack|sandwich|burger|wrap/.test(n)) return LuSandwich;
+  return LuUtensils;
+}
 
 const money = (sym: string, n: number) => `${sym}${Number(n).toFixed(2)}`;
 const MINE_KEY = 'techplug.my-orders';
@@ -130,31 +141,49 @@ export function RestaurantPage({ slug, table }: { slug: string; table?: string }
           <nav className="pub-cats">
             {cats.map((c) => (
               <a key={c.id} href={`#/r/${slug}${table ? `?t=${encodeURIComponent(table)}` : ''}`} onClick={(e) => { e.preventDefault(); document.getElementById(`cat-${c.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>
+                {(() => { const I = catIcon(c.name); return <I aria-hidden="true" />; })()}
                 {c.name}
               </a>
             ))}
           </nav>
-          {cats.map((c) => (
-            <section key={c.id} id={`cat-${c.id}`} className="pub-sec">
-              <h2>{c.name}</h2>
-              <div className="pub-items">
-                {menu.items
-                  .filter((i) => i.categoryId === c.id)
-                  .sort((a, b) => Number(b.available) - Number(a.available) || (a.sort ?? 0) - (b.sort ?? 0))
-                  .map((i) => {
+          {cats.map((c) => {
+            const items = menu.items.filter((i) => i.categoryId === c.id).sort((a, b) => Number(b.available) - Number(a.available) || (a.sort ?? 0) - (b.sort ?? 0));
+            // Photo cards when this section has photos; otherwise a clean list (no empty picture boxes).
+            const photos = items.some((i) => !!i.photo);
+            const Icon = catIcon(c.name);
+            return (
+              <section key={c.id} id={`cat-${c.id}`} className="pub-sec">
+                <h2>{c.name}</h2>
+                <div className={photos ? 'pub-items' : 'pub-rows'}>
+                  {items.map((i) => {
                     const inCart = cart.filter((l) => l.itemId === i.id).reduce((a, l) => a + l.qty, 0);
                     return (
-                      <button key={i.id} className={`pub-item ${i.available ? '' : 'out'}`} onClick={() => tap(i)} disabled={!i.available || !canOrder} aria-label={`${i.name} ${money(sym, i.price)}${i.available ? '' : ' sold out'}`}>
-                        {i.photo ? <img src={i.photo} alt="" loading="lazy" /> : <span className="pub-emoji">{i.emoji}</span>}
-                        <span className="pub-name">{i.name}</span>
-                        <span className="pub-price">{i.available ? money(sym, i.price) : 'Sold out today'}</span>
-                        {inCart > 0 && <span className="pub-qty">{inCart}</span>}
+                      <button key={i.id} className={`${photos ? 'pub-item' : 'pub-row'} ${i.available ? '' : 'out'} ${inCart ? 'in-cart' : ''}`} onClick={() => tap(i)} disabled={!i.available || !canOrder} aria-label={`${i.name} ${money(sym, i.price)}${i.available ? '' : ' sold out'}${inCart ? `, ${inCart} in your order` : ''}`}>
+                        {photos &&
+                          (i.photo ? (
+                            <img src={i.photo} alt="" loading="lazy" />
+                          ) : (
+                            <span className="pub-ph">
+                              <Icon aria-hidden="true" />
+                            </span>
+                          ))}
+                        {!photos && (
+                          <span className="pub-row-ic">
+                            <Icon aria-hidden="true" />
+                          </span>
+                        )}
+                        <span className="pub-txt">
+                          <span className="pub-name">{i.name}</span>
+                          <span className="pub-price">{i.available ? money(sym, i.price) : 'Sold out today'}</span>
+                        </span>
+                        {i.available && canOrder && <span className="pub-add">{inCart ? <>{inCart} <span className="pub-add-x">in order</span></> : <><LuPlus aria-hidden="true" /> Add</>}</span>}
                       </button>
                     );
                   })}
-              </div>
-            </section>
-          ))}
+                </div>
+              </section>
+            );
+          })}
           {menu.updatedAt && <p className="pub-foot">Availability updated {new Date(menu.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
         </>
       )}

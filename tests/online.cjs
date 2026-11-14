@@ -66,19 +66,19 @@ const j = async (p) => (await fetch(MOCK + p)).json();
 
   // ---- 3. Customer opens the page on a phone
   const C = await ctxFor({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const c = C.page;
-  await c.goto(URL + '#/r/mama-rudo-eats'); await c.waitForSelector('.pub-item');
+  await c.goto(URL + '#/r/mama-rudo-eats'); await c.waitForSelector(':is(.pub-item,.pub-row)');
   check('customer sees name and live menu', /Mama Rudo Eats/.test(await c.textContent('.pub-head')) && /menu is live/.test(await c.textContent('.pub-live')));
   check('customer sees opening hours', /Mon–Sat/.test(await c.textContent('.pub-info')));
   check('customer page has no PIN pad', !(await c.isVisible('.keypad')));
   // sold out on the till → shows on the page
   await a.goto(URL + '#/todays-menu'); await a.click('.toggle:has-text("Sadza & Fish")');
   await a.waitForTimeout(9500);
-  await c.reload(); await c.waitForSelector('.pub-item');
-  check('sold out shows on customer page', /Sold out today/.test(await c.textContent('.pub-item:has-text("Sadza & Fish")')));
+  await c.reload(); await c.waitForSelector(':is(.pub-item,.pub-row)');
+  check('sold out shows on customer page', /Sold out today/.test(await c.textContent(':is(.pub-item,.pub-row):has-text("Sadza & Fish")')));
   // order: 2 × Sadza & Beef (+ extra), 1 water
-  await c.click('.pub-item:has-text("Sadza & Beef")');
+  await c.click(':is(.pub-item,.pub-row):has-text("Sadza & Beef")');
   if (await c.isVisible('.pub-sheet .pub-check')) { await c.locator('.pub-check').first().click(); await c.click('.pub-sheet button:has-text("Add to order")'); }
-  await c.click('.pub-item:has-text("Water 500ml")');
+  await c.click(':is(.pub-item,.pub-row):has-text("Water 500ml")');
   await c.click('.pub-cartbar');
   await c.locator('.pub-field:has-text("Your name") input').fill('Tendai');
   await c.click('.pub-btn:has-text("Send order")');
@@ -124,8 +124,8 @@ const j = async (p) => (await fetch(MOCK + p)).json();
   await a.locator('label:has-text("Delivery fee") input').focus(); await a.locator('label:has-text("Where you deliver") input').focus(); await a.click('h3.cloud-h');
   await a.waitForTimeout(9500);
   m = await j('/__state');
-  await c.goto(URL + '#/r/mama-rudo-eats'); await c.waitForSelector('.pub-item');
-  await c.click('.pub-item:has-text("Water 500ml")'); await c.click('.pub-cartbar');
+  await c.goto(URL + '#/r/mama-rudo-eats'); await c.waitForSelector(':is(.pub-item,.pub-row)');
+  await c.click(':is(.pub-item,.pub-row):has-text("Water 500ml")'); await c.click('.pub-cartbar');
   check('customer can choose delivery', await c.isVisible('.pub-mode button:has-text("Delivery")') && /\$2\.00/.test(await c.textContent('.pub-mode')) && /Kadoma town/.test(await c.textContent('.pub-mode')));
   await c.click('.pub-mode button:has-text("Delivery")');
   check('total includes delivery', /Total \$3\.00/.test(await c.textContent('.pub-total')));
@@ -159,8 +159,8 @@ const j = async (p) => (await fetch(MOCK + p)).json();
   check('server charged the delivery fee', od.total === 3 && od.delivery_fee === 2);
 
   // ---- 5. Decline + customer cancel
-  await c.goto(URL + '#/r/mama-rudo-eats'); await c.waitForSelector('.pub-item');
-  await c.click('.pub-item:has-text("Water 500ml")'); await c.click('.pub-cartbar'); await c.click('.pub-btn:has-text("Send order")');
+  await c.goto(URL + '#/r/mama-rudo-eats'); await c.waitForSelector(':is(.pub-item,.pub-row)');
+  await c.click(':is(.pub-item,.pub-row):has-text("Water 500ml")'); await c.click('.pub-cartbar'); await c.click('.pub-btn:has-text("Send order")');
   await c.waitForSelector('.pub-status');
   await a.goto(URL + '#/online'); await a.waitForSelector('.web-card.new', { timeout: 15000 });
   await a.click('.web-card.new button:has-text("Decline")');
@@ -170,7 +170,7 @@ const j = async (p) => (await fetch(MOCK + p)).json();
   // ---- 6. Offline restaurant: QR menu not live, ordering refused
   await j('/__age');
   await c.goto(URL + '#/r/mama-rudo-eats'); await c.waitForSelector('.pub-off');
-  check('offline: menu not live', /not live right now/.test(await c.textContent('.pub-off')) && !(await c.isVisible('.pub-item')));
+  check('offline: menu not live', /not live right now/.test(await c.textContent('.pub-off')) && !(await c.isVisible(':is(.pub-item,.pub-row)')));
 
   // ---- 7. Posters
   await a.goto(URL + '#/posters'); await a.waitForSelector('.poster');

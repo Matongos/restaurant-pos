@@ -56,7 +56,8 @@ section .sub { font-size: 18px; color: var(--muted); max-width: 680px; }
 .feat { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 44px; text-align: left; }
 .feat div { border: 1px solid var(--line); border-radius: 18px; padding: 24px; background: #fff; transition: transform .2s, box-shadow .2s; }
 .feat div:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(15,29,54,.08); }
-.feat .ic { width: 46px; height: 46px; border-radius: 13px; background: var(--orange-soft); display: grid; place-items: center; font-size: 22px; margin-bottom: 16px; }
+.feat .ic { width: 46px; height: 46px; border-radius: 13px; background: var(--orange-soft); color: var(--orange, #f47b20); display: grid; place-items: center; font-size: 22px; margin-bottom: 16px; }
+.dl-ic { display: inline-grid; vertical-align: -3px; color: var(--orange, #f47b20); }
 .feat h3 { font-size: 18px; margin-bottom: 6px; }
 .feat p { color: var(--muted); font-size: 14.5px; }
 .video { margin: 44px auto 0; max-width: 1040px; border-radius: 20px; overflow: hidden; box-shadow: 0 30px 70px rgba(15,29,54,.25); background: #000; }
