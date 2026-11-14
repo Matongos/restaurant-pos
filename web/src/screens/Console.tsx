@@ -14,6 +14,7 @@ interface Overview {
 interface Row {
   id: string; name: string; slug: string; town: string | null; plan: string; trial_ends_at: string; created_at: string; last_seen_at: string | null;
   owner_email: string | null; devices: number; orders: number; web_page: boolean; qr_menu: boolean; online_orders: boolean; online_orders_count: number;
+  group_id?: string | null; group_name?: string | null; branches?: number;
 }
 interface Release { tag_name: string; published_at: string; assets: { name: string; download_count: number }[] }
 
@@ -241,6 +242,8 @@ function Dashboard({ onOut }: { onOut: () => void }) {
                   <tr key={r.id}>
                     <td>
                       <b>{r.name}</b>
+                      {r.group_id && r.group_id !== r.id && <div className="muted small">Branch of {r.group_name}</div>}
+                      {r.group_id === r.id && !!r.branches && <div className="muted small">Main · {r.branches} branches in all</div>}
                       <div className="muted small">
                         {r.slug} · {r.town ?? '—'} · joined {new Date(r.created_at).toLocaleDateString()}
                       </div>

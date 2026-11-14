@@ -283,3 +283,32 @@ export function patch<T = unknown>(table: string, query: string, body: Record<st
 export function insertQuiet(table: string, body: Record<string, unknown>): Promise<unknown> {
   return call(`/rest/v1/${table}`, { method: 'POST', body: JSON.stringify(body), headers: { Prefer: 'return=minimal' } });
 }
+
+/* ------------------------------------------------------------------ branches */
+
+export interface BranchSummary {
+  id: string;
+  name: string;
+  slug: string;
+  town: string | null;
+  last_seen_at: string | null;
+  is_main: boolean;
+  orders_today: number;
+  sales_today: number;
+  orders_week: number;
+  sales_week: number;
+}
+
+/** Every branch this login owns, with today's and this week's sales (worked out on the server). */
+export function groupSummary(): Promise<BranchSummary[]> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const week = new Date(Date.now() - 6 * 864e5);
+  week.setHours(0, 0, 0, 0);
+  return rpc<BranchSummary[]>('group_summary', { p_today: today.toISOString(), p_week: week.toISOString() });
+}
+
+/** Add a branch to the group of `mainId` (the owner only; Group plan or trial; 5 at most). */
+export function createBranch(mainId: string, name: string, slug: string, town: string): Promise<string> {
+  return rpc<string>('create_branch', { p_main: mainId, p_name: name.trim(), p_slug: slug, p_town: town.trim() || null });
+}

@@ -1516,3 +1516,30 @@ tr.struck td b { text-decoration: line-through; }
 .cloud-history { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; margin: 12px 0; }
 .cloud-history .grow { flex: 1 1 260px; }
 .an-note { padding: 12px 16px; margin-bottom: 12px; color: var(--muted); }
+
+/* Branches */
+.branch-page { display: flex; flex-direction: column; gap: 16px; }
+.branch-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.branch-head h2 { margin: 0 0 4px; }
+.branch-head p { margin: 0; }
+.branch-msg { padding: 14px 16px; }
+.branch-empty { padding: 28px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.branch-empty > svg { width: 40px; height: 40px; color: var(--muted); }
+.branch-empty h2, .branch-empty p { margin: 0; }
+.branch-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.branch-totals .card { padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.branch-totals b { font-size: 28px; }
+.branch-table { overflow-x: auto; padding: 0; }
+.branch-table table { width: 100%; border-collapse: collapse; min-width: 560px; }
+.branch-table th, .branch-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+.branch-table th { font-size: 13px; color: var(--muted); font-weight: 700; }
+.branch-table .num { text-align: right; }
+.branch-table tr.here { background: var(--brand-soft); }
+.branch-table .pill { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 10px; background: var(--brand); color: #fff; font-size: 12px; font-weight: 700; }
+.branch-table .pill.soft { background: var(--soft); color: var(--ink); }
+.branch-table .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); margin-right: 4px; }
+.branch-table .dot.on { background: #16a34a; }
+.branch-add { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.branch-add h3 { margin: 0; }
+.branch-add .row .grow { flex: 1 1 auto; }
+@media (max-width: 560px) { .branch-totals { grid-template-columns: 1fr; } }

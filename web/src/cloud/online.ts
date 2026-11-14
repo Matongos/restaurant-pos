@@ -26,6 +26,8 @@ export interface RestaurantInfo {
   qr_menu: boolean;
   online_orders: boolean;
   public_info: PublicInfo;
+  /** The main restaurant of this one's group (branches). Missing until database step 3 is run. */
+  group_id?: string | null;
 }
 export interface PublicInfo {
   phone?: string;
@@ -93,7 +95,14 @@ export async function refreshInfo(force = false): Promise<RestaurantInfo | null>
   const link = getLink();
   if (!link) return null;
   if (!force && Date.now() - infoAt < 5 * 60_000 && st.info) return st.info;
-  const rows = await select<RestaurantInfo[]>('restaurants', `select=${INFO_FIELDS}&id=eq.${link.restaurantId}`);
+  let rows: RestaurantInfo[];
+  try {
+    rows = await select<RestaurantInfo[]>('restaurants', `select=${INFO_FIELDS},group_id&id=eq.${link.restaurantId}`);
+  } catch (e) {
+    // Database step 3 not run yet: no branches column.
+    if (!/group_id/.test(e instanceof Error ? e.message : '')) throw e;
+    rows = await select<RestaurantInfo[]>('restaurants', `select=${INFO_FIELDS}&id=eq.${link.restaurantId}`);
+  }
   infoAt = Date.now();
   if (rows[0]) update({ info: { ...rows[0], public_info: rows[0].public_info ?? {} } });
   return rows[0] ?? null;

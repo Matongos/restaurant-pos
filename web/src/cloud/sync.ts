@@ -459,6 +459,34 @@ export async function loadOlderHistory(onProgress?: (n: number) => void): Promis
   return n;
 }
 
+/** What a new branch can start with: the menu and how this restaurant sells (no sales, customers or stock counts). */
+const SETUP_KINDS = ['categories', 'components', 'menu', 'addOns', 'currencies', 'paymentMethods', 'orderTypes', 'stockItems'] as const;
+
+/** Give a new branch this restaurant's menu, prices, payment methods and settings, and the owner (same PIN). */
+export async function copySetupTo(rid: string, branchName: string, ownerId: string | null): Promise<number> {
+  const st = getState();
+  const items: { kind: string; id: string; data: Item }[] = [];
+  for (const kind of SETUP_KINDS) for (const it of st[kind] as Item[]) if (!it.example) items.push({ kind, id: keyOf(kind, it), data: it });
+  const owner = st.staff.find((s) => s.id === ownerId);
+  if (owner) items.push({ kind: 'staff', id: owner.id, data: owner });
+  items.push({ kind: 'settings', id: 'main', data: { ...st.settings, branchId: rid, restaurantName: branchName, trainingMode: false, showExampleHistory: false } });
+  items.push({ kind: 'dayCounter', id: 'main', data: { date: st.dayCounter.date, lastSlip: 0 } });
+  let parcel: typeof items = [];
+  let size = 0;
+  for (const it of items) {
+    const n = JSON.stringify(it).length;
+    if (size + n > 700_000 && parcel.length) {
+      await rpc('push_records', { rid, items: parcel, device: 'branch-copy' });
+      parcel = [];
+      size = 0;
+    }
+    parcel.push(it);
+    size += n;
+  }
+  if (parcel.length) await rpc('push_records', { rid, items: parcel, device: 'branch-copy' });
+  return items.length;
+}
+
 /** Is there anything online for this restaurant already? */
 export async function restaurantHasData(restaurantId: string): Promise<boolean> {
   const rows = await select<unknown[]>('records', `select=id&restaurant_id=eq.${restaurantId}&limit=1`);

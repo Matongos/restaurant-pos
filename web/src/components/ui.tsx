@@ -9,6 +9,7 @@ import {
   LuChartColumn,
   LuClipboardList,
   LuClock,
+  LuBuilding2,
   LuCircleUserRound,
   LuHouse,
   LuUtensils,
@@ -160,6 +161,7 @@ function useNavItems(): NavDef[] {
   const levels = useStockLevels();
   const mode = useStore((s) => s.settings.serviceMode ?? 'counter');
   const web = useOnlineOrders();
+  const sync = useSyncStatus();
   if (!user) return [];
   const busyTables = orders.filter((o) => o.table?.round === 1 && o.status !== 'cancelled' && o.table.status !== 'paid' && !o.example).length;
   // Stock badge: items running low or out (needs buying or counting).
@@ -178,6 +180,7 @@ function useNavItems(): NavDef[] {
     { to: '/stock', label: 'Stock', perm: 'stock', Icon: LuBoxes, badge: stockAlerts },
     { to: '/reports', label: 'Reports', perm: 'reports', Icon: LuChartColumn },
     { to: '/accounts', label: 'Books', perm: 'accounts', Icon: LuBookOpenText },
+    ...(sync.link ? [{ to: '/branches', label: 'Branches', perm: 'settings' as Permission, Icon: LuBuilding2 }] : []),
     { to: '/staff', label: 'Staff', perm: 'staff', Icon: LuUsers },
     { to: '/menu', label: 'Menu', perm: 'menu_edit', Icon: LuSquarePen },
     { to: '/settings', label: 'Settings', perm: 'till_settings', Icon: LuSettings },

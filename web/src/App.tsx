@@ -23,6 +23,7 @@ import { PostersScreen } from './components/WebsiteSettings';
 import { OrderStatusPage, RestaurantPage } from './screens/PublicPages';
 import Console from './screens/Console';
 import Setup from './screens/Setup';
+import BranchesScreen from './screens/Branches';
 import { TrialBar } from './components/TrialBar';
 
 const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
@@ -40,6 +41,7 @@ const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/tables': { perm: 'tables', el: TablesScreen },
   '/online': { perm: 'take_orders', el: OnlineOrders },
   '/posters': { perm: 'settings', el: PostersScreen },
+  '/branches': { perm: 'settings', el: BranchesScreen },
 };
 
 export default function App() {

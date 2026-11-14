@@ -104,6 +104,75 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
     await A.c.close(); await B.c.close();
   }
 
+  // ---- 4. Branches: add a branch with the same menu, connect its till, see both branches' sales
+  {
+    await fetch(MOCK + '/__reset');
+    const dev = async () => { const c = await b.newContext({ viewport: { width: 1280, height: 860 } }); await c.addInitScript((m) => localStorage.setItem('restaurant-pos.cloud-url', m), MOCK); const p = await c.newPage(); p.on('pageerror', (e) => errors.push(e.message)); return { c, p }; };
+    const pin = async (p, code) => { for (const d of code) await p.click(`.keypad button:text-is("${d}")`); await p.waitForTimeout(300); };
+    const sell = async (page, items) => {
+      await page.goto(URL + '#/till'); await page.waitForSelector('.items');
+      for (const m of items) await page.click(`.item:has-text("${m}")`);
+      await page.locator('button:has-text("Pay $")').last().click(); await page.click('.dialog button:text-is("Exact")');
+      await page.locator('.dialog footer button').last().click(); await page.waitForSelector('.done-number'); await page.click('text=Next customer');
+    };
+    const A = await dev();
+    await A.p.goto(URL); await A.p.waitForSelector('.keypad'); await pin(A.p, '1234');
+    await A.p.evaluate(() => window.__pos.put({ ...window.__pos.state(), settings: { ...window.__pos.state().settings, trainingMode: false } }));
+    await A.p.goto(URL + '#/settings'); await A.p.click('.tabs button:has-text("Online account")');
+    const f = A.p.locator('.cloud-form');
+    await f.locator('label:has-text("Restaurant name") input').fill('Tete Foods');
+    await A.p.waitForSelector('.slug-state.good');
+    await f.locator('label:has-text("Your email") input').fill('tete@example.com');
+    await f.locator('label:has-text("password") input').fill('tete-pass-12');
+    await f.locator('button:has-text("Create account")').click();
+    await A.p.waitForSelector('.cloud-state:has-text("Up to date")', { timeout: 20000 });
+    await A.p.goto(URL + '#/branches'); await A.p.waitForSelector('.branch-table');
+    check('branches nav for owner', await A.p.isVisible('.nav-item:has-text("Branches")'));
+    check('one branch at first', (await A.p.locator('.branch-table tbody tr').count()) === 1);
+    await A.p.click('button:has-text("Add a branch")');
+    await A.p.locator('.branch-add label:has-text("Branch name") input').fill('Tete Foods Mbare');
+    await A.p.locator('.branch-add label:has-text("Town") input').fill('Mbare');
+    await A.p.waitForSelector('.branch-add .slug-state.good');
+    await A.p.click('.branch-add button:has-text("Add branch")');
+    await A.p.waitForSelector('.branch-add', { state: 'detached', timeout: 15000 });
+    await A.p.waitForFunction(() => document.querySelectorAll('.branch-table tbody tr').length === 2);
+    check('branch added and listed', /Tete Foods Mbare/.test(await A.p.textContent('.branch-table')) && /Main/.test(await A.p.textContent('.branch-table')));
+    // the branch's till
+    const B = await dev();
+    await B.p.goto(URL); await B.p.waitForSelector('.keypad');
+    await B.p.click('a:has-text("Connect to my restaurant")');
+    await B.p.locator('label:has-text("Email") input').fill('tete@example.com');
+    await B.p.locator('label:has-text("Password") input').fill('tete-pass-12');
+    await B.p.click('button:has-text("Sign in")');
+    await B.p.waitForSelector('.cloud-item');
+    check('both branches offered when connecting', (await B.p.locator('.cloud-item').count()) === 2);
+    await B.p.click('.cloud-item:has-text("Mbare") button:has-text("Connect")');
+    await B.p.click('.cloud-warn button:has-text("Yes, download")');
+    await B.p.waitForSelector('button:has-text("Go to sign in"), button:has-text("Done")', { timeout: 20000 }).catch(async () => { await B.p.screenshot({ path: '/tmp/claude-0/-home-claude/12c690c4-35da-5133-8bd0-05d676f81acb/scratchpad/bfail.png' }); throw new Error('connect stuck: ' + (await B.p.textContent('body')).slice(0, 400)); });
+    const bs = await B.p.evaluate(() => window.__pos.state());
+    const as = await A.p.evaluate(() => window.__pos.state());
+    check('branch got the same menu and owner, no sales', bs.menu.length === as.menu.length && bs.staff.length === 1 && bs.staff[0].pin === '1234' && bs.orders.length === 0 && bs.settings.restaurantName === 'Tete Foods Mbare', `${bs.menu.length}/${as.menu.length} staff ${bs.staff.length} orders ${bs.orders.length} ${bs.settings.restaurantName}`);
+    await B.p.goto(URL); await B.p.waitForSelector('.keypad'); await pin(B.p, '1234');
+    await sell(B.p, ['Sadza & Beef']); await sell(B.p, ['Rice & Chicken']);
+    await sell(A.p, ['Water 500ml']);
+    await B.p.waitForTimeout(2500); await A.p.waitForTimeout(1500);
+    await A.p.goto(URL + '#/branches'); await A.p.waitForSelector('.branch-table');
+    await A.p.click('button:has-text("Refresh")'); await A.p.waitForTimeout(800);
+    const mb = await A.p.textContent('.branch-table tr:has-text("Mbare")');
+    const tot = await A.p.textContent('.branch-totals');
+    check('owner sees the branch\'s sales', /2 sales/.test(mb), mb);
+    check('totals add up all branches', /3 sales/.test(tot), tot);
+    await A.p.screenshot({ path: process.env.SHOT_BRANCHES || '/tmp/claude-0/-home-claude/12c690c4-35da-5133-8bd0-05d676f81acb/scratchpad/branches.png' });
+    // single-restaurant plan: no adding
+    await fetch(MOCK + '/__plan?slug=tete-foods&plan=restaurant');
+    await A.p.evaluate(() => localStorage.removeItem('restaurant-pos.restaurant-info'));
+    await A.p.reload(); await A.p.waitForSelector('.keypad').catch(() => {});
+    if (await A.p.isVisible('.keypad')) await pin(A.p, '1234');
+    await A.p.goto(URL + '#/branches'); await A.p.waitForSelector('.branch-table'); await A.p.waitForTimeout(1500);
+    check('single plan: no add button, plan explained', !(await A.p.isVisible('button:has-text("Add a branch")')) && /Group plan/.test(await A.p.textContent('.branch-page')));
+    await A.c.close(); await B.c.close();
+  }
+
   check('no page errors', errors.length === 0, errors.join(' | '));
   console.log(JSON.stringify(out, null, 1));
   console.log('fails:', Object.values(out).filter((v) => v !== 'ok').length);

@@ -56,6 +56,7 @@ http.createServer((req, res) => {
     // test helpers
     if (p === '/__state') return send(200, { users: users.size, restaurants: [...restaurants.values()], members, records: [...records.values()].map((r) => ({ kind: r.kind, id: r.id, deleted: r.deleted, device_id: r.device_id })), stats });
     if (p === '/__backdate') { let n = 0; for (const r of records.values()) if (r.kind === 'orders' && r.data?.createdAt && Date.parse(r.data.createdAt) < Date.now() - 200 * 864e5) { r.updated_at = r.data.createdAt; n++; } return send(200, { n }); }
+    if (p === '/__plan') { for (const r of restaurants.values()) if (r.slug === url.searchParams.get('slug')) { r.plan = url.searchParams.get('plan'); if (url.searchParams.get('ended')) r.trial_ends_at = new Date(Date.now() - 10 * 864e5).toISOString(); } return send(200, {}); }
     if (p === '/__reset') { users.clear(); tokens.clear(); refreshTokens.clear(); restaurants.clear(); members.length = 0; records.clear(); admins.clear(); onlineOrders.length = 0; events.length = 0; return send(200, {}); }
     if (p === '/__admin') { const u = users.get(url.searchParams.get('email')); if (u) admins.add(u.id); return send(200, { ok: !!u }); }
     if (p === '/__age') { for (const r of restaurants.values()) r.last_seen_at = new Date(Date.now() - 10 * 60000).toISOString(); return send(200, {}); }
@@ -145,7 +146,7 @@ http.createServer((req, res) => {
       return send(200, null);
     }
     if (p === '/rest/v1/restaurants') {
-      const pick = (r) => ({ name: r.name, slug: r.slug, plan: r.plan, trial_ends_at: r.trial_ends_at, web_page: !!r.web_page, qr_menu: !!r.qr_menu, online_orders: !!r.online_orders, public_info: r.public_info || {} });
+      const pick = (r) => ({ name: r.name, slug: r.slug, plan: r.plan, trial_ends_at: r.trial_ends_at, web_page: !!r.web_page, qr_menu: !!r.qr_menu, online_orders: !!r.online_orders, public_info: r.public_info || {}, group_id: r.group_id || null });
       let rows = filterRows([...restaurants.values()].filter((r) => isMember(r.id, uid) || admins.has(uid)), url);
       if (req.method === 'PATCH') {
         const allowed = ['name', 'town', 'web_page', 'qr_menu', 'online_orders', 'public_info'];
@@ -165,6 +166,30 @@ http.createServer((req, res) => {
       const r = { id: crypto.randomUUID(), name: body.p_name, slug: body.p_slug, town: body.p_town, plan: 'trial', trial_ends_at: new Date(Date.now() + 30 * 864e5).toISOString(), created_at: now(), web_page: false, qr_menu: false, online_orders: false, public_info: {} };
       restaurants.set(r.id, r); members.push({ restaurant_id: r.id, user_id: uid, role: 'owner' });
       return send(200, r.id);
+    }
+    if (p === '/rest/v1/rpc/create_branch') {
+      let m = restaurants.get(body.p_main);
+      if (!m) return send(400, { code: 'P0001', message: 'restaurant not found' });
+      if (!members.some((x) => x.restaurant_id === m.id && x.user_id === uid && x.role === 'owner')) return send(403, { code: '42501', message: 'Only the owner can add a branch' });
+      if (m.group_id && m.group_id !== m.id) m = restaurants.get(m.group_id);
+      if (!['trial', 'group', 'free'].includes(m.plan)) return send(400, { code: 'P0001', message: 'Branches come with the Group plan ($35 a month for up to 5 branches). Ask TechPlug to switch your plan.' });
+      const n = [...restaurants.values()].filter((r) => r.id === m.id || r.group_id === m.id).length;
+      if (n >= 5) return send(400, { code: 'P0001', message: 'The Group plan has up to 5 branches' });
+      if ([...restaurants.values()].some((r) => r.slug === body.p_slug)) return send(409, { code: '23505', message: 'duplicate key value violates unique constraint "restaurants_slug_key"' });
+      if (!m.group_id) m.group_id = m.id;
+      const r = { id: crypto.randomUUID(), name: body.p_name, slug: body.p_slug, town: body.p_town, plan: m.plan, trial_ends_at: m.trial_ends_at, created_at: now(), web_page: false, qr_menu: false, online_orders: false, public_info: {}, group_id: m.id };
+      restaurants.set(r.id, r); members.push({ restaurant_id: r.id, user_id: uid, role: 'owner' });
+      return send(200, r.id);
+    }
+    if (p === '/rest/v1/rpc/group_summary') {
+      const today = Date.parse(body.p_today), week = Date.parse(body.p_week);
+      const mine = [...restaurants.values()].filter((r) => members.some((x) => x.restaurant_id === r.id && x.user_id === uid && x.role !== 'device'));
+      return send(200, mine.map((r) => {
+        const os = [...records.values()].filter((x) => x.restaurant_id === r.id && x.kind === 'orders' && !x.deleted && Date.parse(x.data.createdAt) >= week && !x.data.training && x.data.status !== 'cancelled');
+        const td = os.filter((x) => Date.parse(x.data.createdAt) >= today);
+        const sum = (a) => a.reduce((t, x) => t + Number(x.data.total || 0), 0);
+        return { id: r.id, name: r.name, slug: r.slug, town: r.town, last_seen_at: r.last_seen_at || null, is_main: r.group_id === r.id, orders_today: td.length, sales_today: sum(td), orders_week: os.length, sales_week: sum(os) };
+      }).sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0)));
     }
     if (p === '/rest/v1/rpc/push_records') {
       if (!isMember(body.rid, uid)) return send(403, { code: '42501', message: 'not a member of this restaurant' });
