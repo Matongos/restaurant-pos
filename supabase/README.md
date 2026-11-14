@@ -62,5 +62,5 @@ records, prices come from the server, sold-out meals are refused and the console
 - `tests/cloud-mock.cjs` is a small stand-in for Supabase; `tests/sync.cjs` tests two tills selling,
   going offline and catching up against it.
 
-Known limit for now: with two tills both giving out slip numbers, two sales within a few seconds of each
-other can get the same number (each order is still kept separately).
+Slip numbers: each till gives out its own range (till 1 from 1, till 2 from 501, till 3 from 1001…), so two
+tills never print the same number. A device that connects picks a free till number (Settings → Numbers).

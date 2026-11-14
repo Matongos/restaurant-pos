@@ -23,7 +23,7 @@ const mock = async () => (await fetch(MOCK + '/__state')).json();
     await page.locator('.dialog footer button').last().click(); await page.waitForSelector('.done-number');
     const n = await page.textContent('.done-number'); await page.click('text=Next customer'); return n;
   };
-  const orders = (page) => page.evaluate(() => (JSON.parse(localStorage.getItem('restaurant-pos.state.v1') || '{"orders":[]}')).orders.map((o) => o.number + ':' + o.lines.map((l) => l.name).join('+')));
+  const orders = (page) => page.evaluate(() => ((window.__pos ? window.__pos.state() : { orders: [] })).orders.map((o) => o.number + ':' + o.lines.map((l) => l.name).join('+')));
   const openOnline = async (page) => { await page.goto(URL + '#/settings'); await page.click('.tabs button:has-text("Online account")'); };
 
   // ---- Device A: the first till creates the account
@@ -72,17 +72,17 @@ const mock = async () => (await fetch(MOCK + '/__state')).json();
   await B.page.waitForSelector('.cloud-state', { timeout: 15000 });
   const bOrders = await orders(B.page);
   check('B has A\'s sale', bOrders.length === 1 && /Sadza & Beef/.test(bOrders[0]), bOrders.join(','));
-  check('B has the restaurant name', (await B.page.evaluate(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1')).settings.restaurantName)) === "Mai Tendai's Kitchen" || true);
+  check('B has the restaurant name', (await B.page.evaluate(() => (window.__pos ? window.__pos.state() : null).settings.restaurantName)) === "Mai Tendai's Kitchen" || true);
 
   // ---- A sells; B sees it
   await sell(A.page, ['Rice & Chicken', 'Water 500ml']);
-  await B.page.waitForFunction(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1')).orders.length === 2, null, { timeout: 15000 });
+  await B.page.waitForFunction(() => (window.__pos ? window.__pos.state() : null).orders.length === 2, null, { timeout: 15000 });
   check('A sale reaches B', (await orders(B.page)).some((o) => /Rice & Chicken/.test(o)));
 
   // ---- B changes a setting; A sees it
   await openOnline(B.page); await B.page.click('.tabs button:has-text("Restaurant & branding")');
   await B.page.locator('label:has-text("Tagline") input').fill('Home cooking, fast');
-  await A.page.waitForFunction(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1')).settings.tagline === 'Home cooking, fast', null, { timeout: 15000 });
+  await A.page.waitForFunction(() => (window.__pos ? window.__pos.state() : null).settings.tagline === 'Home cooking, fast', null, { timeout: 15000 });
   check('B setting reaches A', true);
 
   // ---- A goes offline, keeps selling, catches up later
@@ -95,19 +95,29 @@ const mock = async () => (await fetch(MOCK + '/__state')).json();
   check('change waiting in outbox', waiting > 0, waiting);
   await A.ctx.setOffline(false);
   await A.page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await B.page.waitForFunction(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1')).orders.length === 3, null, { timeout: 20000 });
+  await B.page.waitForFunction(() => (window.__pos ? window.__pos.state() : null).orders.length === 3, null, { timeout: 20000 });
   check('offline sale arrives after reconnect', true);
 
-  // ---- both sell at once: nothing is lost
-  await Promise.all([sell(A.page, ['Sadza & Chicken']), sell(B.page, ['Rice & Beef'])]);
-  await Promise.all([A, B].map((d) => d.page.waitForFunction(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1')).orders.length === 5, null, { timeout: 20000 })));
+  // ---- printed slips: the second device picked till 2, so the two tills never give the same number
+  check('second device is till 2', (await B.page.evaluate(() => localStorage.getItem('restaurant-pos.till-no'))) === '2');
+  await A.page.goto(URL + '#/settings'); await A.page.click('.tabs button:has-text("Numbers")'); await A.page.click('.toggle:has-text("Printed slip")');
+  await B.page.waitForFunction(() => window.__pos && window.__pos.state().settings.numberMode === 'slip', null, { timeout: 20000 });
+
+  // ---- both sell at once: nothing is lost, and the numbers differ
+  const num = (t) => Number(String(t).match(/(\d+)\s*$/)[1]);
+  const [na, nb] = (await Promise.all([sell(A.page, ['Sadza & Chicken']), sell(B.page, ['Rice & Beef'])])).map(num);
+  await Promise.all([A, B].map((d) => d.page.waitForFunction(() => (window.__pos ? window.__pos.state() : null).orders.length === 5, null, { timeout: 20000 })));
   check('sales at the same time both kept', true);
+  check('slip numbers differ (till 2 from 501)', na !== nb && nb >= 501 && na < 501, `${na} / ${nb}`);
+  const nb2 = num(await sell(B.page, ['Water 500ml']));
+  check('till 2 counts on', nb2 === nb + 1, `${nb} then ${nb2}`);
+  await Promise.all([A, B].map((d) => d.page.waitForFunction(() => (window.__pos ? window.__pos.state() : null).orders.length === 6, null, { timeout: 20000 })));
 
   // ---- a second window on A does not sync on its own, but its changes still go out (via the first)
   const A2 = await A.ctx.newPage(); await A2.goto(URL); await A2.waitForSelector('.keypad'); await pin(A2, '1111');
   const before = (await mock()).stats.pushes;
   await sell(A2, ['Water 500ml']);
-  await B.page.waitForFunction(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1')).orders.length === 6, null, { timeout: 20000 });
+  await B.page.waitForFunction(() => (window.__pos ? window.__pos.state() : null).orders.length === 7, null, { timeout: 20000 });
   check('second window sale reaches B', (await mock()).stats.pushes > before);
 
   // ---- another account cannot see this restaurant
@@ -142,8 +152,8 @@ const mock = async () => (await fetch(MOCK + '/__state')).json();
   await A.page.click('button:has-text("Remove practice data")');
   await A.page.waitForTimeout(500);
   check('still signed in after fresh start', await A.page.isVisible('.topbar'));
-  await B.page.waitForFunction(() => { const s = JSON.parse(localStorage.getItem('restaurant-pos.state.v1')); return s.customers.length === 0 && s.staff.length === 1 && s.orders.length === 0 && s.credit.length === 0; }, null, { timeout: 20000 });
-  const bs = await B.page.evaluate(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1')));
+  await B.page.waitForFunction(() => { const s = (window.__pos ? window.__pos.state() : null); return s.customers.length === 0 && s.staff.length === 1 && s.orders.length === 0 && s.credit.length === 0; }, null, { timeout: 20000 });
+  const bs = await B.page.evaluate(() => (window.__pos ? window.__pos.state() : null));
   check('fresh start reaches B', bs.staff[0].pin === '2580' && bs.menu.length > 0 && !bs.settings.trainingMode && bs.stockMoves.length === 0, JSON.stringify({ s: bs.staff.length, m: bs.menu.length }));
   await B.page.evaluate(() => sessionStorage.clear()); await B.page.goto(URL); await B.page.waitForSelector('.keypad');
   await pin(B.page, '1234'); check('old PIN no longer works', await B.page.isVisible('.keypad'));

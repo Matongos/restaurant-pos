@@ -10,7 +10,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import type { AppState } from '../domain/types';
-import { applyRemote, emptyState, getState, onLocalChange, replaceAll } from '../store/store';
+import { applyRemote, emptyState, freeTillNo, getState, setTillNo, onLocalChange, replaceAll } from '../store/store';
 import { CloudError, getSession, myRestaurants, rpc, select, signOut } from './api';
 
 const LINK_KEY = 'restaurant-pos.cloud';
@@ -402,6 +402,7 @@ export async function linkAndDownload(l: Omit<CloudLink, 'cursor'>, onProgress?:
     outbox.clear();
     saveOutbox();
     replaceAll(st);
+    setTillNo(freeTillNo(st));
     saveLink({ ...l, cursor: newest });
     void syncNow();
     return n;

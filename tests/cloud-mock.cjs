@@ -55,6 +55,7 @@ http.createServer((req, res) => {
     const p = url.pathname;
     // test helpers
     if (p === '/__state') return send(200, { users: users.size, restaurants: [...restaurants.values()], members, records: [...records.values()].map((r) => ({ kind: r.kind, id: r.id, deleted: r.deleted, device_id: r.device_id })), stats });
+    if (p === '/__reset') { users.clear(); tokens.clear(); refreshTokens.clear(); restaurants.clear(); members.length = 0; records.clear(); admins.clear(); onlineOrders.length = 0; events.length = 0; return send(200, {}); }
     if (p === '/__admin') { const u = users.get(url.searchParams.get('email')); if (u) admins.add(u.id); return send(200, { ok: !!u }); }
     if (p === '/__age') { for (const r of restaurants.values()) r.last_seen_at = new Date(Date.now() - 10 * 60000).toISOString(); return send(200, {}); }
     if (p === '/__online') return send(200, { onlineOrders, events });

@@ -8,7 +8,10 @@ const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((f) => f());
 
 /** True inside the Windows desktop app (Tauri). */
-export const inDesktopApp = () => typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+/** The Windows app: Tauri's own marker when it gives one, else WebView2 (the Windows app's browser), which has chrome.webview — the Edge browser does not. */
+export const inDesktopApp = () =>
+  typeof window !== 'undefined' &&
+  ('__TAURI_INTERNALS__' in window || '__TAURI__' in window || !!(window as unknown as { chrome?: { webview?: unknown } }).chrome?.webview);
 /** True when opened from the home screen / as an installed app. */
 export const isInstalled = () =>
   inDesktopApp() || window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;

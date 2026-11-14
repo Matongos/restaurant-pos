@@ -2,7 +2,7 @@ import { useState } from 'react';
 import CloudAccount from '../components/CloudAccount';
 import WebsiteSettings from '../components/WebsiteSettings';
 import { useSyncStatus } from '../cloud/sync';
-import { addComponent, setExampleHistory, resetDemo, startFresh, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
+import { addComponent, getTillNo, setTillNo, TILL_RANGE, setExampleHistory, resetDemo, startFresh, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
 import type { Currency, MenuItem, NumberMode, PrintWhen } from '../domain/types';
 import { compressLogo, compressPhoto } from '../components/photo';
 import { Dialog, TopBar, toast } from '../components/ui';
@@ -240,12 +240,36 @@ function Numbers() {
           <input type="number" value={s.cardTo} onChange={(e) => updateSettings({ cardTo: Math.max(s.cardFrom, Number(e.target.value)) })} />
         </label>
       </div>
+      <TillNumber />
       <Printing />
       <p className="muted" style={{ fontSize: 13 }}>
         In this prototype printing opens the browser's print dialog. The desktop app prints straight to the 80 mm kitchen printer with no
         dialog.
       </p>
     </>
+  );
+}
+
+/** Which till this device is: each till gives out its own slip numbers, so two tills never print the same one. */
+function TillNumber() {
+  useStore((s) => s.orders.length);
+  const n = getTillNo();
+  return (
+    <div className="till-no">
+      <label className="field">
+        This device is till number
+        <select value={n} onChange={(e) => setTillNo(Number(e.target.value))}>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((k) => (
+            <option key={k} value={k}>
+              Till {k} — slips from {(k - 1) * TILL_RANGE + 1}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="hint">
+        With two or more tills, give each its own number so they never print the same slip number. A device that connects to your restaurant picks a free number itself.
+      </p>
+    </div>
   );
 }
 

@@ -49,7 +49,7 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
   await a.locator('label:has-text("Current PIN") input').fill('2580');
   await a.click('.acct-form button:has-text("Change PIN")');
   await a.waitForTimeout(300);
-  let s = await a.evaluate(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1')));
+  let s = await a.evaluate(() => (window.__pos ? window.__pos.state() : null));
   check('PIN changed', s.staff[0].pin === '3691');
 
   // Change password: wrong current refused; right one works on the server
@@ -83,11 +83,11 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
   check('still syncing after email change', !/Not syncing/.test(sync), sync);
 
   // A cashier: no email, own PIN only
-  await a.evaluate(() => {
-    const st = JSON.parse(localStorage.getItem('restaurant-pos.state.v1'));
+  await a.evaluate(async () => {
+    const st = window.__pos.state();
     const now = new Date().toISOString();
     st.staff.push({ id: 'u-cash1', name: 'Tendai Cashier', role: 'cashier', pin: '1357', active: true, createdAt: now, pinChangedAt: now });
-    localStorage.setItem('restaurant-pos.state.v1', JSON.stringify(st));
+    await window.__pos.put(st);
     sessionStorage.clear();
   });
   await a.goto(URL); await a.reload(); await a.waitForSelector('.keypad');
@@ -105,7 +105,7 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
   await a.locator('label:has-text("New PIN again") input').fill('8024');
   await a.click('.acct-form button:has-text("Change PIN")');
   await a.waitForTimeout(300);
-  s = await a.evaluate(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1')));
+  s = await a.evaluate(() => (window.__pos ? window.__pos.state() : null));
   check('cashier changed own PIN', s.staff.find((x) => x.id === 'u-cash1').pin === '8024');
 
   check('no page errors', errors.length === 0, errors.join(' | '));

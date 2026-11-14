@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRoute, go } from '../router';
-import { deliveryProblem, getState, sendTableRound, serveTable, setLiveCart, useCurrentUser, useStockLevels, useStore, type PlaceOrderSuccess } from '../store/store';
+import { deliveryProblem, getState, getTillNo, nextSlip, sendTableRound, serveTable, setLiveCart, useCurrentUser, useStockLevels, useStore, type PlaceOrderSuccess } from '../store/store';
 import { openTab, tabRounds, tabTotal } from '../domain/tables';
 import { changeVoucherHTML, kitchenTicketHTML, printTickets } from '../print/tickets';
 import TableBill from '../components/TableBill';
 import CancelSaleDialog from '../components/CancelSaleDialog';
 import { outOfStockIds } from '../domain/stock';
-import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, nextFreeCard, sameExtras, tidyName, todayISO } from '../domain/rules';
+import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, nextFreeCard, sameExtras, tidyName } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
 import type { AddOn, DeliveryInfo, MenuItem, OrderLine } from '../domain/types';
 import { Dialog, MoreMenu, TopBar, toast, useNow } from '../components/ui';
@@ -224,7 +224,7 @@ export default function Till() {
   const nextNumber = parent
     ? parent.number
     : settings.numberMode === 'slip'
-      ? (dayCounter.date === todayISO() ? dayCounter.lastSlip : 0) + 1
+      ? nextSlip({ ...getState(), dayCounter }, getTillNo()).number
       : nextFreeCard(orders, settings.cardFrom, settings.cardTo);
   const altCurrencies = currencies.filter((c) => c.enabled && c.code !== baseCode);
   const listTitle = search ? `Results` : cat === ALL ? 'All meals' : cat === FAV ? 'Favourites' : categories.find((c) => c.id === cat)?.name ?? '';

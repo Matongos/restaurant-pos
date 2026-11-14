@@ -1,3 +1,4 @@
+import { flushDisk, onOtherWindowSaved, readDisk, saveDisk } from './disk';
 import { useMemo, useSyncExternalStore } from 'react';
 import type {
   DiningTable,
@@ -53,6 +54,7 @@ import { openTab, openTabs, tabDue, tabItemsTotal, tabRounds } from '../domain/t
  */
 
 const KEY = 'restaurant-pos.state.v1';
+// (Kept on the device in IndexedDB — see disk.ts. KEY is where older versions kept it.)
 const listeners = new Set<() => void>();
 
 /** Bring data saved by an older version of the app up to date. */
@@ -208,14 +210,74 @@ function load(): AppState {
 
 let state: AppState = load();
 
-function persist() {
+/** Last resort when IndexedDB can't be used: the small localStorage (as older versions did). */
+function saveToLocalStorage(value: unknown) {
   try {
-    // Example orders are regenerated at load, so they are never written to storage.
-    const toSave = stripExamples(state);
-    localStorage.setItem(KEY, JSON.stringify(toSave));
+    localStorage.setItem(KEY, JSON.stringify(value));
   } catch (e) {
     console.warn('Could not save state (storage full?)', e);
   }
+}
+
+function persist() {
+  // Example orders are regenerated at load, so they are never written to storage.
+  saveDisk(() => stripExamples(state), saveToLocalStorage);
+}
+
+/**
+ * Open the device's data store before the app starts. Data saved by an older version in localStorage
+ * is moved to IndexedDB (and removed from localStorage once it is safely written).
+ */
+export async function initStore(): Promise<void> {
+  // Tests (on this computer only) read the data through this.
+  if (typeof location !== 'undefined' && /^(localhost|127\.)/.test(location.hostname))
+    (window as unknown as { __pos: unknown }).__pos = {
+      state: () => stripExamples(state),
+      put: async (next: AppState) => {
+        const prev = state;
+        state = withExamples(next);
+        persist();
+        emit();
+        changeHook?.(prev, state);
+        await flushDisk();
+      },
+      flush: flushDisk,
+    };
+  const fromDisk = await readDisk();
+  if (fromDisk) {
+    const migrated = migrate(fromDisk);
+    if (migrated) {
+      state = withExamples(migrated);
+      dropEndedSession();
+      emit();
+    }
+  } else {
+    let legacy: string | null = null;
+    try {
+      legacy = localStorage.getItem(KEY);
+    } catch {
+      /* ignore */
+    }
+    persist();
+    await flushDisk();
+    if (legacy && (await readDisk())) {
+      try {
+        localStorage.removeItem(KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  onOtherWindowSaved(async () => {
+    const v = await readDisk();
+    const migrated = v ? migrate(v) : null;
+    if (!migrated) return;
+    const prev = state;
+    state = withExamples(migrated);
+    dropEndedSession();
+    emit();
+    changeHook?.(prev, state); // another window of this app changed something: send it too
+  });
 }
 
 function emit() {
@@ -344,6 +406,50 @@ export function useCurrentUser(): Staff | null {
   return staff.find((s) => s.id === id && canSignIn(s)) ?? null;
 }
 
+/* ------------------------------------------------------------------ till number (slip ranges) */
+
+const TILL_KEY = 'restaurant-pos.till-no';
+/** Slip numbers per till: till 1 from 1, till 2 from 501, till 3 from 1001… so two tills never give out the same number. */
+export const TILL_RANGE = 500;
+/** This device's till number (kept on the device, not shared). */
+export function getTillNo(): number {
+  try {
+    const n = Number(localStorage.getItem(TILL_KEY));
+    return n >= 1 && n <= 9 ? Math.floor(n) : 1;
+  } catch {
+    return 1;
+  }
+}
+export function setTillNo(n: number) {
+  try {
+    localStorage.setItem(TILL_KEY, String(Math.min(9, Math.max(1, Math.floor(n)))));
+  } catch {
+    /* ignore */
+  }
+  emit();
+}
+/** A till number not used by any till that sold in the last 30 days (for a device that has just connected). */
+export function freeTillNo(st: AppState = state): number {
+  const since = Date.now() - 30 * 86400000;
+  const used = new Set(st.orders.filter((o) => Date.parse(o.createdAt) >= since && o.tillId !== 'online').map((o) => o.tillNo ?? 1));
+  for (let n = 1; n <= 9; n++) if (!used.has(n)) return n;
+  return 1;
+}
+/** The next slip number for this till. Till 1 uses the shared day counter as before; other tills count from their own range. */
+export function nextSlip(s: AppState, tillNo: number): { number: number; dayCounter: AppState['dayCounter'] } {
+  let dayCounter = s.dayCounter;
+  if (s.settings.slipResetDaily && dayCounter.date !== todayISO()) dayCounter = { date: todayISO(), lastSlip: 0 };
+  if (tillNo <= 1) {
+    const number = dayCounter.lastSlip + 1;
+    return { number, dayCounter: { ...dayCounter, lastSlip: number } };
+  }
+  const base = (tillNo - 1) * TILL_RANGE;
+  const today = todayISO();
+  const mine = s.orders.filter((o) => !o.parentOrderId && (o.tillNo ?? 1) === tillNo && o.numberMode !== 'card' && (!s.settings.slipResetDaily || todayISO(new Date(o.createdAt)) === today));
+  const last = mine.reduce((m, o) => Math.max(m, o.number), base);
+  return { number: last + 1, dayCounter: s.dayCounter };
+}
+
 export function login(pin: string): Staff | null {
   const user = state.staff.find((s) => canSignIn(s) && s.pin === pin) ?? null;
   if (user) writeSession(user.id);
@@ -463,9 +569,9 @@ export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
     if (!parent) return { ok: false, error: 'Original order not found.' };
     number = parent.number;
   } else if (mode === 'slip') {
-    if (s.settings.slipResetDaily && dayCounter.date !== todayISO()) dayCounter = { date: todayISO(), lastSlip: 0 };
-    number = dayCounter.lastSlip + 1;
-    dayCounter = { ...dayCounter, lastSlip: number };
+    const next = nextSlip(s, getTillNo());
+    number = next.number;
+    dayCounter = next.dayCounter;
   } else {
     const chosen = input.cardNumber ?? nextFreeCard(s.orders, s.settings.cardFrom, s.settings.cardTo);
     if (chosen == null) return { ok: false, error: 'All cards are in use. Mark served orders first.' };
@@ -481,6 +587,7 @@ export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
     id: uid('o-'),
     branchId: s.settings.branchId,
     tillId: input.tillId,
+    ...(getTillNo() > 1 ? { tillNo: getTillNo() } : {}),
     number,
     numberMode: mode,
     orderTypeId: input.orderTypeId,

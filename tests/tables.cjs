@@ -10,7 +10,7 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
   page.on('pageerror', (e) => errors.push(e.message));
   const pin = async (p) => { await page.waitForSelector('.keypad'); for (const d of p) await page.click(`.keypad button:text-is("${d}")`); };
   const logout = async () => { await page.click('.user-btn'); await page.click('.user-pop button:has-text("Log out")'); };
-  const st = () => page.evaluate(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1')));
+  const st = () => page.evaluate(() => (window.__pos ? window.__pos.state() : null));
   const payExact = async () => { await page.click('.dialog button:text-is("Exact")'); await page.locator('.dialog footer button').last().click(); await page.waitForTimeout(250); };
   await page.goto(URL); await page.evaluate(() => localStorage.clear()); await page.reload();
 

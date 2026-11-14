@@ -184,6 +184,8 @@ export interface Order {
   id: ID;
   branchId: ID;
   tillId: ID;
+  /** Which till numbered this sale (1, 2, 3…). Each till gives out its own slip numbers: till 2 from 501, till 3 from 1001. */
+  tillNo?: number;
   /** The number on the physical card and/or the printed slip. */
   number: number;
   numberMode: NumberMode;

@@ -16,7 +16,7 @@ const j = async (p) => (await fetch(MOCK + p)).json();
     return { ctx, page };
   };
   const pin = async (page, p) => { for (const d of p) await page.click(`.keypad button:text-is("${d}")`); await page.waitForTimeout(300); };
-  const st = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('restaurant-pos.state.v1') || 'null'));
+  const st = (page) => page.evaluate(() => (window.__pos ? window.__pos.state() : null));
 
   // ---- 1. New restaurant from the login screen (no demo PIN needed)
   const A = await ctxFor(); const a = A.page;
