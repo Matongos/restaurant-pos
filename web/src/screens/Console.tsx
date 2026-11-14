@@ -11,6 +11,7 @@ import {
 import { enrollTotp, getSession, myFactors, removeFactor, rpc, select, sessionLevel, signIn, signOut, verifyTotp, type Factor } from '../cloud/api';
 import { getLink } from '../cloud/sync';
 import { Dialog } from '../components/ui';
+import QR from '../components/QR';
 
 interface Overview {
   visits: number; downloads: number; firstOpens: number; signups: number; restaurants: number; activeWeek: number; paying: number; monthlyIncome: number;
@@ -194,7 +195,7 @@ function CodeStep({ factor, onDone, onOut }: { factor: Factor; onDone: () => voi
 }
 
 function EnrollStep({ onDone, onOut }: { onDone: () => void; onOut: () => void }) {
-  const [f, setF] = useState<{ id: string; qr: string; secret: string } | null>(null);
+  const [f, setF] = useState<{ id: string; qr: string; secret: string; uri: string } | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -242,7 +243,10 @@ function EnrollStep({ onDone, onOut }: { onDone: () => void; onOut: () => void }
       </ol>
       {f ? (
         <>
-          {f.qr && <img className="enroll-qr" src={f.qr} alt="QR code to scan with your authenticator app" />}
+          <div className="enroll-qr">
+            {/* Drawn here from the otpauth:// link (Supabase's own picture does not show in every browser). */}
+            <QR text={f.uri || `otpauth://totp/TechPlug%20POS:${encodeURIComponent(getSession()?.email ?? 'admin')}?secret=${f.secret}&issuer=TechPlug%20POS`} size={184} label="QR code to scan with your authenticator app" />
+          </div>
           <p className="small muted">
             Can't scan? Type this key instead: <code className="enroll-secret">{f.secret}</code>
           </p>
@@ -519,7 +523,7 @@ function Dashboard({ onOut }: { onOut: () => void }) {
               {list.length === 0 && (
                 <tr>
                   <td colSpan={8} className="muted">
-                    No restaurants yet.
+                    {loading && !ov ? 'Loading…' : 'No restaurants yet.'}
                   </td>
                 </tr>
               )}

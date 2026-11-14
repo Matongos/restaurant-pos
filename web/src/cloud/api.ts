@@ -341,10 +341,10 @@ export async function myFactors(): Promise<Factor[]> {
 }
 
 /** Start adding an authenticator app: gives the QR code (an image address) and the secret to type in by hand. */
-export async function enrollTotp(): Promise<{ id: string; qr: string; secret: string }> {
+export async function enrollTotp(): Promise<{ id: string; qr: string; secret: string; uri: string }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const j = (await call('/auth/v1/factors', { method: 'POST', body: JSON.stringify({ factor_type: 'totp', friendly_name: `TechPlug console ${new Date().toISOString().slice(0, 16)}` }) })) as any;
-  return { id: j.id, qr: j.totp?.qr_code ?? '', secret: j.totp?.secret ?? '' };
+  return { id: j.id, qr: j.totp?.qr_code ?? '', secret: j.totp?.secret ?? '', uri: j.totp?.uri ?? '' };
 }
 
 /** Check a 6-digit code; on success this login becomes 'aal2'. */

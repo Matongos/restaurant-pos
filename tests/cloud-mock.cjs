@@ -67,7 +67,7 @@ http.createServer((req, res) => {
     if (p === '/__backdate') { let n = 0; for (const r of records.values()) if (r.kind === 'orders' && r.data?.createdAt && Date.parse(r.data.createdAt) < Date.now() - 200 * 864e5) { r.updated_at = r.data.createdAt; n++; } return send(200, { n }); }
     if (p === '/__plan') { for (const r of restaurants.values()) if (r.slug === url.searchParams.get('slug')) { r.plan = url.searchParams.get('plan'); if (url.searchParams.get('ended')) r.trial_ends_at = new Date(Date.now() - 10 * 864e5).toISOString(); } return send(200, {}); }
     if (p === '/__confirmmode') { if (url.searchParams.get('on') === '1') process.env.CONFIRM = '1'; else delete process.env.CONFIRM; return send(200, {}); }
-    if (p === '/__reset') { users.clear(); tokens.clear(); refreshTokens.clear(); restaurants.clear(); members.length = 0; records.clear(); admins.clear(); onlineOrders.length = 0; events.length = 0; return send(200, {}); }
+    if (p === '/__reset') { users.clear(); tokens.clear(); refreshTokens.clear(); restaurants.clear(); members.length = 0; records.clear(); admins.clear(); onlineOrders.length = 0; events.length = 0; payments.length = 0; adminLog.length = 0; factors.clear(); challenges.clear(); platform = {}; return send(200, {}); }
     if (p === '/__admin') { const u = users.get(url.searchParams.get('email')); if (u) admins.add(u.id); return send(200, { ok: !!u }); }
     if (p === '/__age') { for (const r of restaurants.values()) r.last_seen_at = new Date(Date.now() - 10 * 60000).toISOString(); return send(200, {}); }
     if (p === '/__online') return send(200, { onlineOrders, events });
