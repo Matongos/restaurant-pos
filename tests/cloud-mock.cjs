@@ -55,6 +55,7 @@ http.createServer((req, res) => {
     const p = url.pathname;
     // test helpers
     if (p === '/__state') return send(200, { users: users.size, restaurants: [...restaurants.values()], members, records: [...records.values()].map((r) => ({ kind: r.kind, id: r.id, deleted: r.deleted, device_id: r.device_id })), stats });
+    if (p === '/__backdate') { let n = 0; for (const r of records.values()) if (r.kind === 'orders' && r.data?.createdAt && Date.parse(r.data.createdAt) < Date.now() - 200 * 864e5) { r.updated_at = r.data.createdAt; n++; } return send(200, { n }); }
     if (p === '/__reset') { users.clear(); tokens.clear(); refreshTokens.clear(); restaurants.clear(); members.length = 0; records.clear(); admins.clear(); onlineOrders.length = 0; events.length = 0; return send(200, {}); }
     if (p === '/__admin') { const u = users.get(url.searchParams.get('email')); if (u) admins.add(u.id); return send(200, { ok: !!u }); }
     if (p === '/__age') { for (const r of restaurants.values()) r.last_seen_at = new Date(Date.now() - 10 * 60000).toISOString(); return send(200, {}); }
@@ -183,10 +184,13 @@ http.createServer((req, res) => {
       stats.selects++;
       const rid = (url.searchParams.get('restaurant_id') || '').replace(/^eq\./, '');
       if (!isMember(rid, uid)) return send(200, []); // RLS: nothing visible
-      const gt = url.searchParams.get('updated_at');
-      const since = gt ? Date.parse(gt.replace(/^gt\./, '')) : -Infinity;
+      let since = -Infinity, before = Infinity;
+      for (const v of url.searchParams.getAll('updated_at')) { if (v.startsWith('gt.')) since = Date.parse(v.slice(3)); if (v.startsWith('lt.')) before = Date.parse(v.slice(3)); }
+      const kf = url.searchParams.get('kind') || '';
+      const kinds = (kf.match(/in\.\((.*)\)/) || [])[1]?.split(',') || null;
+      const kindOk = (k) => !kinds || (kf.startsWith('not.') ? !kinds.includes(k) : kinds.includes(k));
       const limit = Number(url.searchParams.get('limit') || 1000);
-      const rows = [...records.values()].filter((r) => r.restaurant_id === rid && Date.parse(r.updated_at) > since).sort((a, b) => a.updated_at.localeCompare(b.updated_at)).slice(0, limit);
+      const rows = [...records.values()].filter((r) => r.restaurant_id === rid && Date.parse(r.updated_at) > since && Date.parse(r.updated_at) < before && kindOk(r.kind)).sort((a, b) => a.updated_at.localeCompare(b.updated_at)).slice(0, limit);
       return send(200, rows);
     }
     send(404, { message: 'not in mock: ' + p });

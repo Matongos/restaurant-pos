@@ -60,6 +60,50 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
     await c.close();
   }
 
+  // ---- 3. Archiving: a new device gets the last 6 months; older sales stay online and can be loaded
+  {
+    await fetch(MOCK + '/__reset');
+    const dev = async () => { const c = await b.newContext({ viewport: { width: 1280, height: 860 } }); await c.addInitScript((m) => localStorage.setItem('restaurant-pos.cloud-url', m), MOCK); const p = await c.newPage(); p.on('pageerror', (e) => errors.push(e.message)); return { c, p }; };
+    const pin = async (p, code) => { for (const d of code) await p.click(`.keypad button:text-is("${d}")`); await p.waitForTimeout(300); };
+    const A = await dev();
+    await A.p.goto(URL); await A.p.waitForSelector('.keypad'); await pin(A.p, '1234');
+    await A.p.evaluate(async () => {
+      const s = window.__pos.state();
+      const mk = (id, daysAgo) => ({ id, branchId: s.settings.branchId, tillId: 't1', number: 7, numberMode: 'card', orderTypeId: s.orderTypes[0].id, lines: [{ menuItemId: s.menu[0].id, name: s.menu[0].name, qty: 1, unitPrice: 4 }], total: 4, payments: [{ methodId: 'cash', currency: 'USD', amount: 4, amountBase: 4 }], changeGiven: 0, changeCurrency: 'USD', status: 'served', history: [], cashierId: s.staff[0].id, createdAt: new Date(Date.now() - daysAgo * 864e5).toISOString() });
+      s.orders = [mk('old-1', 300), mk('old-2', 250), mk('new-1', 20)];
+      await window.__pos.put(s);
+    });
+    await A.p.goto(URL + '#/settings'); await A.p.click('.tabs button:has-text("Online account")');
+    const f = A.p.locator('.cloud-form');
+    await f.locator('label:has-text("Restaurant name") input').fill('Archive Cafe');
+    await A.p.waitForSelector('.slug-state.good');
+    await f.locator('label:has-text("Your email") input').fill('arch@example.com');
+    await f.locator('label:has-text("password") input').fill('archive-pass-1');
+    await f.locator('button:has-text("Create account")').click();
+    await A.p.waitForSelector('.cloud-state:has-text("Up to date")', { timeout: 20000 });
+    const bd = await (await fetch(MOCK + '/__backdate')).json();
+    check('old sales are old online', bd.n === 2, JSON.stringify(bd));
+    const B = await dev();
+    await B.p.goto(URL); await B.p.waitForSelector('.keypad'); await pin(B.p, '1234');
+    await B.p.goto(URL + '#/settings'); await B.p.click('.tabs button:has-text("Online account")');
+    await B.p.click('.seg button:has-text("I already have an account")');
+    await B.p.locator('.cloud-form label:has-text("Email") input').fill('arch@example.com');
+    await B.p.locator('.cloud-form label:has-text("Password") input').fill('archive-pass-1');
+    await B.p.click('.cloud-form button:has-text("Sign in")');
+    await B.p.click('.cloud-item button:has-text("Connect")');
+    await B.p.click('.cloud-warn button:has-text("Yes, download")');
+    await B.p.waitForSelector('.cloud-state', { timeout: 20000 });
+    let ids = await B.p.evaluate(() => window.__pos.state().orders.map((o) => o.id).sort().join(','));
+    check('new device: recent sales only', ids === 'new-1', ids);
+    await B.p.goto(URL + '#/settings?tab=online'); await B.p.waitForSelector('.cloud-history');
+    check('older sales offered', /Older sales are kept safely online/.test(await B.p.textContent('.cloud-history')));
+    await B.p.goto(URL + '#/settings?tab=online'); await B.p.click('.cloud-history button:has-text("Load older sales")');
+    await B.p.waitForSelector('.cloud-history', { state: 'detached', timeout: 15000 });
+    ids = await B.p.evaluate(() => window.__pos.state().orders.map((o) => o.id).sort().join(','));
+    check('older sales loaded', ids === 'new-1,old-1,old-2', ids);
+    await A.c.close(); await B.c.close();
+  }
+
   check('no page errors', errors.length === 0, errors.join(' | '));
   console.log(JSON.stringify(out, null, 1));
   console.log('fails:', Object.values(out).filter((v) => v !== 'ok').length);

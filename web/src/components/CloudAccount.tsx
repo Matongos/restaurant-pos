@@ -4,7 +4,7 @@ import { LuCloud, LuCloudOff, LuRefreshCw, LuCircleCheck, LuTriangleAlert, LuSto
 import { useStore } from '../store/store';
 import { PUBLIC_SITE } from '../cloudConfig';
 import { createRestaurant, getSession, sendPasswordReset, setNewPassword, signIn, signOut, signUp, slugAvailable, slugFrom, type Membership } from '../cloud/api';
-import { linkAndDownload, linkAndUpload, myRestaurants, restaurantHasData, syncNow, unlink, useSyncStatus } from '../cloud/sync';
+import { linkAndDownload, linkAndUpload, loadOlderHistory, myRestaurants, restaurantHasData, syncNow, unlink, useSyncStatus } from '../cloud/sync';
 import { Dialog, toast } from './ui';
 import { AccountSecurity } from './MyAccount';
 
@@ -407,6 +407,33 @@ function ago(iso: string | null): string {
   return new Date(iso).toLocaleString();
 }
 
+/** This device has the last months of sales; older ones stay online and can be brought here for reports. */
+function OlderHistory({ from }: { from: string }) {
+  const [busy, setBusy] = useState('');
+  const load = async () => {
+    setBusy('Loading…');
+    try {
+      const n = await loadOlderHistory((k) => setBusy(`Loading… ${k}`));
+      toast(n ? `Older sales loaded (${n})` : 'There were no older sales');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy('');
+    }
+  };
+  return (
+    <div className="cloud-history">
+      <div className="grow">
+        <b>Sales on this device start {new Date(from).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</b>
+        <div className="muted">Older sales are kept safely online. Load them here if you need reports for longer ago.</div>
+      </div>
+      <button className="btn" onClick={load} disabled={!!busy}>
+        {busy || 'Load older sales'}
+      </button>
+    </div>
+  );
+}
+
 function Linked() {
   const st = useSyncStatus();
   const [sure, setSure] = useState(false);
@@ -466,6 +493,7 @@ function Linked() {
           <AccountSecurity />
         </div>
       )}
+      {l.historyFrom && <OlderHistory from={l.historyFrom} />}
       <p className="hint">
         To add another till, phone or tablet: open TechPlug POS on it, go to Settings → Online account, and sign in with the same email.
       </p>

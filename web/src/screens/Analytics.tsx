@@ -1,3 +1,4 @@
+import { useSyncStatus } from '../cloud/sync';
 import { useMemo, useState } from 'react';
 import { useStore } from '../store/store';
 import { fmt, round2 } from '../domain/money';
@@ -50,6 +51,7 @@ export default function Analytics() {
   const [tab, setTab] = useState<Tab>('overview');
   const [period, setPeriod] = useState<PeriodKey>('7d');
   const [includeTraining, setIncludeTraining] = useState(true);
+  const historyFrom = useSyncStatus().link?.historyFrom ?? null;
   const lateMs = settings.lateAfterMinutes * 60000;
 
   const open = useMemo(
@@ -103,6 +105,11 @@ export default function Analytics() {
               </button>
             ))}
           </div>
+          {historyFrom && data.r.start.getTime() < Date.parse(historyFrom) && (
+            <div className="card an-note">
+              Sales before {new Date(historyFrom).toLocaleDateString()} are kept online, not on this device. The owner can load them under Settings → Online account.
+            </div>
+          )}
           {data.customers.length === 0 && <div className="card empty">No orders in this period yet.</div>}
           {data.customers.length > 0 && tab === 'overview' && <Overview {...ctx} />}
           {data.customers.length > 0 && tab === 'busy' && <BusyTimes {...ctx} />}

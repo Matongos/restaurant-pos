@@ -42,7 +42,14 @@ export interface CloudLink {
   role: string;
   /** Server time of the newest change fetched so far. */
   cursor: string | null;
+  /** Sales history on this device starts here; older sales stay online (null = everything is here). */
+  historyFrom?: string | null;
 }
+
+/** Sales history a newly connected device downloads: the last 6 months (older stays online, loadable later). */
+export const HISTORY_DAYS = 183;
+/** Lists that only grow with time; a new device downloads just their recent part. */
+const HISTORY_KINDS = ['orders', 'cancellations', 'staffLog'] as const;
 
 export interface SyncStatus {
   link: CloudLink | null;
@@ -226,13 +233,13 @@ function applyRows(rows: Row[], st: AppState, skipOwn: boolean): AppState {
   return next;
 }
 
-async function fetchRows(since: string | null, onPage: (rows: Row[]) => void): Promise<string | null> {
+async function fetchRows(since: string | null, onPage: (rows: Row[]) => void, filter = '', before?: string): Promise<string | null> {
   let from = since ?? '1970-01-01T00:00:00Z';
   let newest = since;
   for (;;) {
     const rows = await select<Row[]>(
       'records',
-      `select=kind,id,data,deleted,device_id,updated_at&restaurant_id=eq.${link!.restaurantId}&updated_at=gt.${encodeURIComponent(from)}&order=updated_at.asc&limit=500`,
+      `select=kind,id,data,deleted,device_id,updated_at&restaurant_id=eq.${link!.restaurantId}&updated_at=gt.${encodeURIComponent(from)}${before ? `&updated_at=lt.${encodeURIComponent(before)}` : ''}${filter}&order=updated_at.asc&limit=500`,
     );
     if (rows.length) {
       onPage(rows);
@@ -393,23 +400,63 @@ export async function linkAndDownload(l: Omit<CloudLink, 'cursor'>, onProgress?:
   let st = emptyState();
   let n = 0;
   try {
-    const newest = await fetchRows(null, (rows) => {
+    const page = (rows: Row[]) => {
       st = applyRows(rows, st, false);
       n += rows.length;
       onProgress?.(n);
-    });
+    };
+    // Everything except the growing history first (menu, staff, customers, change, stock…).
+    const kinds = `(${HISTORY_KINDS.join(',')})`;
+    const newest1 = await fetchRows(null, page, `&kind=not.in.${kinds}`);
     if (n === 0) throw new CloudError('This restaurant has no data online yet. Connect the first device (the one with your menu and sales) first.');
+    // Then recent history — and older sales too if stock levels still need them (no stock take since then).
+    const historyFrom = historyStart(st);
+    const newest2 = await fetchRows(historyFrom, page, `&kind=in.${kinds}`);
+    const newest = [newest1, newest2].filter(Boolean).sort().pop() ?? null;
     outbox.clear();
     saveOutbox();
     replaceAll(st);
     setTillNo(freeTillNo(st));
-    saveLink({ ...l, cursor: newest });
+    saveLink({ ...l, cursor: newest, historyFrom });
     void syncNow();
     return n;
   } catch (e) {
     link = read<CloudLink | null>(LINK_KEY, null);
     throw e;
   }
+}
+
+/**
+ * Where a new device's sales history starts: 6 months back, or earlier if a tracked stock item has not been
+ * counted since then (its level is worked out from every sale since the last count).
+ */
+function historyStart(st: AppState): string | null {
+  let from = Date.now() - HISTORY_DAYS * 864e5;
+  const lastCount = new Map<string, number>();
+  for (const m of st.stockMoves) if (m.kind === 'count') lastCount.set(m.stockItemId, Math.max(lastCount.get(m.stockItemId) ?? 0, Date.parse(m.at)));
+  for (const item of st.stockItems) {
+    if (!item.track) continue;
+    const c = lastCount.get(item.id);
+    if (c === undefined) return null; // never counted: every sale matters
+    from = Math.min(from, c);
+  }
+  return new Date(from).toISOString();
+}
+
+/** Download the sales older than this device's history (kept online), for reports over longer periods. */
+export async function loadOlderHistory(onProgress?: (n: number) => void): Promise<number> {
+  if (!link?.historyFrom) return 0;
+  const before = link.historyFrom;
+  let n = 0;
+  await fetchRows(null, (rows) => {
+    applyRemote((st) => applyRows(rows, st, false));
+    n += rows.length;
+    onProgress?.(n);
+  }, `&kind=in.(${HISTORY_KINDS.join(',')})`, before);
+  link = { ...link, historyFrom: null };
+  write(LINK_KEY, link);
+  setStatus({});
+  return n;
 }
 
 /** Is there anything online for this restaurant already? */
