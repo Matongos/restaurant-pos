@@ -1,0 +1,13 @@
+digraph G { rankdir=TB; newrank=true;
+  graph [fontname="DejaVu Sans", fontsize=10.5, bgcolor="transparent", pad=0.2, nodesep=0.4, ranksep=0.55];
+  node [fontname="DejaVu Sans", fontsize=10, shape=box, style="rounded,filled", fillcolor="white", color="#94a3b8", penwidth=1.1, margin="0.16,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#5b6678", arrowsize=0.7, fontcolor="#374151"];
+ subgraph cluster_c { label="CUSTOMER'S PHONE"; style="rounded,filled"; fillcolor="#fff7ed"; color="#f6c48f"; fontcolor="#9a3412";
+   c1 [label="Scans QR /\nopens link"]; c2 [label="Picks meals,\nname + phone,\npick-up or delivery"]; c9 [label="Status page\nupdates by itself", fillcolor="#dcf3e4", color="#2f9e5b"]; }
+ subgraph cluster_s { label="SUPABASE"; style="rounded,filled"; fillcolor="#ecf8f0"; color="#a7dcb8"; fontcolor="#166534";
+   s1 [label="place_online_order()\nserver prices\nsold-out + spam checks"]; s2 [label="online_orders\nnew → accepted → ready\n→ out → collected", shape=cylinder, fillcolor="#ede4ff", color="#7c4dcc"]; }
+ subgraph cluster_t { label="RESTAURANT"; style="rounded,filled"; fillcolor="#eef4ff"; color="#bfd2f5"; fontcolor="#1e3a8a";
+   t1 [label="Till rings\n(polls online_orders)"]; t2 [label="Accept with ready time\n(conditional PATCH:\nonly one till wins)", fillcolor="#dbe8ff", color="#3b6fd8"]; t3 [label="Kitchen ticks ready\nfollowLocalOrders()"]; t4 [label="Pay at counter /\nrider pays in"]; }
+ {rank=same; c2; s1;} {rank=same; c9; s2; t1;}
+ c1 -> c2; c2 -> s1 [label=" order"]; s1 -> s2; s2 -> t1 [label=" new"]; t1 -> t2 -> t3 -> t4; s2 -> c9 [label=" every 6 s", style=dashed]; t3 -> s2 [style=dashed, label=" status", constraint=false];
+}

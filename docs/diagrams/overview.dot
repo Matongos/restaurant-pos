@@ -1,0 +1,20 @@
+digraph G { rankdir=TB; compound=true;
+  graph [fontname="DejaVu Sans", fontsize=11, bgcolor="transparent", pad=0.25, nodesep=0.45, ranksep=0.55];
+  node [fontname="DejaVu Sans", fontsize=10, shape=box, style="rounded,filled", fillcolor="white", color="#94a3b8", penwidth=1.1, margin="0.16,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#5b6678", arrowsize=0.7, fontcolor="#374151"];
+  subgraph cluster_r { label="YOUR RESTAURANT  (works even with no internet)"; style="rounded,filled"; fillcolor="#eef4ff"; color="#9db8ec"; fontcolor="#1e4fa8";
+    till [label="Till at the counter\nSell · Pay · Change · Print", fillcolor="#dbe8ff", color="#3b6fd8", penwidth=1.6];
+    kit [label="Kitchen screen\norders + timers"];
+    tab [label="Waiter phone / tablet\nTables"];
+  }
+  subgraph cluster_c { label="TECHPLUG ONLINE  (backup & sync)"; style="rounded,filled"; fillcolor="#ecf8f0"; color="#94d3ab"; fontcolor="#1d7a45";
+    cloud [label="Your restaurant's\nonline account\nsales · menu · staff · stock", shape=cylinder, fillcolor="#dcf3e4", color="#2f9e5b"];
+  }
+  subgraph cluster_o { label="OUTSIDE THE RESTAURANT"; style="rounded,filled"; fillcolor="#fff8e6"; color="#f0cf7a"; fontcolor="#946200";
+    cust [label="Customer's phone\nQR menu · online order"];
+    own [label="Owner at home\nReports · Books · Branches"];
+  }
+  till -> kit [label=" orders", dir=both]; till -> tab [dir=both, label=" tables"];
+  till -> cloud [lhead=cluster_c, label="  syncs when online", dir=both, color="#2f9e5b", penwidth=1.3];
+  cloud -> cust [ltail=cluster_c, dir=both, label=" menu & orders"]; cloud -> own [ltail=cluster_c, dir=both, label=" same data"];
+}

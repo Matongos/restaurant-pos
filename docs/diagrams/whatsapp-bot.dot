@@ -1,0 +1,13 @@
+digraph G { rankdir=TB;
+  graph [fontname="DejaVu Sans", fontsize=10.5, bgcolor="transparent", pad=0.2, nodesep=0.4, ranksep=0.55];
+  node [fontname="DejaVu Sans", fontsize=10, shape=box, style="rounded,filled", fillcolor="white", color="#94a3b8", penwidth=1.1, margin="0.16,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#5b6678", arrowsize=0.7, fontcolor="#374151"];
+ cust [label="Customer on WhatsApp", fillcolor="#e7f8ee", color="#1fa855", penwidth=1.5]; meta [label="WhatsApp Business API\n(Meta Cloud API or provider)"];
+ fn [label="Bot function  — NEW\nSupabase Edge Function or Vercel Function\n(provider token in function secrets)", fillcolor="#fff4cc", color="#d4a514", penwidth=1.6];
+ subgraph cluster_x { label="EXISTS TODAY"; style="rounded,filled"; fillcolor="#ecf8f0"; color="#94d3ab"; fontcolor="#1d7a45";
+  pm [label="public_menu(slug)"]; po [label="place_online_order(...)"]; oo [label="online_orders", shape=cylinder, fillcolor="#ede4ff", color="#7c4dcc"];
+  till [label="Till + kitchen\n(unchanged)", fillcolor="#dbe8ff", color="#3b6fd8"]; }
+ hook [label="Status watcher — NEW\n(database webhook)", fillcolor="#fff4cc", color="#d4a514"];
+ cust -> meta [dir=both]; meta -> fn [label=" webhook"]; fn -> pm [label=" read menu"]; fn -> po [label=" place order"]; po -> oo; oo -> till [dir=both, label=" accept / ready"];
+ oo -> hook [label=" status changes"]; hook -> meta [label=" \"ready at 12:40\"", constraint=false];
+}

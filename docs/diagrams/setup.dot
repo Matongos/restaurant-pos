@@ -1,0 +1,9 @@
+digraph G { rankdir=LR;   graph [fontname="DejaVu Sans", fontsize=10, bgcolor="transparent", pad=0.2, nodesep=0.35, ranksep=0.45];
+  node [fontname="DejaVu Sans", fontsize=9.5, shape=box, style="rounded,filled", fillcolor="white", color="#94a3b8", penwidth=1.1, margin="0.14,0.07"];
+  edge [fontname="DejaVu Sans", fontsize=8.5, color="#5b6678", arrowsize=0.7, fontcolor="#374151"];
+
+ s1 [label="Install on the till\n(Windows app or web)"]; s2 [label="New restaurant?\nSet it up\n(name, PIN, email)", fillcolor="#dbe8ff", color="#3b6fd8", penwidth=1.5];
+ s3 [label="Menu & prices\n+ photos"]; s4 [label="Staff with\ntheir own PINs"]; s5 [label="Payment methods,\ncurrencies, logo"]; s6 [label="Practice sales,\nthen Start fresh"]; s7 [label="Open for\nbusiness", fillcolor="#dcf3e4", color="#2f9e5b"];
+ s8 [label="More tills / phones:\nConnect to my restaurant", style="rounded,filled,dashed", fillcolor="#fff4cc", color="#d4a514"];
+ s1 -> s2 -> s3 -> s4 -> s5 -> s6 -> s7; s2 -> s8 [style=dashed];
+}

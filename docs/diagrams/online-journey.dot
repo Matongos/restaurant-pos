@@ -1,0 +1,9 @@
+digraph G { rankdir=LR;   graph [fontname="DejaVu Sans", fontsize=10, bgcolor="transparent", pad=0.2, nodesep=0.35, ranksep=0.45];
+  node [fontname="DejaVu Sans", fontsize=9.5, shape=box, style="rounded,filled", fillcolor="white", color="#94a3b8", penwidth=1.1, margin="0.14,0.07"];
+  edge [fontname="DejaVu Sans", fontsize=8.5, color="#5b6678", arrowsize=0.7, fontcolor="#374151"];
+
+ j1 [label="Customer scans\nthe QR poster", fillcolor="#fff7ed", color="#f59e0b"]; j2 [label="Sees today's menu\nsold out marked"]; j3 [label="Orders with\nname + phone"];
+ j4 [label="Till rings\n(Online orders)", fillcolor="#dbe8ff", color="#3b6fd8", penwidth=1.5]; j5 [label="Cashier accepts\n\"ready in 15 min\""]; j6 [label="Kitchen cooks,\nticks ready"];
+ j7 [label="Customer's phone:\nREADY", fillcolor="#dcf3e4", color="#2f9e5b"]; j8 [label="Pays at counter\n(or pays the rider)"];
+ j1 -> j2 -> j3 -> j4 -> j5 -> j6 -> j7 -> j8;
+}

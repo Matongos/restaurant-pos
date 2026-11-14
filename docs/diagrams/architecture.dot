@@ -1,0 +1,24 @@
+digraph G { rankdir=TB;   graph [fontname="DejaVu Sans", fontsize=10, bgcolor="transparent", pad=0.2, nodesep=0.35, ranksep=0.45];
+  node [fontname="DejaVu Sans", fontsize=9.5, shape=box, style="rounded,filled", fillcolor="white", color="#94a3b8", penwidth=1.1, margin="0.14,0.07"];
+  edge [fontname="DejaVu Sans", fontsize=8.5, color="#5b6678", arrowsize=0.7, fontcolor="#374151"];
+
+ subgraph cluster_people { label="PEOPLE"; style="rounded,dashed"; color="#cbd5e1"; fontcolor="#64748b";
+   owner [label="Owner /\nmanager"]; cashier [label="Cashier"]; kitchen [label="Kitchen"]; customer [label="Customers\n(phone)"]; tp [label="TechPlug\nadmin"]; }
+ subgraph cluster_front { label="FRONT END  (one React + TypeScript app)"; style="rounded,filled"; fillcolor="#eef4ff"; color="#bfd2f5"; fontcolor="#1e3a8a";
+   app [label="POS app (PWA)\nbrowser · installed · Windows (Tauri)", fillcolor="#dbe8ff", color="#3b6fd8", penwidth=1.6];
+   idb [label="Device store (IndexedDB)\nwhole restaurant + OUTBOX of unsent changes", shape=cylinder, fillcolor="#fff4cc", color="#d4a514"];
+   syncE [label="Sync engine\nsends outbox ~1 s · fetches every 8 s", fillcolor="#fff4cc", color="#d4a514"];
+   pub [label="Restaurant page / QR menu\npos.techplug.co.zw/name"]; con [label="Owner console\n/console (password + code)"]; }
+ subgraph cluster_back { label="BACK END  (Supabase, Frankfurt)"; style="rounded,filled"; fillcolor="#ecf8f0"; color="#a7dcb8"; fontcolor="#166534";
+   auth [label="Auth\nemail + password · TOTP for admins", fillcolor="#dcf3e4", color="#2f9e5b", penwidth=1.4];
+   rpc [label="SQL functions (security definer)\npush_records · public_menu · place_online_order\nrecord_payment · create_branch · console_*"];
+   rls [label="Row-level security\neach restaurant sees only its rows"]; }
+ subgraph cluster_data { label="DATA  (PostgreSQL)"; style="rounded,filled"; fillcolor="#f5efff"; color="#cdb8f0"; fontcolor="#5b21b6";
+   db [label="restaurants · members · records\nonline_orders · payments · admin_log", shape=cylinder, fillcolor="#ede4ff", color="#7c4dcc"]; bk [label="Daily backups\n(Supabase Pro)", shape=cylinder, fillcolor="#ede4ff", color="#7c4dcc", style="rounded,filled,dashed"]; }
+ vercel [label="Vercel\nserves the built app", fillcolor="#f1f5f9"]; gh [label="GitHub\ncode · SQL · tests", fillcolor="#f1f5f9"];
+ owner -> app; cashier -> app; kitchen -> app; customer -> pub; tp -> con;
+ app -> idb [dir=both]; idb -> syncE [dir=both]; syncE -> auth [label=" HTTPS", color="#1e3a8a", penwidth=1.5];
+ pub -> rpc [label=" public functions only"]; con -> rpc [label=" admin, aal2"];
+ auth -> rpc; rpc -> rls; rls -> db; db -> bk [style=dashed, label=" nightly"];
+ rls -> gh [style=invis]; gh -> vercel [label=" push to main"]; vercel -> app [style=dashed, label=" serves the app", constraint=false];
+}

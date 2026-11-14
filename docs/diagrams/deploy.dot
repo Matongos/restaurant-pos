@@ -1,0 +1,13 @@
+digraph G { rankdir=TB;
+  graph [fontname="DejaVu Sans", fontsize=10.5, bgcolor="transparent", pad=0.2, nodesep=0.4, ranksep=0.55];
+  node [fontname="DejaVu Sans", fontsize=10, shape=box, style="rounded,filled", fillcolor="white", color="#94a3b8", penwidth=1.1, margin="0.16,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#5b6678", arrowsize=0.7, fontcolor="#374151"];
+ dev [label="Developer laptop", fillcolor="#f1f5f9"];
+ subgraph cluster_app { label="APP CODE"; style="rounded,filled"; fillcolor="#eef4ff"; color="#9db8ec"; fontcolor="#1e4fa8";
+  gh [label="GitHub main\nMatongos/restaurant-pos", fillcolor="#dbe8ff", color="#3b6fd8", penwidth=1.5]; vercel [label="Vercel builds web/\n(~1 minute)"]; live [label="pos.techplug.co.zw\n+ vercel.app address", fillcolor="#dcf3e4", color="#2f9e5b"]; tills [label="Tills: \"new version\"\nbar → reload"]; }
+ subgraph cluster_db { label="DATABASE"; style="rounded,filled"; fillcolor="#f3eeff"; color="#c3aef0"; fontcolor="#5b2fb0";
+  sql [label="supabase/migrations/\n000N_name.sql + SQL test"]; editor [label="Supabase SQL Editor\n(run once by hand)"]; db [label="PostgreSQL", shape=cylinder, fillcolor="#ede4ff", color="#7c4dcc"]; }
+ subgraph cluster_win { label="WINDOWS APP (rare)"; style="rounded,filled"; fillcolor="#fff8e6"; color="#f0cf7a"; fontcolor="#946200";
+  tag [label="Tag desktop-vX.Y.Z"]; act [label="GitHub Action\n(Windows runner)"]; rel [label="Release with\nTechPlug-POS-Setup.exe", fillcolor="#fff4cc", color="#d4a514"]; }
+ dev -> gh [label=" push"]; gh -> vercel -> live -> tills; dev -> sql -> editor -> db; dev -> tag [label=" only when the\nTauri shell changes", style=dashed]; tag -> act -> rel;
+}

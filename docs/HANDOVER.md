@@ -237,3 +237,7 @@ On `localhost` the app can talk to the Supabase stand-in instead of the real dat
 - `supabase/README.md` — setting up Supabase, email (Resend), security notes, sync summary.
 - `docs/ARCHITECTURE.md` — the original design principles (some of its "planned" parts were replaced by the cloud design described here).
 - `docs/HANDOVER.md` — this document.
+
+Designed PDF versions with diagrams and screenshots: `docs/TechPlug-POS-Technical-Handover.pdf` and
+`docs/TechPlug-POS-Restaurant-Guide.pdf` (for restaurants). Diagram sources (Graphviz) are in `docs/diagrams/`
+— render with `dot -Tsvg name.dot -o name.svg`.

@@ -1,0 +1,15 @@
+digraph G { rankdir=TB; newrank=true;
+  graph [fontname="DejaVu Sans", fontsize=10.5, bgcolor="transparent", pad=0.2, nodesep=0.4, ranksep=0.55];
+  node [fontname="DejaVu Sans", fontsize=10, shape=box, style="rounded,filled", fillcolor="white", color="#94a3b8", penwidth=1.1, margin="0.16,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#5b6678", arrowsize=0.7, fontcolor="#374151"];
+ subgraph cluster_a { label="TILL A"; style="rounded,filled"; fillcolor="#eef4ff"; color="#9db8ec"; fontcolor="#1e4fa8";
+  a1 [label="Cashier sells", fillcolor="#dbe8ff", color="#3b6fd8"]; a2 [label="Saved in IndexedDB\nat once"]; a3 [label="Key added\nto OUTBOX", fillcolor="#fff4cc", color="#d4a514"]; a4 [label="push_records()\nparcels of ~700 KB"];
+  off [label="No internet?\nkeep selling;\noutbox waits", fillcolor="#fde8e8", color="#d14b4b"]; }
+ subgraph cluster_s { label="SUPABASE"; style="rounded,filled"; fillcolor="#f3eeff"; color="#c3aef0"; fontcolor="#5b2fb0";
+  s [label="records\nserver sets updated_at", shape=cylinder, fillcolor="#ede4ff", color="#7c4dcc"]; }
+ subgraph cluster_b { label="TILL B (and the owner's phone)"; style="rounded,filled"; fillcolor="#ecf8f0"; color="#94d3ab"; fontcolor="#1d7a45";
+  b1 [label="Fetch rows newer\nthan cursor − 15 s\n(every 8 s)"]; b2 [label="applyRemote()\nshown, not sent back", fillcolor="#dcf3e4", color="#2f9e5b"]; }
+ {rank=same; a4; s; b1;} {rank=same; a3; off;}
+ a1 -> a2 -> a3 -> a4; a3 -> off [style=dashed, label=" offline"]; off -> a4 [style=dashed, label=" back online"];
+ a4 -> s [label=" ~1 s later", color="#7c4dcc", penwidth=1.3]; s -> b1 [color="#2f9e5b", penwidth=1.3]; b1 -> b2;
+}

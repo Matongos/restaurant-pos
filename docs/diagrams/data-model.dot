@@ -1,0 +1,13 @@
+digraph G { rankdir=LR;   graph [fontname="DejaVu Sans", fontsize=10, bgcolor="transparent", pad=0.2, nodesep=0.35, ranksep=0.45];
+  node [fontname="DejaVu Sans", fontsize=9.5, shape=box, style="rounded,filled", fillcolor="white", color="#94a3b8", penwidth=1.1, margin="0.14,0.07"];
+  edge [fontname="DejaVu Sans", fontsize=8.5, color="#5b6678", arrowsize=0.7, fontcolor="#374151"];
+
+ edge [dir=none];
+ users [label="auth.users\n(logins)"]; members [label="members\nowner / manager / device"];
+ restaurants [label="restaurants\nplan · trial · paid_until\ngroup_id (branches)", fillcolor="#dbe8ff", color="#3b6fd8", penwidth=1.5];
+ records [label="records\nkind + id → data\nmenu, orders, staff, stock…", fillcolor="#dbe8ff", color="#3b6fd8", penwidth=1.5];
+ online_orders [label="online_orders\ncustomer orders"]; payments [label="payments\nrecorded by TechPlug", fillcolor="#dcf3e4", color="#2f9e5b"];
+ admins [label="platform_admins"]; admin_log [label="admin_log"]; platform_settings [label="platform_settings\nWhatsApp · how to pay", fillcolor="#fff4cc", color="#d4a514"]; app_events [label="app_events\nvisits · downloads"];
+ users -> members -> restaurants; restaurants -> records; restaurants -> online_orders; restaurants -> payments; restaurants -> restaurants [label=" branch of", dir=forward];
+ users -> admins; admins -> admin_log; admins -> platform_settings; admins -> app_events;
+}
