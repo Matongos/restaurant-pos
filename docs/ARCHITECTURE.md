@@ -1,5 +1,7 @@
 # Architecture
 
+> **Current design: see [HANDOVER.md](HANDOVER.md).** This page keeps the original principles; the "local server" plan was replaced by an offline-first app that syncs to Supabase.
+
 ## Principles
 
 1. **Local first.** Sales, printing and serving never depend on the internet. A local server runs on the main till PC; every device connects to it over the restaurant's Wi-Fi.
