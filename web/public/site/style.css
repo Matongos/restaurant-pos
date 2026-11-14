@@ -130,3 +130,12 @@ footer .logo { color: #fff; margin-bottom: 10px; } footer b { color: #fff; displ
   footer .wrap { grid-template-columns: 1fr 1fr; }
 }
 @media (min-width: 901px) and (max-width: 1100px) { .feat { grid-template-columns: repeat(2, 1fr); } }
+
+/* Developed by TechPlug + floating WhatsApp button */
+.devby { background: #070f1d; color: #8a96aa; font-size: 13px; padding: 14px 0; text-align: center; }
+.devby a { color: #fff; font-weight: 700; text-decoration: none; }
+.devby a:hover { text-decoration: underline; }
+.wa-float { position: fixed; right: 18px; bottom: 18px; z-index: 50; display: inline-flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 18px 0 14px; border-radius: 26px; background: #1fa855; color: #fff; font-weight: 700; text-decoration: none; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); }
+.wa-float svg { width: 24px; height: 24px; }
+.wa-float:hover { background: #178a45; }
+@media (max-width: 600px) { .wa-float span { display: none; } .wa-float { padding: 0; width: 56px; justify-content: center; } }

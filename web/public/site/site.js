@@ -30,3 +30,25 @@ try {
   if (!sessionStorage.getItem('tp-visit')) { sessionStorage.setItem('tp-visit', '1'); logEvent('site_visit'); }
 } catch (e) { logEvent('site_visit'); }
 document.querySelectorAll('[data-download]').forEach(function (a) { a.addEventListener('click', function () { logEvent('download_click'); }); });
+
+// Floating WhatsApp button: TechPlug's number comes from the owner console (TechPlug details), so it can be
+// changed without touching the website. Hidden until a number is set.
+(function () {
+  try {
+    fetch('https://lrgeumaidmfmkszfdqjm.supabase.co/rest/v1/platform_settings?select=data&id=eq.1', { headers: { apikey: EVENTS_KEY } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        var n = rows && rows[0] && rows[0].data && String(rows[0].data.whatsapp || '').replace(/\D/g, '');
+        if (!n) return;
+        var a = document.createElement('a');
+        a.className = 'wa-float';
+        a.href = 'https://wa.me/' + n + '?text=' + encodeURIComponent('Hi TechPlug, I would like to know more about TechPlug POS.');
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.setAttribute('aria-label', 'Chat with TechPlug on WhatsApp');
+        a.innerHTML = '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path></svg><span>WhatsApp us</span>';
+        document.body.appendChild(a);
+      })
+      .catch(function () {});
+  } catch (e) { /* never break the page */ }
+})();

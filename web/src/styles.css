@@ -1617,3 +1617,4 @@ tr.struck td b { text-decoration: line-through; }
 .in-cart .pub-add { background: var(--brand); color: var(--brand-ink); }
 .pub-add-x { font-weight: 600; }
 .pub-item.in-cart { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.pub-powered a { color: inherit; font-weight: 700; }

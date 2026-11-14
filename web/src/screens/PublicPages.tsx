@@ -187,7 +187,7 @@ export function RestaurantPage({ slug, table }: { slug: string; table?: string }
           {menu.updatedAt && <p className="pub-foot">Availability updated {new Date(menu.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
         </>
       )}
-      <p className="pub-powered">Powered by TechPlug POS</p>
+      <p className="pub-powered">Powered by TechPlug POS · developed by <a href="https://techplug.co.zw/" target="_blank" rel="noreferrer">TechPlug</a></p>
 
       {count > 0 && canOrder && !checkout && (
         <button className="pub-cartbar" onClick={() => setCheckout(true)}>
@@ -378,7 +378,7 @@ export function OrderStatusPage({ token }: { token: string }) {
         </button>
       )}
       {slug && <a className="pub-btn ghost" href={`#/r/${slug}`}>Back to the menu</a>}
-      <p className="pub-powered">Powered by TechPlug POS</p>
+      <p className="pub-powered">Powered by TechPlug POS · developed by <a href="https://techplug.co.zw/" target="_blank" rel="noreferrer">TechPlug</a></p>
     </div>
   );
 }
