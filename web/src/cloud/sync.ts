@@ -101,6 +101,9 @@ function setStatus(patch: Partial<SyncStatus>) {
   status = { ...status, link, pending: outbox.size, ...patch };
   listeners.forEach((l) => l());
 }
+/** The sync state right now (outside React). */
+export const syncStatusNow = (): SyncStatus => status;
+
 export function useSyncStatus(): SyncStatus {
   return useSyncExternalStore(
     (cb) => {

@@ -1543,3 +1543,4 @@ tr.struck td b { text-decoration: line-through; }
 .branch-add h3 { margin: 0; }
 .branch-add .row .grow { flex: 1 1 auto; }
 @media (max-width: 560px) { .branch-totals { grid-template-columns: 1fr; } }
+.switch-link { display: block; margin: 14px auto 0; font-size: 14px; color: var(--muted); text-align: center; }

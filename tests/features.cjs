@@ -170,6 +170,18 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
     if (await A.p.isVisible('.keypad')) await pin(A.p, '1234');
     await A.p.goto(URL + '#/branches'); await A.p.waitForSelector('.branch-table'); await A.p.waitForTimeout(1500);
     check('single plan: no add button, plan explained', !(await A.p.isVisible('button:has-text("Add a branch")')) && /Group plan/.test(await A.p.textContent('.branch-page')));
+    // Switch restaurant from the PIN screen (owner only)
+    await B.p.evaluate(() => sessionStorage.clear()); await B.p.goto(URL); await B.p.reload(); await B.p.waitForSelector('.keypad');
+    check('switch link on a connected till', await B.p.isVisible('button:has-text("Switch restaurant")') && !(await B.p.isVisible('a:has-text("Connect to my restaurant")')));
+    await B.p.click('button:has-text("Switch restaurant")');
+    await B.p.locator('.dialog label:has-text("Owner\'s PIN") input').fill('1111');
+    await B.p.click('.dialog button:has-text("Continue")');
+    check('cashier PIN refused', /not the owner's PIN/.test(await B.p.textContent('.dialog .error')));
+    await B.p.locator('.dialog label:has-text("Owner\'s PIN") input').fill('1234');
+    await B.p.click('.dialog button:has-text("Continue")');
+    await B.p.click('.dialog button:has-text("Switch restaurant")');
+    await B.p.waitForSelector('text=Connect this device to your restaurant', { timeout: 15000 });
+    check('switched: signed out, ready to connect', (await B.p.evaluate(() => localStorage.getItem('restaurant-pos.cloud'))) === null);
     await A.c.close(); await B.c.close();
   }
 
