@@ -442,14 +442,13 @@ export default function Till() {
             <div className="chips-wrap">
             <div className="chips" role="tablist" aria-label="Categories" ref={chipsRef} onScroll={checkChips}>
               {showFav && (
-                <button role="tab" aria-selected={cat === FAV && !search} className={`chip ${cat === FAV && !search ? 'on' : ''}`} onClick={() => pickCat(FAV)}>
+                <button role="tab" aria-selected={cat === FAV && !search} className={`chip ${cat === FAV && !search ? 'on' : ''}`} style={{ '--c': '#1f3a5f' } as CSSProperties} onClick={() => pickCat(FAV)}>
                   <LuStar aria-hidden="true" />
                   Favourites
                 </button>
               )}
               {visibleCats.map((c) => (
-                <button key={c.id} role="tab" aria-selected={cat === c.id && !search} className={`chip ${cat === c.id && !search ? 'on' : ''}`} onClick={() => pickCat(c.id)}>
-                  <span className="dot" style={{ background: c.color }} aria-hidden="true" />
+                <button key={c.id} role="tab" aria-selected={cat === c.id && !search} className={`chip ${cat === c.id && !search ? 'on' : ''}`} style={{ '--c': c.color } as CSSProperties} onClick={() => pickCat(c.id)}>
                   {c.name}
                 </button>
               ))}

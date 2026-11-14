@@ -1637,3 +1637,22 @@ tr.struck td b { text-decoration: line-through; }
 .printer-bar .grow { flex: 1; min-width: 160px; font-size: 13px; }
 .printer-bar b { display: block; font-size: 15px; }
 @media (max-width: 599px) { .printer-bar { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); } }
+
+/* Sell screen: category buttons filled with their own colour (no dot), a little smaller */
+.chips .chip { --c: #475569; min-height: 40px; padding: 0 14px; font-size: 14px; gap: 6px; border-radius: 10px; box-shadow: none;
+  background: color-mix(in srgb, var(--c) 11%, #fff); border: 1px solid color-mix(in srgb, var(--c) 32%, #fff); color: color-mix(in srgb, var(--c) 82%, #000);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s; }
+.chips .chip svg { width: 15px; height: 15px; }
+.chips .chip:hover { background: color-mix(in srgb, var(--c) 18%, #fff); border-color: color-mix(in srgb, var(--c) 50%, #fff); }
+.chips .chip.on { background: var(--c); border-color: var(--c); color: #fff; box-shadow: 0 3px 10px color-mix(in srgb, var(--c) 35%, transparent); }
+@media (max-width: 599px) { .chips .chip { min-height: 36px; padding: 0 11px; font-size: 13px; } }
+
+/* Sell screen: meal cards with a light visible border and shadow; they glow in their category colour on hover */
+.items .item { border: 1px solid #dde3ea; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 3px 8px rgba(16, 24, 40, 0.07); transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s; }
+@media (hover: hover) {
+  .items .item:hover { border-color: color-mix(in srgb, var(--cat, #f47b20) 55%, #fff); transform: translateY(-2px);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat, #f47b20) 16%, transparent), 0 10px 24px rgba(16, 24, 40, 0.13); }
+}
+.items .item:active { transform: scale(0.98); }
+.items .item.in-order { border: 2px solid #f47b20; box-shadow: 0 0 0 3px rgba(244, 123, 32, 0.14), 0 6px 18px rgba(244, 123, 32, 0.18); }
+.items { padding-top: 5px; }
