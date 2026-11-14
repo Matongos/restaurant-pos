@@ -36,5 +36,11 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/:slug((?!site$|assets$|icons$)[a-z0-9][a-z0-9-]{1,38}[a-z0-9])",
+      "destination": "/index.html"
+    }
   ]
 }

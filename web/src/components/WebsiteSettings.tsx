@@ -81,7 +81,7 @@ export default function WebsiteSettings() {
             </button>
           </div>
           <p className="hint">
-            When techplugpos.com is set up this becomes <b>{info.slug}.techplugpos.com</b>. {live ? '' : 'Switch on the web page or QR menu to make it live.'}
+            Share this link on WhatsApp, Facebook or your shop window. {live ? '' : 'Switch on the web page or QR menu to make it live.'}
           </p>
         </div>
       </div>

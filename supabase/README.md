@@ -17,8 +17,9 @@ only see the published menu, and only TechPlug admins can open the owner console
    (Supabase's built-in email only sends to your own team's addresses, so restaurant owners would never
    get the confirmation email. Turn it back on once a mail service such as Resend is set up under
    **Authentication → Emails → SMTP settings** — that also makes "Forgot password" work for everyone.)
-5. **Authentication → URL Configuration**: *Site URL* = the app's address
-   (`https://web-delta-five-slu2k38rxm.vercel.app`), and add the same address under *Redirect URLs*.
+5. **Authentication → URL Configuration**: *Site URL* = the app's address (`https://pos.techplug.co.zw`),
+   and under *Redirect URLs* add `https://pos.techplug.co.zw` and `https://web-delta-five-slu2k38rxm.vercel.app`
+   (the Windows app and tills set up before the move still use the vercel.app address).
    Email links (confirm, new password) then come back to the app.
 6. **Project Settings → API Keys**: you will see the **Project URL** and the **publishable** key.
    These two are meant to be public (they are built into the app); share them so they can be added

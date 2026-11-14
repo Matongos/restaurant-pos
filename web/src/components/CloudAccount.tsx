@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { LuCloud, LuCloudOff, LuRefreshCw, LuCircleCheck, LuTriangleAlert, LuStore } from 'react-icons/lu';
 import { useStore } from '../store/store';
+import { PUBLIC_SITE } from '../cloudConfig';
 import { createRestaurant, getSession, sendPasswordReset, setNewPassword, signIn, signOut, signUp, slugAvailable, slugFrom, type Membership } from '../cloud/api';
 import { linkAndDownload, linkAndUpload, myRestaurants, restaurantHasData, syncNow, unlink, useSyncStatus } from '../cloud/sync';
 import { Dialog, toast } from './ui';
@@ -24,7 +25,8 @@ const writePending = (p: Pending | null) => {
   }
 };
 
-export const WEB_DOMAIN = 'techplugpos.com';
+/** How a restaurant's web address is shown: pos.techplug.co.zw/<web address>. */
+export const WEB_PREFIX = PUBLIC_SITE.replace(/^https?:\/\//, '') + '/';
 
 export default function CloudAccount() {
   const status = useSyncStatus();
@@ -64,6 +66,8 @@ function Start({ onSignedIn }: { onSignedIn: () => void }) {
   );
 }
 
+const RESERVED_PATHS = ['setup', 'console', 'site', 'assets', 'icons', 'online', 'posters', 'display', 'kitchen', 'orders', 'settings'];
+
 export function SlugField({ name, slug, setSlug, ok, setOk }: { name: string; slug: string; setSlug: (s: string) => void; ok: boolean | null; setOk: (b: boolean | null) => void }) {
   const [touched, setTouched] = useState(false);
   useEffect(() => {
@@ -72,6 +76,8 @@ export function SlugField({ name, slug, setSlug, ok, setOk }: { name: string; sl
   useEffect(() => {
     setOk(null);
     if (slug.length < 3) return;
+    // Words the app's own addresses use (pos.techplug.co.zw/setup, /console…) can't be a restaurant's.
+    if (RESERVED_PATHS.includes(slug)) return setOk(false);
     const t = setTimeout(() => {
       slugAvailable(slug)
         .then(setOk)
@@ -83,6 +89,7 @@ export function SlugField({ name, slug, setSlug, ok, setOk }: { name: string; sl
     <label className="field">
       Your web address
       <div className="slug-input">
+        <span>{WEB_PREFIX}</span>
         <input
           value={slug}
           onChange={(e) => {
@@ -91,7 +98,6 @@ export function SlugField({ name, slug, setSlug, ok, setOk }: { name: string; sl
           }}
           aria-describedby="slug-help"
         />
-        <span>.{WEB_DOMAIN}</span>
       </div>
       <span id="slug-help" className={`slug-state ${ok === false ? 'bad' : ok ? 'good' : ''}`}>
         {slug.length < 3 ? 'At least 3 letters' : ok === false ? 'Taken — try another' : ok ? 'Available' : 'Checking…'}
@@ -333,7 +339,7 @@ export function ChooseRestaurant({ onSignOut }: { onSignOut: () => void }) {
                 <div className="grow">
                   <b>{m.restaurants?.name}</b>
                   <div className="muted">
-                    {m.restaurants?.slug}.{WEB_DOMAIN} · {m.role}
+                    {WEB_PREFIX}{m.restaurants?.slug} · {m.role}
                   </div>
                 </div>
                 <button className="btn primary" disabled={!!busy} onClick={() => use(m)}>
@@ -417,7 +423,7 @@ function Linked() {
         <div>
           <b>{l.restaurantName}</b>
           <div className="muted">
-            {l.slug}.{WEB_DOMAIN} · signed in as {l.email}
+            {WEB_PREFIX}{l.slug} · signed in as {l.email}
           </div>
         </div>
       </div>

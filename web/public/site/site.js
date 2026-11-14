@@ -1,5 +1,5 @@
-// Links shared by all pages. Change APP_URL when the app moves to its own address (e.g. app.techplugpos.com).
-var APP_URL = 'https://web-delta-five-slu2k38rxm.vercel.app/';
+// Links shared by all pages: the app's public address.
+var APP_URL = 'https://pos.techplug.co.zw/';
 var DOWNLOAD_URL = 'https://github.com/Matongos/restaurant-pos/releases/latest/download/TechPlug-POS-Setup.exe';
 document.querySelectorAll('[data-app]').forEach(function (a) { a.href = APP_URL; });
 document.querySelectorAll('[data-download]').forEach(function (a) { a.href = DOWNLOAD_URL; });
