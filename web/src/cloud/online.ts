@@ -10,7 +10,7 @@ import { useSyncExternalStore } from 'react';
 import type { AppState } from '../domain/types';
 import { isSellable } from '../domain/rules';
 import { outOfStockIds, stockLevels } from '../domain/stock';
-import { acceptOnlineOrder, getState, useStore } from '../store/store';
+import { acceptOnlineOrder, setSalesLock, getState, useStore } from '../store/store';
 import { insertQuiet, patch, rpc, select } from './api';
 import { inDesktopApp, isInstalled } from '../pwa';
 import { deviceId, getLink, isSyncLeader, onSyncTick } from './sync';
@@ -79,6 +79,9 @@ function update(p: Partial<OnlineState>) {
   }
   listeners.forEach((l) => l());
 }
+function addListener(cb: () => void) {
+  listeners.add(cb);
+}
 export function useOnline(): OnlineState {
   return useSyncExternalStore(
     (cb) => {
@@ -119,6 +122,17 @@ export async function saveRestaurantInfo(p: Partial<Pick<RestaurantInfo, 'web_pa
 }
 
 /** Days left of the free trial (negative when over), or null when not on a trial. */
+/** Days after the trial ends before the till pauses (time to arrange payment). */
+export const GRACE_DAYS = 3;
+/** Why selling is paused on this restaurant's tills, or null. */
+export function lockReason(info: RestaurantInfo | null): string | null {
+  if (!info) return null;
+  if (info.plan === 'closed') return 'This restaurant’s account is closed, so new sales are paused. Contact TechPlug to reopen it.';
+  if (info.plan === 'trial' && Date.parse(info.trial_ends_at) + GRACE_DAYS * 86_400_000 < Date.now())
+    return 'The free trial has ended, so new sales are paused. Your sales, reports and books are all kept. Contact TechPlug to choose a plan.';
+  return null;
+}
+
 export function trialDaysLeft(info: RestaurantInfo | null): number | null {
   if (!info || info.plan !== 'trial') return null;
   return Math.ceil((Date.parse(info.trial_ends_at) - Date.now()) / 86_400_000);
@@ -307,9 +321,23 @@ export function startOnline() {
     /* ignore */
   }
   window.addEventListener('appinstalled', () => logEvent('web_install'));
+  // Pause selling when the trial is over or the account closed (every window, also offline, from the saved info).
+  const checkLock = () => setSalesLock(getLink() ? lockReason(st.info) : null);
+  checkLock();
+  setInterval(checkLock, 60_000);
+  addListener(checkLock);
   onSyncTick(async () => {
-    if (!isSyncLeader()) return;
-    await refreshInfo();
+    if (!isSyncLeader()) {
+      // Other windows: pick up the leader's newer restaurant info (plan, trial) from the device.
+      try {
+        const saved = JSON.parse(localStorage.getItem(INFO_KEY) || 'null');
+        if (saved && JSON.stringify(saved) !== JSON.stringify(st.info)) update({ info: saved });
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    await refreshInfo(!!lockReason(st.info));
     await publishMenu();
     await pollOrders();
   });

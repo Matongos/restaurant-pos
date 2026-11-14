@@ -1568,3 +1568,6 @@ tr.struck td b { text-decoration: line-through; }
 .item.in-order { border: 2px solid #f47b20; box-shadow: 0 6px 18px rgba(244, 123, 32, 0.18); }
 @media (max-width: 900px) { .items.with-photos { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; } .item-pic .mono { font-size: 26px; } }
 @media (max-width: 520px) { .items.with-photos { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .item-pic { aspect-ratio: 16 / 10; } .item-pic .mono { font-size: 22px; } .items.with-photos .item .meta { padding: 7px 9px 9px; gap: 6px; } .items.with-photos .item .nm { font-size: 14px; min-height: 0; } }
+.paused-card { padding: 28px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.paused-card > svg { width: 44px; height: 44px; color: #b45309; }
+.paused-card h2, .paused-card p { margin: 0; max-width: 520px; }

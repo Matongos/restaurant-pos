@@ -257,7 +257,8 @@ function Dashboard({ onOut }: { onOut: () => void }) {
                           </option>
                         ))}
                       </select>
-                      {r.plan === 'trial' && <div className={`small ${left < 0 ? 'bad' : left <= 7 ? 'warn' : 'muted'}`}>{left < 0 ? `ended ${-left} days ago` : `${left} days left`}</div>}
+                      {r.plan === 'trial' && <div className={`small ${left < 0 ? 'bad' : left <= 7 ? 'warn' : 'muted'}`}>{left < 0 ? `ended ${-left} days ago${left < -3 ? ' · tills paused' : ''}` : `${left} days left`}</div>}
+                      {r.plan === 'closed' && <div className="small bad">tills paused</div>}
                     </td>
                     <td className={`small ${ago(r.last_seen_at) === 'online now' ? 'good' : ''}`}>{ago(r.last_seen_at)}</td>
                     <td>{r.devices}</td>

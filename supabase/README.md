@@ -26,7 +26,9 @@ only see the published menu, and only TechPlug admins can open the owner console
    to the app's settings. **Never share the `service_role` key or the database password.**
 7. **SQL Editor → New query**: paste everything from `migrations/0002_console_and_online.sql` → **Run**
    (owner console, plan protection, extra menu details for the restaurant page).
-8. Make yourself an admin for the owner console: after you have signed up in the app, run in the SQL Editor:
+8. **SQL Editor → New query**: paste everything from `migrations/0003_branches_delivery_trial.sql` → **Run**
+   (branches for the Group plan, delivery for online orders, pausing tills when a trial is over).
+9. Make yourself an admin for the owner console: after you have signed up in the app, run in the SQL Editor:
    `insert into platform_admins (user_id) select id from auth.users where email = 'your@email';`
 
 ## What is in it
@@ -45,7 +47,7 @@ only see the published menu, and only TechPlug admins can open the owner console
 
 ## Tests
 
-`tests/test_security.sql` runs on plain PostgreSQL with `tests/stub_supabase.sql` standing in for
+`tests/test_security.sql`, `tests/test_console.sql` and `tests/test_branches.sql` run on plain PostgreSQL with `tests/stub_supabase.sql` standing in for
 Supabase's login system. It checks that restaurants cannot see each other, customers cannot read
 records, prices come from the server, sold-out meals are refused and the console is admin-only.
 

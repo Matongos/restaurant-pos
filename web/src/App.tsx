@@ -1,6 +1,6 @@
 import { useEffect, type ComponentType, type ReactElement } from 'react';
 import { useRoute } from './router';
-import { useCurrentUser, useStore } from './store/store';
+import { useCurrentUser, useSalesLock, useStore } from './store/store';
 import { can, type Permission } from './domain/rules';
 import { homeFor, ToastHost, TopBar } from './components/ui';
 import Login from './screens/Login';
@@ -24,7 +24,7 @@ import { OrderStatusPage, RestaurantPage } from './screens/PublicPages';
 import Console from './screens/Console';
 import Setup from './screens/Setup';
 import BranchesScreen from './screens/Branches';
-import { TrialBar } from './components/TrialBar';
+import { PausedScreen, TrialBar } from './components/TrialBar';
 
 const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/till': { perm: 'take_orders', el: Till },
@@ -49,6 +49,7 @@ export default function App() {
   const user = useCurrentUser();
   const mode = useStore((s) => s.settings.serviceMode ?? 'counter');
   const brand = useStore((s) => s.settings.brandColor);
+  const paused = useSalesLock();
 
   useEffect(() => {
     document.documentElement.style.setProperty('--brand', brand);
@@ -91,6 +92,7 @@ export default function App() {
           </div>
         </div>
       );
+    else if (paused && (path === '/till' || path === '/tables' || path === '/online')) body = <PausedScreen />;
     else {
       const El = r.el;
       body = <El />;

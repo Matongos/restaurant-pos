@@ -540,7 +540,22 @@ function customerChange(
   return { ok: true, customer, newCustomer, entries, used };
 }
 
+/* ------------------------------------------------------------------ paused (trial over, account closed) */
+
+let salesLock: string | null = null;
+/** The online account pauses selling on this till (trial over or account closed). null = selling allowed. */
+export function setSalesLock(reason: string | null) {
+  if (reason === salesLock) return;
+  salesLock = reason;
+  emit();
+}
+export const getSalesLock = () => salesLock;
+export function useSalesLock(): string | null {
+  return useSyncExternalStore(subscribe, () => salesLock);
+}
+
 export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
+  if (salesLock) return { ok: false, error: salesLock };
   const s = state;
   const now = new Date().toISOString();
   const isDelivery = input.orderTypeId === 'delivery' && !input.parentOrderId;
@@ -705,6 +720,7 @@ export function deleteDeliveryArea(id: string) {
  * the table's bill (who serves it, how many guests); later rounds are added to it.
  */
 export function sendTableRound(input: { tableId: string; guests?: number; lines: OrderLine[]; cashierId: string }): { ok: true; order: Order } | { ok: false; error: string } {
+  if (salesLock) return { ok: false, error: salesLock };
   const s = state;
   const table = (s.settings.tables ?? []).find((t) => t.id === input.tableId);
   if (!table) return { ok: false, error: 'Table not found.' };
@@ -754,6 +770,7 @@ export function acceptOnlineOrder(input: {
   lines: { itemId: string; name: string; qty: number; unitPrice: number; extras?: string[]; without?: string[]; note?: string }[];
   cashierId: string;
 }): { ok: true; order: Order } | { ok: false; error: string } {
+  if (salesLock) return { ok: false, error: salesLock };
   const s = state;
   if (s.orders.some((o) => o.online?.id === input.online.id)) return { ok: false, error: 'This order is already on the till.' };
   const lines: OrderLine[] = input.lines.map((l) => {

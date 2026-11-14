@@ -185,6 +185,41 @@ const out = {}; const check = (n, c, d) => (out[n] = c ? 'ok' : `FAIL ${d ?? ''}
     await A.c.close(); await B.c.close();
   }
 
+  // ---- 5. Trial over: selling pauses (after the grace days); unpaused as soon as the plan is switched on
+  {
+    await fetch(MOCK + '/__reset');
+    const c = await b.newContext({ viewport: { width: 1280, height: 860 } }); await c.addInitScript((m) => localStorage.setItem('restaurant-pos.cloud-url', m), MOCK);
+    const p = await c.newPage(); p.on('pageerror', (e) => errors.push(e.message));
+    await p.goto(URL); await p.waitForSelector('.keypad');
+    await p.click('a:has-text("New restaurant? Set it up")');
+    await p.locator('label:has-text("Restaurant name") input').fill('Paused Place');
+    await p.waitForSelector('.slug-state.good');
+    await p.click('.setup-nav button:has-text("Next")');
+    await p.locator('label:has-text("Your name") input').fill('Farai Dube');
+    await p.locator('label:has-text("Choose your 4-digit PIN") input').fill('2580');
+    await p.locator('label:has-text("Type it again") input').fill('2580');
+    await p.click('.setup-nav button:has-text("Next")');
+    await p.locator('label:has-text("Email") input').fill('farai@example.com');
+    await p.locator('label:has-text("password") input').fill('farai-pass-1');
+    await p.click('button:has-text("Create my restaurant")');
+    await p.waitForSelector('.topbar', { timeout: 20000 });
+    await p.goto(URL + '#/till'); await p.waitForSelector('.items');
+    check('selling works during the trial', true);
+    await fetch(MOCK + '/__plan?slug=paused-place&plan=trial&ended=1');
+    // The till re-reads its plan every 5 minutes; a restart reads it at once.
+    await p.reload(); await p.waitForTimeout(1000);
+    if (await p.isVisible('.keypad')) for (const d of '2580') await p.click(`.keypad button:text-is("${d}")`);
+    await p.goto(URL + '#/till');
+    await p.waitForSelector('.paused-card', { timeout: 30000 });
+    check('trial over: Sell shows paused', /New sales are paused/.test(await p.textContent('.paused-card')) && /free trial has ended/.test(await p.textContent('.paused-card')));
+    await p.goto(URL + '#/reports'); await p.waitForTimeout(500);
+    check('reports still open while paused', !(await p.isVisible('.paused-card')));
+    await fetch(MOCK + '/__plan?slug=paused-place&plan=restaurant');
+    await p.goto(URL + '#/till'); await p.waitForSelector('.items', { timeout: 30000 });
+    check('plan switched on: selling back by itself', !(await p.isVisible('.paused-card')));
+    await c.close();
+  }
+
   check('no page errors', errors.length === 0, errors.join(' | '));
   console.log(JSON.stringify(out, null, 1));
   console.log('fails:', Object.values(out).filter((v) => v !== 'ok').length);
