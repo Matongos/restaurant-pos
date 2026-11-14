@@ -73,6 +73,9 @@ function messageOf(j: any, status: number): string {
   const code: string = j?.error_code || j?.code || '';
   if (code === 'invalid_credentials' || /invalid login credentials/i.test(raw)) return 'Wrong email or password.';
   if (code === 'email_not_confirmed' || /email not confirmed/i.test(raw)) return 'Please confirm your email first: open the link we emailed you.';
+  if (code === 'email_exists' || /already been registered/i.test(raw)) return 'Another account already uses that email. Choose a different one.';
+  if (code === 'same_password' || /should be different from the old/i.test(raw)) return 'The new password is the same as the old one.';
+  if (code === 'reauthentication_needed' || /reauthentication/i.test(raw)) return 'For safety, sign out and sign in again, then change the password.';
   if (code === 'user_already_exists' || /already registered/i.test(raw)) return 'There is already an account with this email. Sign in instead.';
   if (code === 'weak_password' || /password should be/i.test(raw)) return 'Choose a longer password (at least 8 characters).';
   if (code === 'over_email_send_rate_limit' || /rate limit/i.test(raw)) return 'Too many emails sent. Please wait a few minutes and try again.';
@@ -193,6 +196,40 @@ export function takeSessionFromLink(): string | null {
 
 export async function setNewPassword(password: string): Promise<void> {
   await call('/auth/v1/user', { method: 'PUT', body: JSON.stringify({ password }) });
+}
+
+/** Check the current password by signing in again (also gives a fresh login, which the service wants before changes). */
+async function confirmPassword(password: string): Promise<void> {
+  if (!session) throw new CloudError('Sign in first.');
+  try {
+    await signIn(session.email, password);
+  } catch (e) {
+    if (e instanceof CloudError && /wrong email or password/i.test(e.message)) throw new CloudError('Your current password is not right.');
+    throw e;
+  }
+}
+
+/** Change the online account's password (the current one is asked for first). */
+export async function changePassword(current: string, next: string): Promise<void> {
+  if (next.length < 8) throw new CloudError('Choose a new password of at least 8 characters.');
+  if (next === current) throw new CloudError('The new password is the same as the old one.');
+  await confirmPassword(current);
+  await setNewPassword(next);
+}
+
+/** Change the online account's email. 'changed' = done now; 'confirm' = the service sent a link that must be opened first. */
+export async function changeEmail(newEmail: string, password: string): Promise<'changed' | 'confirm'> {
+  const email = newEmail.trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(email)) throw new CloudError('Type the new email address.');
+  if (session && email === session.email.toLowerCase()) throw new CloudError('That is already the email of this account.');
+  await confirmPassword(password);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const u = (await call('/auth/v1/user', { method: 'PUT', body: JSON.stringify({ email }) })) as any;
+  if (u?.email && u.email.toLowerCase() === email) {
+    if (session) saveSession({ ...session, email: u.email });
+    return 'changed';
+  }
+  return 'confirm';
 }
 
 /* ------------------------------------------------------------------ database */

@@ -1342,6 +1342,19 @@ export function setStaffPin(id: string, pin: string, byId: string): StaffResult 
   return { ok: true, staff: updated };
 }
 
+/** Anyone signed in can change their own PIN, by typing the current one first. */
+export function changeMyPin(id: string, currentPin: string, pin: string): StaffResult {
+  const me = state.staff.find((s) => s.id === id && canSignIn(s));
+  if (!me) return { ok: false, error: 'Log in again first' };
+  if (me.pin !== currentPin) return { ok: false, error: 'Your current PIN is not right' };
+  if (pin === currentPin) return { ok: false, error: 'The new PIN is the same as the old one' };
+  const bad = pinProblem(pin, state.staff, id);
+  if (bad) return { ok: false, error: bad };
+  const updated = { ...me, pin, pinChangedAt: new Date().toISOString() };
+  set((st) => logStaff({ ...st, staff: st.staff.map((s) => (s.id === id ? updated : s)) }, id, id, 'pin_changed'));
+  return { ok: true, staff: updated };
+}
+
 export function setStaffSuspended(id: string, suspended: boolean, byId: string, reason = ''): StaffResult {
   const { actor, target, rights } = actorAndTarget(byId, id);
   if (!actor || !target || !rights?.suspend) return { ok: false, error: actor?.id === id ? "You can't suspend yourself" : "You can't suspend this person" };

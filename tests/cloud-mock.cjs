@@ -82,6 +82,13 @@ http.createServer((req, res) => {
     }
     if (p === '/auth/v1/logout') { tokens.delete(auth); return send(204); }
     if (p === '/auth/v1/recover') return send(200, {});
+    if (p === '/auth/v1/user' && req.method === 'PUT') {
+      const u = [...users.values()].find((x) => x.id === uid);
+      if (!u) return send(401, { msg: 'Invalid JWT' });
+      if (body.password) { if (body.password.length < 6) return send(422, { error_code: 'weak_password', msg: 'Password should be at least 6 characters.' }); u.password = body.password; }
+      if (body.email) { if (users.has(body.email)) return send(422, { error_code: 'email_exists', msg: 'A user with this email address has already been registered' }); users.delete(u.email); u.email = body.email; users.set(u.email, u); }
+      return send(200, { id: u.id, email: u.email });
+    }
 
     if (p === '/rest/v1/rpc/slug_available') {
       const s = String(body.p_slug || '').toLowerCase();

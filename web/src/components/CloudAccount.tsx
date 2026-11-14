@@ -6,6 +6,7 @@ import { PUBLIC_SITE } from '../cloudConfig';
 import { createRestaurant, getSession, sendPasswordReset, setNewPassword, signIn, signOut, signUp, slugAvailable, slugFrom, type Membership } from '../cloud/api';
 import { linkAndDownload, linkAndUpload, myRestaurants, restaurantHasData, syncNow, unlink, useSyncStatus } from '../cloud/sync';
 import { Dialog, toast } from './ui';
+import { AccountSecurity } from './MyAccount';
 
 const PENDING_KEY = 'restaurant-pos.signup-pending';
 type Pending = { name: string; slug: string; town: string };
@@ -450,6 +451,21 @@ function Linked() {
         </button>
       </div>
       {st.state === 'signed-out' && <SignIn onSignedIn={() => void syncNow()} />}
+      {(
+        <div className="acct-card">
+          <h3>Account</h3>
+          <dl className="acct-facts">
+            <dt>Email</dt>
+            <dd className="acct-email">{l.email}</dd>
+            <dt>Web address</dt>
+            <dd>
+              {WEB_PREFIX}
+              {l.slug}
+            </dd>
+          </dl>
+          <AccountSecurity />
+        </div>
+      )}
       <p className="hint">
         To add another till, phone or tablet: open TechPlug POS on it, go to Settings → Online account, and sign in with the same email.
       </p>

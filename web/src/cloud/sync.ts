@@ -243,6 +243,14 @@ async function fetchRows(since: string | null, onPage: (rows: Row[]) => void): P
   }
 }
 
+/** After the account's email changes: show the new one everywhere. */
+export function setLinkEmail(email: string) {
+  if (!link) return;
+  link = { ...link, email };
+  write(LINK_KEY, link);
+  setStatus({});
+}
+
 async function pull(): Promise<void> {
   if (!link) return;
   // Look a little further back than the last change seen, in case a slow device saved something

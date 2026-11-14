@@ -23,7 +23,8 @@ const MANAGER_TABS: Tab[] = ['numbers', 'delivery', 'kitchen'];
 export default function SettingsScreen() {
   const user = useCurrentUser()!;
   const owner = can(user.role, 'settings');
-  const [tab, setTab] = useState<Tab>(owner ? 'general' : 'numbers');
+  const asked = new URLSearchParams(location.hash.split('?')[1] ?? '').get('tab') as Tab | null;
+  const [tab, setTab] = useState<Tab>(asked && owner ? asked : owner ? 'general' : 'numbers');
   const allTabs: [Tab, string][] = [
     ['general', 'Restaurant & branding'],
     ['online', 'Online account'],

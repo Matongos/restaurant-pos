@@ -9,6 +9,7 @@ import {
   LuChartColumn,
   LuClipboardList,
   LuClock,
+  LuCircleUserRound,
   LuHouse,
   LuUtensils,
   LuCookingPot,
@@ -27,6 +28,7 @@ import {
 } from 'react-icons/lu';
 import { go, useRoute } from '../router';
 import { useSyncStatus } from '../cloud/sync';
+import MyAccount from './MyAccount';
 import { useOnlineOrders } from '../cloud/online';
 import { logout, updateSettings, useCurrentUser, useStockLevels, useStore } from '../store/store';
 import { balances, can, ROLE_LABEL, type Permission } from '../domain/rules';
@@ -307,7 +309,10 @@ function UserMenu() {
   const user = useCurrentUser();
   const settings = useStore((s) => s.settings);
   const [open, setOpen] = useState(false);
+  const [account, setAccount] = useState(false);
+  const sync = useSyncStatus();
   if (!user) return null;
+  const seesEmail = user.role === 'super_admin' || user.role === 'manager';
   const showDisplay = can(user.role, 'take_orders') || can(user.role, 'screens');
   const showTraining = can(user.role, 'reports');
   return (
@@ -327,7 +332,12 @@ function UserMenu() {
             <div className="who-line">
               <b>{user.name}</b>
               <span className="muted">{ROLE_LABEL[user.role]}</span>
+              {sync.link && seesEmail && <span className="muted who-email">{sync.link.email}</span>}
             </div>
+            <button role="menuitem" onClick={() => { setOpen(false); setAccount(true); }}>
+              <LuCircleUserRound aria-hidden="true" />
+              My account
+            </button>
             {showDisplay && (
               <button role="menuitem" onClick={() => { setOpen(false); openCustomerScreen(); }}>
                 <LuMonitor aria-hidden="true" />
@@ -348,6 +358,7 @@ function UserMenu() {
           </div>
         </>
       )}
+      {account && <MyAccount onClose={() => setAccount(false)} />}
     </div>
   );
 }

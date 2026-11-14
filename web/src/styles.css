@@ -1492,3 +1492,23 @@ tr.struck td b { text-decoration: line-through; }
 .pub-steps li { text-align: center; padding: 8px 4px; border-radius: 10px; background: var(--soft); color: var(--muted); font-weight: 700; font-size: 13px; }
 .pub-steps li.on { background: var(--brand); color: var(--brand-ink); }
 .setup-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; } .setup-brand img { border-radius: 8px; }
+
+/* My account */
+.user-pop .who-email { display: block; font-size: 13px; margin-top: 2px; word-break: break-all; }
+.acct-dialog .body { display: flex; flex-direction: column; gap: 16px; }
+.acct-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: var(--panel); display: flex; flex-direction: column; gap: 12px; }
+.acct-card h3 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.acct-head { display: flex; align-items: center; gap: 14px; }
+.acct-avatar { width: 52px; height: 52px; border-radius: 50%; background: var(--accent, #f47b20); color: #fff; display: grid; place-items: center; font-size: 22px; font-weight: 800; flex: none; }
+.acct-row { display: flex; align-items: center; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.acct-row > svg { width: 22px; height: 22px; color: var(--muted); flex: none; }
+.acct-row .grow, .acct-head .grow { flex: 1 1 auto; min-width: 0; }
+.acct-form { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 10px; background: var(--soft); }
+.acct-form .row .grow { flex: 1 1 auto; }
+.acct-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.acct-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+.acct-facts dt { color: var(--muted); font-weight: 600; }
+.acct-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.acct-facts .acct-email { font-weight: 700; font-size: 16px; }
+.acct-security { display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 560px) { .acct-grid3 { grid-template-columns: 1fr; } .acct-row { flex-wrap: wrap; } }
