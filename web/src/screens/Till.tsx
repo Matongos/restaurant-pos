@@ -105,6 +105,8 @@ export default function Till() {
     if (cat === FAV) return showFav ? sellable.filter((m) => m.favourite) : [];
     return sellable.filter((m) => m.categoryId === cat);
   }, [sellable, cat, search, showFav]);
+  // Meal photos: when any meal on screen has one, all tiles take the photo shape so the grid stays even.
+  const withPhotos = shown.some((m) => !!m.photo);
 
   // Mirror the order on the customer display while it is being entered.
   useEffect(() => {
@@ -470,13 +472,45 @@ export default function Till() {
               </button>
             )}
           </div>
-          <div className="items">
+          <div className={`items ${withPhotos ? 'with-photos' : ''}`}>
             {shown.map((m) => {
               const q = qtyOf(m.id);
+              if (withPhotos)
+                // Photo layout (any meal on screen has a photo): every tile the same shape — the photo on top,
+                // or the meal's letters on its category colour.
+                return (
+                  <button
+                    key={m.id}
+                    className={`item pic-tile ${q > 0 ? 'in-order' : ''}`}
+                    onClick={() => add(m)}
+                    style={{ '--cat': catColor(m.categoryId) } as CSSProperties}
+                    aria-label={`${m.name}, ${fmt(m.price, base)}${q ? `, ${q} in order` : ''}`}
+                  >
+                    <div className="item-pic">
+                      {m.photo ? (
+                        <img src={m.photo} alt="" />
+                      ) : (
+                        <span className="mono" aria-hidden="true">
+                          {mealInitials(m.name)}
+                        </span>
+                      )}
+                      {q > 0 && <span className="qty-badge">{q}</span>}
+                    </div>
+                    <div className="meta">
+                      <div className="nm">{m.name}</div>
+                      <div className="pr-row">
+                        <span className="pr">{fmt(m.price, base)}</span>
+                        <span className="add-dot" aria-hidden="true">
+                          <LuPlus />
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
               return (
                 <button
                   key={m.id}
-                  className={`item ${m.photo ? 'has-photo' : ''}`}
+                  className={`item ${m.photo ? 'has-photo' : ''} ${q > 0 ? 'in-order' : ''}`}
                   onClick={() => add(m)}
                   style={{ '--cat': catColor(m.categoryId) } as CSSProperties}
                   aria-label={`${m.name}, ${fmt(m.price, base)}${q ? `, ${q} in order` : ''}`}
