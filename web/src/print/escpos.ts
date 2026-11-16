@@ -11,8 +11,11 @@ export type PaperWidth = 58 | 80;
 const ESC = 0x1b;
 const GS = 0x1d;
 
-/** Characters per line in the printer's normal font. */
-export const colsFor = (w: PaperWidth) => (w === 58 ? 32 : 48);
+/**
+ * Characters per line in the printer's normal font. 58 mm printers fit 32. 80 mm printers fit 48 or 42
+ * depending on the model, so 42 is the safe default; the owner can choose 48 in Settings.
+ */
+export const defaultCols = (w: PaperWidth) => (w === 58 ? 32 : 42);
 const dotsFor = (w: PaperWidth) => (w === 58 ? 384 : 576);
 
 /** Printers here use plain ASCII safely; swap the few special characters the tickets use. */
@@ -38,7 +41,7 @@ type Align = 0 | 1 | 2;
 
 class Out {
   bytes: number[] = [];
-  constructor(public width: PaperWidth) {
+  constructor(public width: PaperWidth, public cols: number) {
     this.raw(ESC, 0x40); // initialise
   }
   raw(...b: number[]) {
@@ -64,7 +67,7 @@ class Out {
   para(segs: Seg[], opts: { align?: Align; w?: number; h?: number; indent?: number; bold?: boolean } = {}) {
     const w = opts.w ?? 1;
     const h = opts.h ?? 1;
-    const cols = Math.max(8, Math.floor(colsFor(this.width) / w));
+    const cols = Math.max(8, Math.floor(this.cols / w));
     const indent = ' '.repeat(opts.indent ?? 0);
     // Split into words keeping bold per word.
     const words: Seg[] = [];
@@ -116,7 +119,7 @@ class Out {
   }
   /** Left text and right text on one line (prices). Long left text wraps above. */
   row(left: string, right: string, bold = false) {
-    const cols = colsFor(this.width);
+    const cols = this.cols;
     const l = ascii(left).trim();
     const r = ascii(right).trim();
     this.align(0);
@@ -141,7 +144,7 @@ class Out {
   }
   rule(ch = '-') {
     this.align(0);
-    this.text(ch.repeat(colsFor(this.width)));
+    this.text(ch.repeat(this.cols));
     this.nl();
   }
   /** Black-and-white picture (logo), printed as a raster image. */
@@ -236,10 +239,10 @@ async function ticket(out: Out, root: Element) {
       }
     } else if (!t) continue;
     else if (cls.contains('num')) {
-      const w = t.length * big > colsFor(out.width) ? 2 : big;
+      const w = t.length * big > out.cols ? 2 : big;
       out.para([{ text: t, bold: true }], { align: 1, w, h: big });
     } else if (cls.contains('type')) {
-      const w = t.length * 2 > colsFor(out.width) ? 1 : 2;
+      const w = t.length * 2 > out.cols ? 1 : 2;
       out.para([{ text: t, bold: true }], { align: 1, w, h: 2 });
     } else if (cls.contains('name')) out.para([{ text: t, bold: true }], { align: 1, h: 2 });
     else if (cls.contains('training') || cls.contains('addon') || cls.contains('paid')) {
@@ -258,8 +261,8 @@ async function ticket(out: Out, root: Element) {
 }
 
 /** Ticket HTML parts → one ESC/POS byte stream, each ticket cut (or torn) separately. */
-export async function ticketsToEscPos(htmlParts: string[], width: PaperWidth, cut: boolean): Promise<Uint8Array> {
-  const out = new Out(width);
+export async function ticketsToEscPos(htmlParts: string[], width: PaperWidth, cut: boolean, cols?: number): Promise<Uint8Array> {
+  const out = new Out(width, cols || defaultCols(width));
   const doc = new DOMParser().parseFromString(`<body>${htmlParts.join('')}</body>`, 'text/html');
   const tickets = Array.from(doc.querySelectorAll('.ticket'));
   for (const tk of tickets) {
@@ -273,6 +276,6 @@ export async function ticketsToEscPos(htmlParts: string[], width: PaperWidth, cu
 export function testPageHTML(name: string, width: PaperWidth): string {
   return `<div class="ticket"><div class="name">${name.replace(/[<>&]/g, '')}</div><div class="label">PRINTER TEST</div><div class="num">123</div><hr/>
   <table><tr><td>1 × Sadza &amp; Beef</td><td class="r">$5.00</td></tr><tr class="tot"><td>Total</td><td class="r">$5.00</td></tr></table><hr/>
-  <div class="small">Paper ${width} mm. Each dashed line above should fit on one row.</div>
+  <div class="small">Paper ${width} mm. Each dashed line and each price should fit on one row. If they break onto a second row, choose fewer letters per line in Settings.</div>
   <div class="small">${new Date().toLocaleString()}</div></div>`;
 }

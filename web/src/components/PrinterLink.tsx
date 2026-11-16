@@ -16,7 +16,7 @@ import {
   unlinkPrinter,
   updatePrinter,
 } from '../print/printer';
-import { testPageHTML, type PaperWidth } from '../print/escpos';
+import { defaultCols, testPageHTML, type PaperWidth } from '../print/escpos';
 import { printWithBrowser } from '../print/tickets';
 import { getState } from '../store/store';
 import { toast } from './ui';
@@ -91,8 +91,21 @@ export function PrinterSettings() {
             <span>Paper</span>
             <div className="seg small">
               {([58, 80] as PaperWidth[]).map((w) => (
-                <button key={w} className={link.width === w ? 'on' : ''} onClick={() => updatePrinter({ width: w })}>
+                <button key={w} className={link.width === w ? 'on' : ''} onClick={() => updatePrinter({ width: w, cols: undefined })}>
                   {w} mm
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="pc-row">
+            <span>
+              Letters per line
+              <div className="muted" style={{ fontSize: 12, fontWeight: 400 }}>If dashed lines or prices break onto a second row, choose a smaller number.</div>
+            </span>
+            <div className="seg small">
+              {[32, 42, 48].map((c) => (
+                <button key={c} className={(link.cols ?? defaultCols(link.width)) === c ? 'on' : ''} onClick={() => updatePrinter({ cols: c })}>
+                  {c}
                 </button>
               ))}
             </div>

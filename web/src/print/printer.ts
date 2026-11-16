@@ -20,6 +20,8 @@ export type PrinterLink = {
   kind: Kind;
   name: string;
   width: PaperWidth;
+  /** Letters per line (32, 42 or 48). Not set = the usual for the paper width. */
+  cols?: number;
   cut: boolean;
   /** Bluetooth device id, or USB/serial ids, to find it again after the app reopens. */
   btId?: string;
@@ -136,7 +138,7 @@ export function subscribePrinter(f: () => void) {
   subs.add(f);
   return () => subs.delete(f);
 }
-export function updatePrinter(p: Partial<Pick<PrinterLink, 'width' | 'cut' | 'name'>>) {
+export function updatePrinter(p: Partial<Pick<PrinterLink, 'width' | 'cut' | 'name' | 'cols'>>) {
   if (link) save({ ...link, ...p });
 }
 
@@ -408,7 +410,7 @@ let queue: Promise<unknown> = Promise.resolve();
 export function printDirect(htmlParts: string[]): Promise<boolean> {
   const job = queue.then(async () => {
     if (!link) return false;
-    const data = await ticketsToEscPos(htmlParts, link.width, link.cut);
+    const data = await ticketsToEscPos(htmlParts, link.width, link.cut, link.cols);
     for (let attempt = 0; attempt < 2; attempt++) {
       if (!conn && !(await reconnect())) return false;
       try {
