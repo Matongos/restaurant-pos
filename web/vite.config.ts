@@ -18,5 +18,7 @@ const versionFile = (): Plugin => ({
 export default defineConfig({
   plugins: [react(), versionFile()],
   define: { __APP_BUILD__: JSON.stringify(BUILD) },
+  // Older tills (Windows 10 with an old Chrome/Edge) must still run the app.
+  build: { target: ['chrome87', 'edge88', 'firefox78', 'safari14'] },
   server: { port: 5173 },
 });

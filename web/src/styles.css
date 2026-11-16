@@ -1640,6 +1640,7 @@ tr.struck td b { text-decoration: line-through; }
 
 /* Sell screen: category buttons filled with their own colour (no dot), a little smaller */
 .chips .chip { --c: #475569; min-height: 40px; padding: 0 14px; font-size: 14px; gap: 6px; border-radius: 10px; box-shadow: none;
+  background: #f4f6f9; border: 1px solid var(--c); color: var(--c); /* older browsers without color-mix */
   background: color-mix(in srgb, var(--c) 11%, #fff); border: 1px solid color-mix(in srgb, var(--c) 32%, #fff); color: color-mix(in srgb, var(--c) 82%, #000);
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s; }
 .chips .chip svg { width: 15px; height: 15px; }

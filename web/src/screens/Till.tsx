@@ -6,7 +6,7 @@ import { changeVoucherHTML, kitchenTicketHTML, printTickets } from '../print/tic
 import TableBill from '../components/TableBill';
 import CancelSaleDialog from '../components/CancelSaleDialog';
 import { outOfStockIds } from '../domain/stock';
-import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, nextFreeCard, sameExtras, tidyName } from '../domain/rules';
+import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, nextFreeCard, sameExtras, tidyName, uid } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
 import type { AddOn, DeliveryInfo, MenuItem, OrderLine } from '../domain/types';
 import { Dialog, MoreMenu, TopBar, toast, useNow } from '../components/ui';
@@ -128,7 +128,7 @@ export default function Till() {
       setLines((ls) => ls.map((l) => (l.id === existing.id ? { ...l, qty: l.qty + 1 } : l)));
       setLastLine(existing.id);
     } else {
-      const id = crypto.randomUUID();
+      const id = uid('l-');
       setLines((ls) => [...ls, { id, itemId: m.id, name: m.name, qty: 1, unitPrice: m.price, without: auto.length ? auto : undefined }]);
       setLastLine(id);
     }
@@ -161,7 +161,7 @@ export default function Till() {
       const rest = ls.map((l) => (l.id === id ? { ...l, qty: l.qty - count } : twin && l.id === twin.id ? { ...l, qty: l.qty + count } : l));
       if (twin) return rest;
       const i = rest.findIndex((l) => l.id === id);
-      const split: OrderLine = { ...line, ...next, id: crypto.randomUUID(), qty: count };
+      const split: OrderLine = { ...line, ...next, id: uid('l-'), qty: count };
       return [...rest.slice(0, i + 1), split, ...rest.slice(i + 1)];
     });
   const flipWithout = (part: string) => (l: OrderLine) => {
