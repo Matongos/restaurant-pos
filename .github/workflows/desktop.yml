@@ -69,3 +69,19 @@ jobs:
           EXE=$(ls web/src-tauri/target/release/bundle/nsis/*-setup.exe | head -1)
           cp "$EXE" TechPlug-POS-Setup.exe
           gh release upload "desktop-v${{ steps.v.outputs.version }}" TechPlug-POS-Setup.exe --clobber
+
+      # Same app with the WebView2 runtime inside (~170 MB), for computers that cannot download it while installing.
+      - name: Offline installer (WebView2 included)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd web/src-tauri
+          node -e "const fs=require('fs');const f='tauri.conf.json';const c=JSON.parse(fs.readFileSync(f));c.bundle.windows.webviewInstallMode={type:'offlineInstaller'};fs.writeFileSync(f,JSON.stringify(c,null,2))"
+          cd ..
+          rm -f src-tauri/target/release/bundle/nsis/*-setup.exe
+          npx tauri build
+          EXE=$(ls src-tauri/target/release/bundle/nsis/*-setup.exe | head -1)
+          cp "$EXE" ../TechPlug-POS-Setup-Offline.exe
+          cd ..
+          gh release upload "desktop-v${{ steps.v.outputs.version }}" TechPlug-POS-Setup-Offline.exe --clobber
