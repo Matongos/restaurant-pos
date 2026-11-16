@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import CloudAccount from '../components/CloudAccount';
-import Backup from '../components/Backup';
+import Backup, { backupFile } from '../components/Backup';
+import { signIn } from '../cloud/api';
 import PlanPayments from '../components/PlanPayments';
 import WebsiteSettings from '../components/WebsiteSettings';
 import { useSyncStatus } from '../cloud/sync';
@@ -860,7 +861,10 @@ function StartFresh() {
   const [pin, setPin] = useState('');
   const [current, setCurrent] = useState('');
   const [typed, setTyped] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const link = useSyncStatus().link;
   if (user.role !== 'super_admin') return null;
   return (
     <div className="fresh-card">
@@ -868,7 +872,8 @@ function StartFresh() {
       <p className="muted">
         Removes the practice staff, customers and their change, stock, sales and books. Payment methods, currencies and categories stay. You
         stay as the owner with a new PIN; add your real staff afterwards in Staff. On a till connected online, the practice data is removed
-        online and on your other devices too. It cannot be undone: download a Backup first if you want a copy.
+        online and on your other devices too. It asks for the owner PIN and, on a till connected online, the online account's password, and saves a
+        backup of the old data in Downloads first.
       </p>
       {!open ? (
         <button className="btn primary" onClick={() => setOpen(true)}>
@@ -894,6 +899,12 @@ function StartFresh() {
               Your new owner PIN
               <input inputMode="numeric" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} />
             </label>
+            {link && (
+              <label className="field">
+                Online account password ({link.email})
+                <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              </label>
+            )}
             <label className="field">
               Type START to confirm
               <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="START" />
@@ -906,17 +917,38 @@ function StartFresh() {
             </button>
             <button
               className="btn danger-fill"
-              disabled={typed.trim().toUpperCase() !== 'START'}
-              onClick={() => {
+              disabled={busy || typed.trim().toUpperCase() !== 'START' || (!!link && !password)}
+              onClick={async () => {
+                setError('');
                 const who = verifyManagerPin(current);
                 if (!who || who.id !== user.id || who.role !== 'super_admin') return setError('Your current owner PIN is not right. Only the owner can start fresh.');
+                // On a till connected online, a PIN is not enough: staff may have seen it. The online account's password is asked too.
+                if (link) {
+                  setBusy(true);
+                  try {
+                    await signIn(link.email, password);
+                  } catch {
+                    setBusy(false);
+                    return setError('The online account password is not right (or there is no internet). Nothing was removed.');
+                  }
+                  setBusy(false);
+                }
+                // A copy of everything is saved first, so a mistake can be put back (Settings → Backup → Restore).
+                const { name, text } = backupFile();
+                const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = name.replace(/\.json$/, '') + '-before-start-fresh.json';
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
                 const r = startFresh({ ownerPin: pin, keepMenu, byId: user.id });
                 if (!r.ok) return setError(r.error);
                 setOpen(false);
-                toast(`Fresh start done — your owner PIN is now ${pin}`);
+                setPassword('');
+                toast(`Fresh start done. A backup of the old data was saved in Downloads. Your owner PIN is now ${pin}`);
               }}
             >
-              Remove practice data
+              {busy ? 'Checking…' : 'Remove practice data'}
             </button>
           </div>
         </div>
