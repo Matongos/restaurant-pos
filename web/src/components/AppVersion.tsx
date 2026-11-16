@@ -1,32 +1,17 @@
 import { useEffect, useState } from 'react';
-import { LuRefreshCw, LuCircleCheck, LuCircleAlert, LuMonitorSmartphone } from 'react-icons/lu';
-import { BUILD, buildDate, desktopVersion, latestBuild, platformName } from '../version';
+import { LuMonitorSmartphone } from 'react-icons/lu';
+import { BUILD, buildDate, platformName } from '../version';
+import { UpdateStatus, useUpdateCheck } from './AboutDialog';
 import { listDevices, type DeviceRow } from '../cloud/devices';
 import { useSyncStatus } from '../cloud/sync';
 import { useCurrentUser } from '../store/store';
 
-type Check = 'checking' | 'latest' | 'update' | 'offline';
-
 /** "My account": which version this device runs, whether it is the newest, and (owner) every device's version. */
 export default function AppVersion() {
-  const [desktop, setDesktop] = useState<string | null>(null);
-  const [check, setCheck] = useState<Check>('checking');
-  const [latest, setLatest] = useState<string | null>(null);
+  const { check, latest, desktop, run } = useUpdateCheck();
   const user = useCurrentUser();
   const link = useSyncStatus().link;
   const owner = user?.role === 'super_admin' || user?.role === 'manager';
-
-  const run = async () => {
-    setCheck('checking');
-    const l = await latestBuild();
-    setLatest(l);
-    setCheck(!l ? 'offline' : l === BUILD || BUILD === 'dev' ? 'latest' : 'update');
-  };
-  useEffect(() => {
-    desktopVersion().then(setDesktop);
-    void run();
-  }, []);
-
   return (
     <section className="acct-card" aria-labelledby="acct-version">
       <div className="acct-head">
@@ -47,28 +32,7 @@ export default function AppVersion() {
           <div className="muted small">{platformName(desktop)}</div>
         </div>
       </div>
-      <div className={`ver-status ${check}`}>
-        {check === 'checking' && 'Checking for updates…'}
-        {check === 'latest' && (
-          <>
-            <LuCircleCheck aria-hidden="true" /> This is the newest version.
-          </>
-        )}
-        {check === 'update' && (
-          <>
-            <LuCircleAlert aria-hidden="true" /> A newer version is out ({latest}). Reload to get it — your data stays.
-            <button className="btn small primary" onClick={() => location.reload()}>
-              Reload now
-            </button>
-          </>
-        )}
-        {check === 'offline' && 'Cannot check now (no internet). The app updates itself next time it is online.'}
-        {check !== 'checking' && check !== 'update' && (
-          <button className="btn small" onClick={() => void run()}>
-            <LuRefreshCw aria-hidden="true" /> Check again
-          </button>
-        )}
-      </div>
+      <UpdateStatus check={check} latest={latest} run={() => void run()} />
       <p className="muted small" style={{ margin: '8px 0 0' }}>
         When asking TechPlug for help, tell them this version number.
       </p>

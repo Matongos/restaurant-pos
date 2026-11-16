@@ -1668,3 +1668,15 @@ tr.struck td b { text-decoration: line-through; }
 td .good { color: var(--good); font-weight: 600; } td .warn { color: var(--warn); font-weight: 600; }
 .error-bar { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 90; width: min(720px, calc(100vw - 24px)); background: #fff1f1; border: 1px solid #e5484d; color: #7f1d1d; border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow-pop); font-size: 14px; }
 .error-bar .mono-sm { display: block; margin-top: 6px; color: #450a0a; word-break: break-word; }
+.about { display: flex; gap: 18px; align-items: center; }
+.about-logo { width: 84px; height: 84px; border-radius: 20px; flex: none; box-shadow: var(--shadow-pop); }
+.about h2 { margin: 0 0 4px; font-size: 22px; }
+.about-ver { font-size: 15px; }
+.about-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.about-links .btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.about-foot { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.console-versions { padding: 16px; margin-bottom: 14px; }
+.console-versions .cv-head { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 10px; }
+.console-versions .cv-head > div { display: flex; flex-direction: column; gap: 2px; }
+.console-versions .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+.console-versions .cv-head b { font-size: 18px; }

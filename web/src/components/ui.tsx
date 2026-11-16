@@ -18,6 +18,7 @@ import {
   LuGraduationCap,
   LuHandCoins,
   LuLogOut,
+  LuInfo,
   LuMenu,
   LuMonitor,
   LuSettings,
@@ -31,6 +32,7 @@ import {
 import { go, useRoute } from '../router';
 import { useSyncStatus } from '../cloud/sync';
 import MyAccount from './MyAccount';
+import AboutDialog from './AboutDialog';
 import { useOnlineOrders } from '../cloud/online';
 import { logout, updateSettings, useCurrentUser, useStockLevels, useStore } from '../store/store';
 import { balances, can, ROLE_LABEL, type Permission } from '../domain/rules';
@@ -314,6 +316,7 @@ function UserMenu() {
   const settings = useStore((s) => s.settings);
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState(false);
+  const [about, setAbout] = useState(false);
   const sync = useSyncStatus();
   if (!user) return null;
   const seesEmail = user.role === 'super_admin' || user.role === 'manager';
@@ -355,6 +358,10 @@ function UserMenu() {
                 <span className="state">{settings.trainingMode ? 'On' : 'Off'}</span>
               </button>
             )}
+            <button role="menuitem" onClick={() => { setOpen(false); setAbout(true); }}>
+              <LuInfo aria-hidden="true" />
+              About TechPlug POS
+            </button>
             <button role="menuitem" className="danger" onClick={() => { logout(); go('/'); }}>
               <LuLogOut aria-hidden="true" />
               Log out
@@ -364,6 +371,7 @@ function UserMenu() {
         </>
       )}
       {account && <MyAccount onClose={() => setAccount(false)} />}
+      {about && <AboutDialog onClose={() => setAbout(false)} />}
     </div>
   );
 }

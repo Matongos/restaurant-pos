@@ -426,6 +426,8 @@ function Dashboard({ onOut }: { onOut: () => void }) {
         )}
       </div>
 
+      <VersionsCard devs={devs} ghLatest={gh?.latest ?? ''} />
+
       {ov && ov.perDay.length > 0 && (
         <div className="card console-chart">
           <b>Per day</b>
@@ -909,5 +911,85 @@ function DeviceVersions({ list }: { list: DevRow[] }) {
         </div>
       ))}
     </details>
+  );
+}
+
+/** Newest version published, and which versions restaurants' devices really run (from their reports). */
+function VersionsCard({ devs, ghLatest }: { devs: Map<string, DevRow[]> | null; ghLatest: string }) {
+  const [latest, setLatest] = useState<{ build: string; at?: string } | null>(null);
+  useEffect(() => {
+    fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setLatest)
+      .catch(() => setLatest(null));
+  }, []);
+  const newest = latest?.build ?? BUILD;
+  const recent = devs ? [...devs.values()].flat().filter((d) => Date.now() - Date.parse(d.updated_at) < 14 * 864e5) : [];
+  const byBuild = new Map<string, { devices: number; restaurants: Set<string> }>();
+  const byDesktop = new Map<string, number>();
+  for (const d of recent) {
+    const b = d.data.build ?? 'unknown';
+    const cur = byBuild.get(b) ?? { devices: 0, restaurants: new Set<string>() };
+    cur.devices++;
+    cur.restaurants.add(d.restaurant_id);
+    byBuild.set(b, cur);
+    if (d.data.desktop) byDesktop.set(d.data.desktop, (byDesktop.get(d.data.desktop) ?? 0) + 1);
+  }
+  const builds = [...byBuild.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  const upToDate = byBuild.get(newest)?.devices ?? 0;
+  const desktopLatest = ghLatest.replace(/^desktop-v/, '');
+  return (
+    <div className="card console-versions">
+      <div className="cv-head">
+        <div>
+          <span className="lbl">Newest version (just published)</span>
+          <b className="mono-sm">{newest}</b>
+          <span className="muted small">{latest?.at ? `published ${new Date(latest.at).toLocaleString()}` : 'this console'}</span>
+        </div>
+        <div>
+          <span className="lbl">Newest Windows app</span>
+          <b>{desktopLatest || '…'}</b>
+          <span className="muted small">installer on GitHub</span>
+        </div>
+        <div>
+          <span className="lbl">Devices up to date</span>
+          <b>{devs ? `${upToDate} of ${recent.length}` : '—'}</b>
+          <span className="muted small">used in the last 14 days</span>
+        </div>
+      </div>
+      {!devs && <p className="muted small">Run database step 5 (<code>0005_device_versions.sql</code>) to see which version each device runs.</p>}
+      {devs && builds.length === 0 && <p className="muted small">No device has reported its version yet. Tills report within a few minutes of updating while online.</p>}
+      {builds.length > 0 && (
+        <table className="list small">
+          <thead>
+            <tr>
+              <th>Version in use</th>
+              <th>Devices</th>
+              <th>Restaurants</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {builds.map(([b, v]) => (
+              <tr key={b}>
+                <td className="mono-sm">{b}</td>
+                <td>{v.devices}</td>
+                <td>{v.restaurants.size}</td>
+                <td className={b === newest ? 'good' : 'warn'}>{b === newest ? 'newest' : 'older — reloads by itself when online'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {byDesktop.size > 0 && (
+        <p className="small" style={{ marginBottom: 0 }}>
+          <b>Windows app versions:</b>{' '}
+          {[...byDesktop.entries()]
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .map(([v, n]) => `${v} (${n} device${n === 1 ? '' : 's'}${v === desktopLatest ? ', newest' : ''})`)
+            .join(' · ')}
+        </p>
+      )}
+    </div>
   );
 }
