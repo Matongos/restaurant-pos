@@ -27,6 +27,7 @@ import BranchesScreen from './screens/Branches';
 import { PausedScreen, TrialBar } from './components/TrialBar';
 import { PrinterBar } from './components/PrinterLink';
 import IdleLock from './components/IdleLock';
+import { ErrorBar, ScreenGuard } from './components/ErrorReport';
 
 const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/till': { perm: 'take_orders', el: Till },
@@ -103,7 +104,8 @@ export default function App() {
 
   return (
     <>
-      {body}
+      <ScreenGuard key={path}>{body}</ScreenGuard>
+      <ErrorBar />
       <UpdateBar />
       <LinkNotice />
       <OnlineOrderAlert />

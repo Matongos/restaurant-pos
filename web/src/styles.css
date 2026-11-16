@@ -1665,3 +1665,5 @@ tr.struck td b { text-decoration: line-through; }
 .ver-status .btn { margin-left: auto; }
 .mono-sm { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
 td .good { color: var(--good); font-weight: 600; } td .warn { color: var(--warn); font-weight: 600; }
+.error-bar { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 90; width: min(720px, calc(100vw - 24px)); background: #fff1f1; border: 1px solid #e5484d; color: #7f1d1d; border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow-pop); font-size: 14px; }
+.error-bar .mono-sm { display: block; margin-top: 6px; color: #450a0a; word-break: break-word; }
