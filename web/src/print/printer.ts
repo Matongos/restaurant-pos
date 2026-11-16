@@ -14,7 +14,7 @@
 import { ticketsToEscPos, type PaperWidth } from './escpos';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type Kind = 'bluetooth' | 'usb' | 'serial';
+type Kind = 'bluetooth' | 'usb' | 'serial' | 'windows' | 'network';
 
 export type PrinterLink = {
   kind: Kind;
@@ -26,6 +26,9 @@ export type PrinterLink = {
   vendorId?: number;
   productId?: number;
   serial?: string;
+  /** Windows app: the Windows printer name, or a network printer's address (IP). */
+  printer?: string;
+  address?: string;
 };
 
 export type PrinterStatus = 'none' | 'connecting' | 'ready' | 'offline' | 'needs-tap';
@@ -49,11 +52,47 @@ const BT_SERVICES = [
 ];
 const SPP = '00001101-0000-1000-8000-00805f9b34fb';
 
+/** Inside the TechPlug POS Windows app: it prints to Windows printers itself (no print screen). */
+const tauri = (window as any).__TAURI_INTERNALS__ as { invoke: (cmd: string, args?: object) => Promise<any> } | undefined;
+export const inDesktopApp = () => !!tauri?.invoke;
+
 export const canUse = {
-  bluetooth: () => !!nav.bluetooth,
-  usb: () => !!nav.usb,
-  serial: () => !!nav.serial,
+  // The Windows app's window cannot show Chrome's device pickers; it uses Windows printers instead.
+  bluetooth: () => !inDesktopApp() && !!nav.bluetooth,
+  usb: () => !inDesktopApp() && !!nav.usb,
+  serial: () => !inDesktopApp() && !!nav.serial,
 };
+
+/** Printers installed in Windows (Windows app only). null = this copy of the Windows app is too old to print by itself. */
+export async function listWindowsPrinters(): Promise<string[] | null> {
+  if (!tauri) return [];
+  try {
+    return await tauri.invoke('list_printers');
+  } catch {
+    return null;
+  }
+}
+
+function desktopConn(l: PrinterLink): Conn {
+  return {
+    async write(data) {
+      const bytes = Array.from(data);
+      if (l.kind === 'windows') await tauri!.invoke('print_raw', { printer: l.printer, data: bytes });
+      else await tauri!.invoke('print_tcp', { address: l.address, data: bytes });
+    },
+    async close() {},
+  };
+}
+
+/** Windows app: use a Windows printer or a network printer (IP address). */
+export function linkDesktopPrinter(kind: 'windows' | 'network', target: string, width: PaperWidth) {
+  const t = target.trim();
+  const l: PrinterLink = kind === 'windows' ? { kind, name: t, printer: t, width, cut: true } : { kind, name: `Network printer ${t}`, address: t, width, cut: true };
+  conn = desktopConn(l);
+  save(l);
+  setStatus('ready');
+  if (waiting.length) setTimeout(flushWaiting, 0);
+}
 
 /* ------------------------------------------------------------------ saved link + live status */
 
@@ -213,6 +252,7 @@ async function openSerial(port: any): Promise<Conn> {
 }
 
 const friendly = (e: unknown) => {
+  if (typeof e === 'string') return e; // the Windows app already explains its errors
   const m = e instanceof Error ? e.message : String(e);
   if (/cancel|chooser|No device selected|No port selected/i.test(m)) return '';
   if (/Access denied|Unable to claim|SecurityError/i.test(m))
@@ -268,7 +308,10 @@ async function reconnect(): Promise<boolean> {
   if (conn) return true;
   setStatus('connecting');
   try {
-    if (link.kind === 'bluetooth') {
+    if (link.kind === 'windows' || link.kind === 'network') {
+      if (!inDesktopApp()) throw new Error('This printer is linked in the Windows app only');
+      conn = desktopConn(link);
+    } else if (link.kind === 'bluetooth') {
       let device = btDevice;
       if (!device && nav.bluetooth?.getDevices) {
         const list = await nav.bluetooth.getDevices();

@@ -1,8 +1,11 @@
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { LuBluetooth, LuPrinter, LuUsb, LuCable, LuCircleCheck, LuCircleAlert } from 'react-icons/lu';
 import {
   canUse,
   getPrinter,
+  inDesktopApp,
+  linkDesktopPrinter,
+  listWindowsPrinters,
   getWaiting,
   linkPrinter,
   printDirect,
@@ -74,11 +77,16 @@ export function PrinterSettings() {
               <div className="pc-status">
                 {status === 'ready' ? <LuCircleCheck aria-hidden="true" /> : <LuCircleAlert aria-hidden="true" />}
                 {STATUS_TEXT[status]}
-                {link.kind === 'bluetooth' ? ' · Bluetooth' : link.kind === 'usb' ? ' · USB' : ' · Serial'}
+                {({ bluetooth: ' · Bluetooth', usb: ' · USB', serial: ' · Serial', windows: ' · Windows printer', network: ' · Network' } as const)[link.kind]}
               </div>
               {error && status !== 'ready' && <div className="pc-err">{error}</div>}
             </div>
           </div>
+          {link.kind === 'windows' && (
+            <p className="muted" style={{ fontSize: 13, margin: '10px 0 0' }}>
+              If the test page comes out as strange symbols or blank, this is not a receipt printer: unlink and pick the receipt printer.
+            </p>
+          )}
           <div className="pc-row">
             <span>Paper</span>
             <div className="seg small">
@@ -110,6 +118,8 @@ export function PrinterSettings() {
             </button>
           </div>
         </div>
+      ) : inDesktopApp() ? (
+        <DesktopPrinterPicker width={width} setWidth={setWidth} />
       ) : ways.length ? (
         <>
           <div className="pc-row" style={{ marginBottom: 10 }}>
@@ -137,6 +147,73 @@ export function PrinterSettings() {
       ) : (
         <div className="warn-box">This browser cannot talk to printers directly. Open the app in Google Chrome (Android, Windows or Mac) to link a printer. Until then, tickets use the print screen.</div>
       )}
+    </>
+  );
+}
+
+/** Windows app: pick a printer installed in Windows, or type a network printer's address. */
+function DesktopPrinterPicker({ width, setWidth }: { width: PaperWidth; setWidth: (w: PaperWidth) => void }) {
+  const [list, setList] = useState<string[] | null | undefined>(undefined);
+  const [pick, setPick] = useState('');
+  const [ip, setIp] = useState('');
+  const load = () => listWindowsPrinters().then((l) => {
+    setList(l);
+    if (l?.length) setPick((p) => p || l.find((n) => /pos|receipt|thermal|xp-|80|58|epson tm|star/i.test(n)) || l[0]);
+  });
+  useEffect(() => {
+    load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const done = (msg: string) => toast(msg);
+  if (list === null)
+    return (
+      <div className="warn-box">
+        This copy of the TechPlug POS Windows app is older and cannot print by itself yet. Download the newest TechPlug-POS-Setup.exe and install it over this one (your sales stay). Until then, tickets use the print screen.
+      </div>
+    );
+  return (
+    <>
+      <div className="pc-row" style={{ marginBottom: 10 }}>
+        <span>Paper width</span>
+        <div className="seg small">
+          {([58, 80] as PaperWidth[]).map((w) => (
+            <button key={w} className={width === w ? 'on' : ''} onClick={() => setWidth(w)}>
+              {w} mm{w === 58 ? ' (small)' : ' (wide)'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <label className="field">
+        Receipt printer installed on this computer
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select value={pick} onChange={(e) => setPick(e.target.value)} style={{ flex: 1 }} disabled={!list?.length}>
+            {list === undefined && <option>Looking for printers…</option>}
+            {list?.length === 0 && <option value="">No printers installed</option>}
+            {list?.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          <button className="btn" onClick={load}>
+            Refresh
+          </button>
+        </div>
+      </label>
+      <button className="btn primary big" disabled={!pick} onClick={() => { linkDesktopPrinter('windows', pick, width); done('Printer linked. Print a test page to check it.'); }}>
+        <LuPrinter aria-hidden="true" /> Use this printer
+      </button>
+      <p className="muted" style={{ fontSize: 13 }}>
+        Pick the receipt printer (often called POS-80, POS-58, XP-80 or similar), not OneNote, PDF or an office printer. If it is not in the list, install the driver that came with the printer, switch it on and tap Refresh.
+      </p>
+      <label className="field" style={{ marginTop: 12 }}>
+        Or a network (Wi-Fi / cable) receipt printer: its IP address
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input value={ip} onChange={(e) => setIp(e.target.value.replace(/[^\d.:a-zA-Z-]/g, ''))} placeholder="e.g. 192.168.1.100" inputMode="decimal" style={{ flex: 1 }} />
+          <button className="btn" disabled={!ip.trim()} onClick={() => { linkDesktopPrinter('network', ip, width); done('Network printer linked. Print a test page to check it.'); }}>
+            Use
+          </button>
+        </div>
+      </label>
     </>
   );
 }
