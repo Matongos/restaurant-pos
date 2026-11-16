@@ -9,6 +9,7 @@ import { startSync } from './cloud/sync';
 import { startOnline } from './cloud/online';
 import { initStore } from './store/store';
 import { startPrinter } from './print/printer';
+import { startDeviceReport } from './cloud/devices';
 
 // First-time visitors to pos.techplug.co.zw see the product website. Devices that already use the app
 // (tills, the Windows app, the installed app, anyone who opened the app once) go straight to it.
@@ -46,6 +47,7 @@ function start() {
   startOnline();
   startSync();
   startPrinter();
+  startDeviceReport();
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

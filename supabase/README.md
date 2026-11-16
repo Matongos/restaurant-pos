@@ -31,7 +31,9 @@ only see the published menu, and only TechPlug admins can open the owner console
 9. **SQL Editor → New query**: paste everything from `migrations/0004_payments_security.sql` → **Run**
    (payments recorded in the console, two-step login for the console, admin log, limits against spam orders).
    From then on the console asks you to set up an authenticator app the first time you sign in.
-10. Make yourself an admin for the owner console: after you have signed up in the app, run in the SQL Editor:
+10. **SQL Editor → New query**: paste everything from `migrations/0005_device_versions.sql` → **Run**
+   (the owner console shows which app version every till runs).
+11. Make yourself an admin for the owner console: after you have signed up in the app, run in the SQL Editor:
    `insert into platform_admins (user_id) select id from auth.users where email = 'your@email';`
 
 ## What is in it

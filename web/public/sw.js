@@ -31,6 +31,7 @@ self.addEventListener('fetch', (e) => {
   const font = /fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
   if (!same && !font) return; // database and other services: always live
   if (same && url.pathname.startsWith('/site')) return; // the product website is not part of the app
+  if (same && url.pathname === '/version.json') return; // "is there a newer version?" must always ask the server
 
   if (req.mode === 'navigate') {
     e.respondWith(

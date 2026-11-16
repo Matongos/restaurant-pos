@@ -1,4 +1,5 @@
 import { InstallCard } from '../components/AppInstall';
+import { BUILD } from '../version';
 import { useEffect, useState } from 'react';
 import { getState, login, useStore } from '../store/store';
 import { LuDelete } from 'react-icons/lu';
@@ -101,6 +102,7 @@ export default function Login() {
           )}
           {switching && <SwitchRestaurant onClose={() => setSwitching(false)} />}
           <InstallCard />
+          <div className="ver-line" style={{ border: 0, textAlign: 'center' }}>Version {BUILD}</div>
         </div>
       </div>
     </div>

@@ -1656,3 +1656,12 @@ tr.struck td b { text-decoration: line-through; }
 .items .item:active { transform: scale(0.98); }
 .items .item.in-order { border: 2px solid #f47b20; box-shadow: 0 0 0 3px rgba(244, 123, 32, 0.14), 0 6px 18px rgba(244, 123, 32, 0.18); }
 .items { padding-top: 5px; }
+
+/* App version (My account, user menu) */
+.ver-line { font-size: 11px; color: var(--muted); padding: 6px 12px 2px; border-top: 1px solid var(--line); margin-top: 4px; }
+.ver-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--soft); font-size: 14px; font-weight: 600; }
+.ver-status.latest { background: var(--good-soft); color: var(--good); }
+.ver-status.update { background: var(--warn-soft); color: var(--warn); }
+.ver-status .btn { margin-left: auto; }
+.mono-sm { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+td .good { color: var(--good); font-weight: 600; } td .warn { color: var(--warn); font-weight: 600; }

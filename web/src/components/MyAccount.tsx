@@ -2,6 +2,7 @@
  * "My account" (from the name, top right): who you are, your PIN, and the restaurant's online account —
  * its email, web address and sync state, with change password / change email for the owner.
  */
+import AppVersion from './AppVersion';
 import { useState } from 'react';
 import { LuCircleUserRound, LuEye, LuEyeOff, LuKeyRound, LuMail, LuStore } from 'react-icons/lu';
 import { Dialog, toast } from './ui';
@@ -20,6 +21,7 @@ export default function MyAccount({ onClose }: { onClose: () => void }) {
     <Dialog title="My account" onClose={onClose} width={640} className="acct-dialog">
       <You />
       <OnlineAccount onClose={onClose} />
+      <AppVersion />
     </Dialog>
   );
 }

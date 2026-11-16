@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { BUILD } from '../version';
 import type { IconType } from 'react-icons';
 import {
   LuGlobe,
@@ -358,6 +359,7 @@ function UserMenu() {
               <LuLogOut aria-hidden="true" />
               Log out
             </button>
+            <div className="ver-line">Version {BUILD}</div>
           </div>
         </>
       )}

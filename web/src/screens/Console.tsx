@@ -3,6 +3,7 @@
  * Only for TechPlug admins (platform_admins), and only with two-step login: password plus a 6-digit code
  * from an authenticator app (database step 4 makes the server insist on it). Signs out after 30 idle minutes.
  */
+import { BUILD } from '../version';
 import { useCallback, useEffect, useState } from 'react';
 import {
   LuDownload, LuEye, LuMonitorSmartphone, LuStore, LuUserPlus, LuActivity, LuWallet, LuRefreshCw, LuLogOut, LuShieldCheck, LuTrash2,
@@ -297,6 +298,7 @@ function Dashboard({ onOut }: { onOut: () => void }) {
   const [deleting, setDeleting] = useState<Row | null>(null);
   const [settings, setSettings] = useState(false);
   const [log, setLog] = useState(false);
+  const [devs, setDevs] = useState<Map<string, DevRow[]> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -305,6 +307,14 @@ function Dashboard({ onOut }: { onOut: () => void }) {
       const [o, r] = await Promise.all([rpc<Overview>('console_overview', { p_days: days }), rpc<Row[]>('console_restaurants', {})]);
       setOv(o);
       setRows(r);
+      // Which version every device runs (needs migration 0005; without it the column just shows the count).
+      rpc<DevRow[]>('console_devices', {})
+        .then((list) => {
+          const m = new Map<string, DevRow[]>();
+          for (const d of list) m.set(d.restaurant_id, [...(m.get(d.restaurant_id) ?? []), d]);
+          setDevs(m);
+        })
+        .catch(() => setDevs(null));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(/not allowed/i.test(msg) ? 'Not allowed. Sign out and in again with your code.' : /console_restaurants|function/i.test(msg) ? 'needs-sql' : msg);
@@ -490,7 +500,10 @@ function Dashboard({ onOut }: { onOut: () => void }) {
                       {r.plan === 'closed' && <div className="small bad">tills paused</div>}
                     </td>
                     <td className={`small ${ago(r.last_seen_at) === 'online now' ? 'good' : ''}`}>{ago(r.last_seen_at)}</td>
-                    <td>{r.devices}</td>
+                    <td>
+                      {r.devices}
+                      {devs?.get(r.id) && <DeviceVersions list={devs.get(r.id)!} />}
+                    </td>
                     <td>{r.orders}</td>
                     <td className="small">{[r.web_page && 'page', r.qr_menu && 'QR', r.online_orders && `orders (${r.online_orders_count})`].filter(Boolean).join(' · ') || '—'}</td>
                     <td>
@@ -875,5 +888,26 @@ function Tile({ Icon, label, value, sub }: { Icon: typeof LuStore; label: string
       <b>{value}</b>
       <span className="muted small">{sub}</span>
     </div>
+  );
+}
+
+type DevRow = { restaurant_id: string; device_id: string; data: { build?: string; desktop?: string | null; platform?: string; tillNo?: number; lastUser?: string }; updated_at: string };
+
+/** Under the device count: how many run the newest version, and each device's version. */
+function DeviceVersions({ list }: { list: DevRow[] }) {
+  const old = list.filter((d) => d.data.build !== BUILD).length;
+  return (
+    <details className="small">
+      <summary className={old ? 'warn' : 'good'}>{old ? `${old} not updated` : 'all up to date'}</summary>
+      {list.map((d) => (
+        <div key={d.device_id} className="muted" style={{ marginTop: 4 }}>
+          Till {d.data.tillNo ?? '?'} · {d.data.platform ?? ''}
+          <br />
+          <b className={d.data.build === BUILD ? 'good' : 'warn'}>{d.data.build ?? '?'}</b>
+          {d.data.desktop ? ` · Windows app ${d.data.desktop}` : ''} · {ago(d.updated_at)}
+          {d.data.lastUser ? ` · ${d.data.lastUser}` : ''}
+        </div>
+      ))}
+    </details>
   );
 }
