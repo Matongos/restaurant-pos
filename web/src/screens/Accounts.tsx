@@ -14,6 +14,9 @@ import { Dialog, TopBar, toast } from '../components/ui';
 import BarChart from '../components/BarChart';
 import CancelSaleDialog from '../components/CancelSaleDialog';
 import { go } from '../router';
+import { getState } from '../store/store';
+import { downloadCsv, fileDate, moneyOutRows, salesRows } from '../components/exportCsv';
+import { LuDownload } from 'react-icons/lu';
 
 /* ---------------------------------------------------------------- periods */
 
@@ -97,6 +100,26 @@ export default function Accounts() {
             </div>
             <span className="muted" style={{ fontSize: 14 }}>
               {period.from === period.to ? period.from : `${period.from} to ${period.to}`}
+            </span>
+            <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                className="btn"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                onClick={() => {
+                  const st = getState();
+                  const sold = st.orders.filter((o) => !o.example && Date.parse(o.createdAt) >= period.start && Date.parse(o.createdAt) < period.end);
+                  downloadCsv(`sales_${fileDate(period.from, period.to)}.csv`, salesRows(sold, st));
+                }}
+              >
+                <LuDownload aria-hidden="true" /> Sales (Excel)
+              </button>
+              <button
+                className="btn"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                onClick={() => downloadCsv(`purchases-expenses_${fileDate(period.from, period.to)}.csv`, moneyOutRows(getState(), period.from, period.to))}
+              >
+                <LuDownload aria-hidden="true" /> Purchases &amp; expenses (Excel)
+              </button>
             </span>
           </div>
           <div className="tabs an-tabs">

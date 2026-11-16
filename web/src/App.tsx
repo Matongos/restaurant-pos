@@ -26,6 +26,7 @@ import Setup from './screens/Setup';
 import BranchesScreen from './screens/Branches';
 import { PausedScreen, TrialBar } from './components/TrialBar';
 import { PrinterBar } from './components/PrinterLink';
+import IdleLock from './components/IdleLock';
 
 const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/till': { perm: 'take_orders', el: Till },
@@ -108,6 +109,7 @@ export default function App() {
       <OnlineOrderAlert />
       {user && <TrialBar />}
       {user && <PrinterBar />}
+      {user && <IdleLock />}
       <ToastHost />
     </>
   );

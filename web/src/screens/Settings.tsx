@@ -4,7 +4,7 @@ import Backup from '../components/Backup';
 import PlanPayments from '../components/PlanPayments';
 import WebsiteSettings from '../components/WebsiteSettings';
 import { useSyncStatus } from '../cloud/sync';
-import { addComponent, getTillNo, setTillNo, TILL_RANGE, setExampleHistory, resetDemo, startFresh, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
+import { addComponent, verifyManagerPin, getTillNo, setTillNo, TILL_RANGE, setExampleHistory, resetDemo, startFresh, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
 import type { Currency, MenuItem, NumberMode, PrintWhen } from '../domain/types';
 import { compressLogo, compressPhoto } from '../components/photo';
 import { Dialog, TopBar, toast } from '../components/ui';
@@ -858,6 +858,7 @@ function StartFresh() {
   const [open, setOpen] = useState(false);
   const [keepMenu, setKeepMenu] = useState(true);
   const [pin, setPin] = useState('');
+  const [current, setCurrent] = useState('');
   const [typed, setTyped] = useState('');
   const [error, setError] = useState('');
   if (user.role !== 'super_admin') return null;
@@ -866,7 +867,8 @@ function StartFresh() {
       <b>Start fresh with your real restaurant</b>
       <p className="muted">
         Removes the practice staff, customers and their change, stock, sales and books. Payment methods, currencies and categories stay. You
-        stay as the owner with a new PIN; add your real staff afterwards in Staff.
+        stay as the owner with a new PIN; add your real staff afterwards in Staff. On a till connected online, the practice data is removed
+        online and on your other devices too. It cannot be undone: download a Backup first if you want a copy.
       </p>
       {!open ? (
         <button className="btn primary" onClick={() => setOpen(true)}>
@@ -885,12 +887,16 @@ function StartFresh() {
           </div>
           <div className="form-grid">
             <label className="field">
+              Your current owner PIN
+              <input type="password" inputMode="numeric" maxLength={4} autoComplete="off" value={current} onChange={(e) => setCurrent(e.target.value.replace(/\D/g, ''))} />
+            </label>
+            <label className="field">
               Your new owner PIN
               <input inputMode="numeric" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} />
             </label>
             <label className="field">
               Type START to confirm
-              <input value={typed} onChange={(e) => setTyped(e.target.value)} />
+              <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="START" />
             </label>
           </div>
           {error && <div className="error-text">{error}</div>}
@@ -902,6 +908,8 @@ function StartFresh() {
               className="btn danger-fill"
               disabled={typed.trim().toUpperCase() !== 'START'}
               onClick={() => {
+                const who = verifyManagerPin(current);
+                if (!who || who.id !== user.id || who.role !== 'super_admin') return setError('Your current owner PIN is not right. Only the owner can start fresh.');
                 const r = startFresh({ ownerPin: pin, keepMenu, byId: user.id });
                 if (!r.ok) return setError(r.error);
                 setOpen(false);

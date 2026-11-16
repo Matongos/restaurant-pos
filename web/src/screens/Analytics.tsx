@@ -1,6 +1,8 @@
 import { useSyncStatus } from '../cloud/sync';
 import { useMemo, useState } from 'react';
-import { useStore } from '../store/store';
+import { getState, useStore } from '../store/store';
+import { downloadCsv, fileDate, salesRows } from '../components/exportCsv';
+import { LuDownload } from 'react-icons/lu';
 import { fmt, round2 } from '../domain/money';
 import { balances, fmtDuration, lineLabel, serviceTimes } from '../domain/rules';
 import {
@@ -97,6 +99,17 @@ export default function Analytics() {
               <input id="include-training" type="checkbox" checked={includeTraining} onChange={(e) => setIncludeTraining(e.target.checked)} />
               Include training &amp; example orders
             </label>
+            <button
+              className="btn"
+              style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+              disabled={!data.all.length}
+              onClick={() => {
+                const d = (t: Date) => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+                downloadCsv(`sales_${fileDate(d(data.r.start), d(new Date(Math.min(Date.now(), data.r.end.getTime() - 1))))}.csv`, salesRows(data.all, getState()));
+              }}
+            >
+              <LuDownload aria-hidden="true" /> Download sales (Excel)
+            </button>
           </div>
           <div className="tabs an-tabs">
             {TABS.map(([k, l]) => (
