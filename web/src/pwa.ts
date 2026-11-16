@@ -66,9 +66,12 @@ function startUpdateCheck() {
       /* offline */
     }
   };
-  setInterval(check, 20 * 60 * 1000);
+  // Every 5 minutes, and whenever the till comes back online or the window is opened again.
+  setInterval(check, 5 * 60 * 1000);
   window.addEventListener('online', check);
-  setTimeout(check, 60 * 1000);
+  window.addEventListener('focus', check);
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && check());
+  setTimeout(check, 30 * 1000);
 }
 
 export function useAppStatus() {
