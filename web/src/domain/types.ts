@@ -178,7 +178,8 @@ export interface StatusEvent {
   auto?: boolean;
 }
 
-export type NumberMode = 'card' | 'slip' | 'both';
+/** card: numbered card handed over. slip: printed slip with a big number. both. receipt: no numbers, a normal receipt. */
+export type NumberMode = 'card' | 'slip' | 'both' | 'receipt';
 
 export interface Order {
   id: ID;

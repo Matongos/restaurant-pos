@@ -225,7 +225,7 @@ export default function Till() {
   const dayCounter = useStore((s) => s.dayCounter);
   const nextNumber = parent
     ? parent.number
-    : settings.numberMode === 'slip'
+    : settings.numberMode === 'slip' || settings.numberMode === 'receipt'
       ? nextSlip({ ...getState(), dayCounter }, getTillNo()).number
       : nextFreeCard(orders, settings.cardFrom, settings.cardTo);
   const altCurrencies = currencies.filter((c) => c.enabled && c.code !== baseCode);

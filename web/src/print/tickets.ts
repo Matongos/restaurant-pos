@@ -48,6 +48,7 @@ export function kitchenTicketHTML(order: Order, s: AppState): string {
 export function customerSlipHTML(order: Order, s: AppState): string {
   const base = s.currencies.find((c) => c.code === s.settings.baseCurrency)!;
   const type = s.orderTypes.find((t) => t.id === order.orderTypeId);
+  const cashier = s.staff.find((u) => u.id === order.cashierId);
   const rows = order.lines
     .map((l) => `<tr><td>${l.qty} × ${esc(lineLabel(l))}</td><td class="r">${fmt(l.qty * l.unitPrice, base)}</td></tr>`)
     .join('');
@@ -65,9 +66,11 @@ export function customerSlipHTML(order: Order, s: AppState): string {
       <div class="name">${esc(s.settings.restaurantName)}</div>
       <div class="small">${esc(s.settings.address)} · ${esc(s.settings.phone)}</div>
       ${order.training ? '<div class="training">TRAINING</div>' : ''}
-      <div class="label">YOUR NUMBER</div>
-      <div class="num">${order.number}</div>
-      <div class="type">${esc(type?.name ?? '')}</div>
+      ${
+        order.numberMode === 'receipt'
+          ? `<div class="label">RECEIPT</div><div class="small">Order #${order.number} · ${esc(type?.name ?? '')}${cashier ? ` · Served by ${esc(cashier.name)}` : ''}</div>`
+          : `<div class="label">YOUR NUMBER</div><div class="num">${order.number}</div><div class="type">${esc(type?.name ?? '')}</div>`
+      }
       <hr/>
       <table>${rows}${order.delivery ? `<tr><td>Delivery fee</td><td class="r">${fmt(order.delivery.fee, base)}</td></tr>` : ''}<tr class="tot"><td>Total</td><td class="r">${fmt(order.total, base)}</td></tr>${pays}
       <tr><td>Change</td><td class="r">${fmt(order.changeGiven * changeCur.rate, changeCur)}</td></tr></table>

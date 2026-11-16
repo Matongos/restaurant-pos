@@ -189,8 +189,14 @@ function Printing() {
         </div>
         <div className="switch-row">
           <div className="grow">
-            <b>Customer number slip</b>
-            <div className="muted">{slip ? 'Prints because customers get a printed number (set above).' : 'Not printed: customers get a physical card (set above).'}</div>
+            <b>{s.numberMode === 'receipt' ? 'Customer receipt' : 'Customer number slip'}</b>
+            <div className="muted">
+              {s.numberMode === 'receipt'
+                ? 'Prints for every sale: meals, prices, total and change (set above).'
+                : slip
+                  ? 'Prints because customers get a printed number (set above).'
+                  : 'Not printed: customers get a physical card (set above).'}
+            </div>
           </div>
         </div>
       </div>
@@ -216,7 +222,9 @@ function Numbers() {
     ['card', 'Physical cards', 'Cashier hands over a numbered card. The system tracks which cards are out.'],
     ['slip', 'Printed slip', 'A slip with a big number prints for the customer. Numbers restart daily.'],
     ['both', 'Both', 'Card handed over and a slip printed with the same number.'],
+    ['receipt', 'No numbers — normal receipt', 'Customers are not given a number. A normal receipt with the meals, prices, total and change prints for the customer.'],
   ];
+  const cards = s.numberMode === 'card' || s.numberMode === 'both';
   return (
     <>
       <div className="section-title" style={{ marginTop: 0 }}>
@@ -238,7 +246,7 @@ function Numbers() {
           </button>
         ))}
       </div>
-      <div className="form-grid" style={{ marginTop: 8 }}>
+      {cards && <div className="form-grid" style={{ marginTop: 8 }}>
         <label className="field">
           First card number
           <input type="number" value={s.cardFrom} onChange={(e) => updateSettings({ cardFrom: Math.max(1, Number(e.target.value)) })} />
@@ -247,13 +255,9 @@ function Numbers() {
           Last card number
           <input type="number" value={s.cardTo} onChange={(e) => updateSettings({ cardTo: Math.max(s.cardFrom, Number(e.target.value)) })} />
         </label>
-      </div>
+      </div>}
       <TillNumber />
       <Printing />
-      <p className="muted" style={{ fontSize: 13 }}>
-        In this prototype printing opens the browser's print dialog. The desktop app prints straight to the 80 mm kitchen printer with no
-        dialog.
-      </p>
     </>
   );
 }

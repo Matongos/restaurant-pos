@@ -30,8 +30,8 @@ export default function OrderDoneDialog({ result, onNew }: { result: PlaceOrderS
     if (s.settings.printKitchenTicket !== false) list.push({ title: 'Kitchen ticket', html: kitchenTicketHTML(order, s) });
     // A delivery always gets a slip for the bag (who, where, phone, paid). The customer slip is not needed.
     if (order.delivery) list.push({ title: 'Delivery slip', html: deliverySlipHTML(order, s) });
-    else if (!order.parentOrderId && (order.numberMode === 'slip' || order.numberMode === 'both'))
-      list.push({ title: 'Customer slip', html: customerSlipHTML(order, s) });
+    else if (!order.parentOrderId && (order.numberMode === 'slip' || order.numberMode === 'both' || order.numberMode === 'receipt'))
+      list.push({ title: order.numberMode === 'receipt' ? 'Customer receipt' : 'Customer slip', html: customerSlipHTML(order, s) });
     if (kept && customer && s.settings.printChangeSlip !== false)
       list.push({ title: 'Change slip', html: changeVoucherHTML(kept, customer, balanceAfter ?? kept.amount, s) });
     return list;
@@ -98,10 +98,12 @@ export default function OrderDoneDialog({ result, onNew }: { result: PlaceOrderS
   const handOver = order.parentOrderId
     ? 'Added to the same number'
     : order.delivery
-      ? `Delivery to ${order.delivery.name}${order.numberMode === 'slip' ? '' : ' — keep the card with the order'}`
-      : order.numberMode === 'slip'
-        ? 'Hand over the printed slip'
-        : 'Hand over card';
+      ? `Delivery to ${order.delivery.name}${order.numberMode === 'card' || order.numberMode === 'both' ? ' — keep the card with the order' : ''}`
+      : order.numberMode === 'receipt'
+        ? 'Order number (hand over the receipt)'
+        : order.numberMode === 'slip'
+          ? 'Hand over the printed slip'
+          : 'Hand over card';
 
   return (
     <Dialog

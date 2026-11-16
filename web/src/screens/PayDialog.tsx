@@ -60,7 +60,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
   const [keepFor, setKeepFor] = useState<CustomerSelection>({ kind: 'none' });
 
   // ---- order number
-  const needsCard = !parentOrderId && !tabPay && settings.numberMode !== 'slip';
+  const needsCard = !parentOrderId && !tabPay && (settings.numberMode === 'card' || settings.numberMode === 'both');
   const suggested = useMemo(() => nextFreeCard(orders, settings.cardFrom, settings.cardTo), [orders, settings.cardFrom, settings.cardTo]);
   const [cardStr, setCardStr] = useState(suggested ? String(suggested) : '');
   const inUse = useMemo(() => cardsInUse(orders), [orders]);

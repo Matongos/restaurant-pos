@@ -610,7 +610,7 @@ export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
     const parent = s.orders.find((o) => o.id === input.parentOrderId);
     if (!parent) return { ok: false, error: 'Original order not found.' };
     number = parent.number;
-  } else if (mode === 'slip') {
+  } else if (mode === 'slip' || mode === 'receipt') {
     const next = nextSlip(s, getTillNo());
     number = next.number;
     dayCounter = next.dayCounter;

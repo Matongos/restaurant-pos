@@ -151,7 +151,7 @@ export default function ActiveOrders() {
                         onClick={() => {
                           setOrderStatus(o.id, 'served', user.id);
                           toast(
-                            `Order ${o.number} ${d ? `delivered to ${d.name}` : 'served'}${o.numberMode !== 'slip' ? ` — card ${o.number} is free again` : ''}`,
+                            `Order ${o.number} ${d ? `delivered to ${d.name}` : 'served'}${o.numberMode === 'card' || o.numberMode === 'both' ? ` — card ${o.number} is free again` : ''}`,
                           );
                         }}
                       >
