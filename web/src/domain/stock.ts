@@ -103,9 +103,9 @@ export function stockLevels(s: StockState, now = Date.now()): Map<ID, StockLevel
     if (!item.track && !ready) { out.set(item.id, base); continue; }
     let c = lastCount.get(item.id);
     let estimated = false;
-    if (!c && (ready || cookedFrom.has(item.id))) {
-      // Never counted: ready portions start at 0 before their first cooking; raw stock the kitchen cooks
-      // from starts at 0 before its first purchase or cooking.
+    if (!c) {
+      // Never counted: ready portions start at 0 before their first cooking; anything else starts at 0
+      // just before its first purchase (or cooking), so bought stock shows at once. A count makes it exact.
       const times = [
         ...cooks.filter((m) => m.stockItemId === item.id || m.rawId === item.id).map((m) => m.at),
         ...(ready ? [] : s.purchases.filter((p) => !p.example && p.lines.some((l) => l.stockItemId === item.id)).map((p) => p.at)),
