@@ -9,7 +9,8 @@ import {
 } from '../store/store';
 import { fmt, round2 } from '../domain/money';
 import { lineLabel, todayISO } from '../domain/rules';
-import { CREDIT_METHOD, type AppState, type Expense, type Order, type PaidFrom, type Purchase } from '../domain/types';
+import { CREDIT_METHOD, type AppState, type Expense, type Order, type PaidFrom, type Purchase, type StockItem } from '../domain/types';
+import { countUnit, fmtQty, perPack, purchaseToStock } from '../domain/stock';
 import { Dialog, TopBar, toast } from '../components/ui';
 import BarChart from '../components/BarChart';
 import CancelSaleDialog from '../components/CancelSaleDialog';
@@ -513,9 +514,10 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
       if (patch.name !== undefined) {
         const item = stock.find((s) => s.name.toLowerCase() === patch.name!.trim().toLowerCase());
         if (item) {
+          const allowed = [item.unit, countUnit(item)].map((u) => u.toLowerCase());
           next[i] = {
             ...next[i],
-            unit: next[i].unit || item.unit,
+            unit: next[i].unit && allowed.includes(next[i].unit.trim().toLowerCase()) ? next[i].unit : item.unit,
             unitCost: next[i].unitCost || (item.lastUnitCost !== undefined ? String(round2(item.lastUnitCost * cur.rate)) : ''),
           };
         }
@@ -527,7 +529,17 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
     });
   };
 
-  const parsed = lines.filter((l) => l.name.trim()).map((l) => ({ name: l.name, qty: Number(l.qty) || 0, unit: l.unit, unitCost: Number(l.unitCost) || 0 }));
+  // The system leads on units: a known item can only be bought in its own units (bag, or kg), and the row says
+  // what it adds to stock; an unknown name is flagged as a new item, with a "did you mean" for near matches.
+  const known = (name: string) => stock.find((s) => s.name.toLowerCase() === name.trim().toLowerCase() && !s.madeFrom);
+  const unitsOf = (it: StockItem) => [...new Set([it.unit, countUnit(it)].map((u) => u.trim()).filter(Boolean))];
+  const norm = (t: string) => t.toLowerCase().replace(/[^a-z]/g, '');
+  const nearest = (name: string) => {
+    const n = norm(name);
+    if (n.length < 3) return undefined;
+    return stock.find((s) => !s.madeFrom && (norm(s.name).includes(n) || n.includes(norm(s.name)) || norm(s.name).startsWith(n.slice(0, 4))));
+  };
+  const parsed = lines.filter((l) => l.name.trim()).map((l) => ({ name: known(l.name)?.name ?? l.name, qty: Number(l.qty) || 0, unit: l.unit, unitCost: Number(l.unitCost) || 0 }));
   const total = round2(parsed.reduce((s, l) => s + l.qty * l.unitCost, 0));
 
   const save = () => {
@@ -605,7 +617,7 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
             </tr>
           </thead>
           <tbody>
-            {lines.map((l, i) => (
+            {lines.map((l, i) => [
               <tr key={i}>
                 <td>
                   <input id={`pl-name-${i}`} list="stock-list" placeholder="Start typing, e.g. Beef" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} />
@@ -614,14 +626,65 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
                   <input id={`pl-qty-${i}`} inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value.replace(/[^\d.]/g, '') })} style={{ width: 80 }} />
                 </td>
                 <td>
-                  <input id={`pl-unit-${i}`} placeholder="kg, bag…" value={l.unit} onChange={(e) => setLine(i, { unit: e.target.value })} style={{ width: 120 }} />
+                  {known(l.name) ? (
+                    <select id={`pl-unit-${i}`} value={unitsOf(known(l.name)!).find((u) => u.toLowerCase() === l.unit.trim().toLowerCase()) ?? known(l.name)!.unit} onChange={(e) => setLine(i, { unit: e.target.value })} style={{ width: 130 }}>
+                      {unitsOf(known(l.name)!).map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input id={`pl-unit-${i}`} placeholder="kg, bag…" value={l.unit} onChange={(e) => setLine(i, { unit: e.target.value })} style={{ width: 120 }} />
+                  )}
                 </td>
                 <td>
                   <input id={`pl-cost-${i}`} inputMode="decimal" value={l.unitCost} onChange={(e) => setLine(i, { unitCost: e.target.value.replace(/[^\d.]/g, '') })} style={{ width: 110 }} />
                 </td>
                 <td className="num">{l.name.trim() ? fmt(round2((Number(l.qty) || 0) * (Number(l.unitCost) || 0)), cur) : ''}</td>
-              </tr>
-            ))}
+              </tr>,
+              l.name.trim() ? (
+                <tr key={`h${i}`} className="pl-hint">
+                  <td colSpan={5}>
+                    {(() => {
+                      const it = known(l.name);
+                      if (it) {
+                        const q = Number(l.qty) || 0;
+                        const u = l.unit.trim() || it.unit;
+                        const adds = it.track ? purchaseToStock(it, q, u) : null;
+                        const per = perPack(it);
+                        return (
+                          <span>
+                            ✓ <b>{it.name}</b> — bought by <b>{it.unit}</b>
+                            {countUnit(it) !== it.unit ? `, counted in ${countUnit(it)} (1 ${it.unit} = ${per} ${countUnit(it)})` : ''}
+                            {adds !== null && q > 0 ? (
+                              <>
+                                {' '}· adds <b>{fmtQty(adds, countUnit(it))}</b> to stock
+                              </>
+                            ) : !it.track ? ' · not counted in Stock (money only)' : ''}
+                          </span>
+                        );
+                      }
+                      const near = nearest(l.name);
+                      return (
+                        <span className="warn-t">
+                          New item: “{l.name.trim()}” will be added to Stock.{' '}
+                          {near && (
+                            <>
+                              Did you mean{' '}
+                              <button type="button" className="link-btn" onClick={() => setLine(i, { name: near.name, unit: '' })}>
+                                {near.name}
+                              </button>
+                              ?
+                            </>
+                          )}
+                        </span>
+                      );
+                    })()}
+                  </td>
+                </tr>
+              ) : null,
+            ])}
           </tbody>
         </table>
       </div>

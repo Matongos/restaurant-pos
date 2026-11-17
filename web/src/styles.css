@@ -1712,3 +1712,4 @@ td.bad { color: #b91c1c; font-weight: 700; } td.good { color: var(--good); font-
 .now-card > b { display: block; margin-bottom: 6px; font-size: 15px; }
 .now-card .raw-row td { color: var(--muted); }
 .tag2.b { background: #e6efff; color: #1e4fa8; }
+.pl-hint td { font-size: 12.5px; color: var(--muted); padding-top: 0 !important; border-top: 0 !important; } .pl-hint .link-btn { font-weight: 700; }
