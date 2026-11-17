@@ -215,18 +215,18 @@ function Profit({ p }: { p: Period }) {
   // Profit per meal (needs a cost per plate on the menu item).
   const perMeal = useMemo(() => {
     // Sales include the add-ons sold with the meal (extra meat ...), and so does the cost.
-    const m = new Map<string, { qty: number; sales: number; extrasCost: number }>();
+    const m = new Map<string, { qty: number; sales: number; extrasCost: number; name?: string }>();
     for (const o of f.live) for (const l of o.lines) {
       const cur = m.get(l.itemId) ?? { qty: 0, sales: 0, extrasCost: 0 };
       const xc = (l.extras ?? []).reduce((s, x) => s + (x.cost ?? 0), 0) * l.qty;
-      m.set(l.itemId, { qty: cur.qty + l.qty, sales: round2(cur.sales + l.qty * l.unitPrice), extrasCost: round2(cur.extrasCost + xc) });
+      m.set(l.itemId, { qty: cur.qty + l.qty, sales: round2(cur.sales + l.qty * l.unitPrice), extrasCost: round2(cur.extrasCost + xc), name: cur.name ?? l.name });
     }
     return [...m.entries()]
       .map(([id, v]) => {
         const item = menu.find((x) => x.id === id);
         const cost = item?.costPerPlate;
         const totalCost = cost === undefined ? null : round2(cost * v.qty + v.extrasCost);
-        return { id, name: item?.name ?? id, qty: v.qty, sales: v.sales, cost, totalCost, profit: totalCost === null ? null : round2(v.sales - totalCost) };
+        return { id, name: item?.name ?? v.name ?? id, qty: v.qty, sales: v.sales, cost, totalCost, profit: totalCost === null ? null : round2(v.sales - totalCost) };
       })
       .sort((a, b) => (b.profit ?? -1) - (a.profit ?? -1));
   }, [f.live, menu]);

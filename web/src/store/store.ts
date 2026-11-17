@@ -1073,6 +1073,14 @@ export function upsertMenuItem(item: MenuItem) {
   });
 }
 
+/**
+ * Take a meal or drink off the menu for good. Past sales keep its name and price (they are copied onto
+ * each order), so reports and Books stay correct.
+ */
+export function deleteMenuItem(id: string) {
+  set((st) => ({ ...st, menu: st.menu.filter((x) => x.id !== id) }));
+}
+
 /* ------------------------------------------------------------------ add-ons */
 
 /** Add or change an add-on (Extra meat +$1.50 ...). Its price applies to new orders only. */

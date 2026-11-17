@@ -5,13 +5,13 @@ import { signIn } from '../cloud/api';
 import PlanPayments from '../components/PlanPayments';
 import WebsiteSettings from '../components/WebsiteSettings';
 import { useSyncStatus } from '../cloud/sync';
-import { addComponent, verifyManagerPin, getTillNo, setTillNo, TILL_RANGE, setExampleHistory, resetDemo, startFresh, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
+import { addComponent, deleteMenuItem, verifyManagerPin, getTillNo, setTillNo, TILL_RANGE, setExampleHistory, resetDemo, startFresh, updatePaymentMethod, updateSettings, upsertCurrency, upsertMenuItem, useCurrentUser, useStore } from '../store/store';
 import type { Currency, MenuItem, NumberMode, PrintWhen } from '../domain/types';
 import { compressLogo, compressPhoto } from '../components/photo';
 import { Dialog, TopBar, toast } from '../components/ui';
 import { fmt } from '../domain/money';
 import { can, mealInitials, uid } from '../domain/rules';
-import { LuCamera, LuStore } from 'react-icons/lu';
+import { LuCamera, LuStore, LuTrash2 } from 'react-icons/lu';
 import CategoryEditor from '../components/CategoryEditor';
 import AddOnEditor from '../components/AddOnEditor';
 import DeliverySettings from '../components/DeliverySettings';
@@ -528,6 +528,8 @@ export function MenuEditor() {
 function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) {
   const categories = useStore((s) => s.categories);
   const [m, setM] = useState<MenuItem>(item);
+  const [sure, setSure] = useState(false);
+  const exists = useStore((s) => s.menu.some((x) => x.id === item.id));
   const valid = m.name.trim() && m.price >= 0;
   return (
     <Dialog
@@ -536,9 +538,35 @@ function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) 
       width={620}
       footer={
         <>
+          {exists &&
+            (sure ? (
+              <span className="row" style={{ marginRight: 'auto', gap: 8 }}>
+                <b>Delete {item.name}?</b>
+                <button className="btn" onClick={() => setSure(false)}>
+                  Keep
+                </button>
+                <button
+                  className="btn danger-fill"
+                  onClick={() => {
+                    deleteMenuItem(item.id);
+                    toast(`${item.name} deleted. Past sales keep it in reports.`);
+                    onClose();
+                  }}
+                >
+                  Yes, delete
+                </button>
+              </span>
+            ) : (
+              <button className="btn danger" style={{ marginRight: 'auto' }} onClick={() => setSure(true)}>
+                <LuTrash2 aria-hidden="true" /> Delete
+              </button>
+            ))}
+          {!sure && (
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
+          )}
+          {!sure && (
           <button
             className="btn primary"
             disabled={!valid}
@@ -550,6 +578,7 @@ function ItemDialog({ item, onClose }: { item: MenuItem; onClose: () => void }) 
           >
             Save
           </button>
+          )}
         </>
       }
     >
