@@ -5,7 +5,8 @@ import { countUnit, fmtQty, perPack, type StockLevel } from '../domain/stock';
 import { fmt } from '../domain/money';
 import type { StockItem } from '../domain/types';
 import { Dialog, TopBar, toast } from '../components/ui';
-import { LuClipboardCheck, LuPlus, LuTrash2, LuTriangleAlert } from 'react-icons/lu';
+import { LuChefHat, LuClipboardCheck, LuPlus, LuTrash2, LuTriangleAlert } from 'react-icons/lu';
+import { go } from '../router';
 
 type Filter = 'attention' | 'all' | 'untracked';
 const STATUS_LABEL: Record<StockLevel['status'], string> = { ok: 'OK', low: 'Running low', out: 'Out', uncounted: 'Not counted yet', untracked: 'Not tracked' };
@@ -26,7 +27,8 @@ export default function StockScreen() {
   const [wasting, setWasting] = useState<string | null>(null);
   const [open, setOpen] = useState<StockItem | null>(null);
 
-  const all = [...levels.values()];
+  // Ready portions (Chicken portion) live under Today's cooking, not in the store room list.
+  const all = [...levels.values()].filter((l) => !l.item.madeFrom);
   const tracked = all.filter((l) => l.status !== 'untracked');
   const attention = tracked.filter((l) => l.status === 'low' || l.status === 'out' || l.status === 'uncounted');
   const list = (filter === 'attention' ? attention : filter === 'all' ? tracked : all.filter((l) => l.status === 'untracked')).sort(
@@ -38,6 +40,10 @@ export default function StockScreen() {
   return (
     <div className="app">
       <TopBar title="Stock">
+        <button className="btn stock-act" onClick={() => go('/cooking')} aria-label="Today's cooking" title="Today's cooking">
+          <LuChefHat aria-hidden="true" />
+          <span>Today's cooking</span>
+        </button>
         <button className="btn stock-act" onClick={() => setWasting('')} aria-label="Record waste" title="Record waste">
           <LuTrash2 aria-hidden="true" />
           <span>Record waste</span>

@@ -15,6 +15,7 @@ import Analytics from './screens/Analytics';
 import Accounts from './screens/Accounts';
 import StaffScreen from './screens/StaffScreen';
 import StockScreen from './screens/Stock';
+import CookingScreen from './screens/Cooking';
 import TablesScreen from './screens/Tables';
 import { UpdateBar } from './components/AppInstall';
 import { LinkNotice } from './components/CloudAccount';
@@ -41,6 +42,7 @@ const ROUTES: Record<string, { perm: Permission; el: ComponentType }> = {
   '/accounts': { perm: 'accounts', el: Accounts },
   '/staff': { perm: 'staff', el: StaffScreen },
   '/stock': { perm: 'stock', el: StockScreen },
+  '/cooking': { perm: 'stock', el: CookingScreen },
   '/tables': { perm: 'tables', el: TablesScreen },
   '/online': { perm: 'take_orders', el: OnlineOrders },
   '/posters': { perm: 'settings', el: PostersScreen },

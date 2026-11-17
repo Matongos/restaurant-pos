@@ -101,6 +101,8 @@ function AddOnDialog({ addOn, isNew, onClose }: { addOn: AddOn; isNew: boolean; 
   const [cost, setCost] = useState(addOn.cost === undefined ? '' : String(addOn.cost));
   const [meals, setMeals] = useState<Set<string>>(() => new Set(menu.filter((m) => m.addOnIds?.includes(addOn.id)).map((m) => m.id)));
   const [recipe, setRecipe] = useState(addOn.recipe);
+  const [multi, setMulti] = useState(!!addOn.multi);
+  const [maxQty, setMaxQty] = useState(String(addOn.maxQty ?? 3));
   const [error, setError] = useState('');
   const p = price.trim() === '' ? 0 : Number(price);
   const blocker = !name.trim() ? 'Type a name' : !(p >= 0) ? 'Check the price' : '';
@@ -113,7 +115,7 @@ function AddOnDialog({ addOn, isNew, onClose }: { addOn: AddOn; isNew: boolean; 
     });
   const save = () => {
     if (blocker) return;
-    const r = upsertAddOn({ ...addOn, name, price: p, cost: cost.trim() === '' ? undefined : Math.max(0, Number(cost) || 0), recipe: recipe?.filter((x) => x.qty > 0).length ? recipe.filter((x) => x.qty > 0) : undefined });
+    const r = upsertAddOn({ ...addOn, name, price: p, multi: multi || undefined, maxQty: multi ? Math.max(2, Math.min(10, Number(maxQty) || 3)) : undefined, cost: cost.trim() === '' ? undefined : Math.max(0, Number(cost) || 0), recipe: recipe?.filter((x) => x.qty > 0).length ? recipe.filter((x) => x.qty > 0) : undefined });
     if (!r.ok) return setError(r.error);
     for (const m of menu) {
       const has = !!m.addOnIds?.includes(addOn.id);
@@ -153,6 +155,23 @@ function AddOnDialog({ addOn, isNew, onClose }: { addOn: AddOn; isNew: boolean; 
           Cost to make (optional)
           <input id="addon-cost" type="number" step="0.05" min={0} inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="e.g. 0.90" />
         </label>
+      </div>
+      <div className="switch-rows" style={{ marginTop: 12 }}>
+        <div className="switch-row">
+          <div className="grow">
+            <b>Can be added more than once on a plate</b>
+            <div className="muted">e.g. Extra beef piece × 2: the price and the stock it uses are counted that many times.</div>
+          </div>
+          {multi && (
+            <label className="row" style={{ gap: 6, fontSize: 14 }}>
+              up to
+              <input type="number" min={2} max={10} value={maxQty} onChange={(e) => setMaxQty(e.target.value)} style={{ width: 60 }} aria-label="Most per plate" />
+            </label>
+          )}
+          <button className={`switch ${multi ? 'on' : ''}`} onClick={() => setMulti(!multi)} aria-pressed={multi} aria-label="Can be added more than once">
+            <span />
+          </button>
+        </div>
       </div>
       <div className="section-title">Offered with</div>
       <p className="hint" style={{ marginTop: -4 }}>

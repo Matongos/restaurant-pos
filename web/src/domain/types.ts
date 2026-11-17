@@ -131,6 +131,10 @@ export interface AddOn {
   sort: number;
   /** Stock one portion uses (extra meat: 0.1 kg beef). */
   recipe?: RecipeLine[];
+  /** The cashier can add it more than once on a plate (Extra beef piece × 2). Stored as repeated extras. */
+  multi?: boolean;
+  /** Most of it on one plate when `multi` (default 3). */
+  maxQty?: number;
 }
 
 /** An add-on as it was sold: name and price are copied, so later menu changes don't rewrite old sales. */
@@ -454,6 +458,18 @@ export interface StockItem {
   hideWhenOut?: boolean;
   /** Packaging: used once for every Take Away or Delivery plate (e.g. containers). */
   perPackedPlate?: number;
+  /**
+   * A ready portion the kitchen makes from another stock item (raw stock): "Chicken portion" made from
+   * "Chicken". Made in Today's cooking; meals then use it. Its name for one is `countUnit` ("portion").
+   */
+  madeFrom?: ID;
+  /** Ready portions: what happens to what is left at closing. Default keep. */
+  leftovers?: 'keep' | 'waste';
+  /**
+   * Ready portions: false = the kitchen does not count how many were made (rice, sadza); the system
+   * works out plates per bag from the sales instead. Default true.
+   */
+  countMade?: boolean;
 }
 
 /** How much of a stock item one plate (or one add-on) uses, in the item's count unit. */
@@ -469,9 +485,18 @@ export interface RecipeLine {
 export interface StockMove {
   id: ID;
   stockItemId: ID;
-  kind: 'count' | 'waste';
-  /** count: the amount counted. waste: the amount thrown away (positive). Count units. */
+  /**
+   * cook: Today's cooking — `rawQty` of `rawId` (raw stock) became `qty` of this ready portion
+   * (qty 0 when the kitchen does not count them, e.g. rice).
+   */
+  kind: 'count' | 'waste' | 'cook';
+  /** count: the amount counted. waste: the amount thrown away (positive). cook: how many were made. Count units. */
   qty: number;
+  /** cook: the raw stock used and how much of it (its count units). */
+  rawId?: ID;
+  rawQty?: number;
+  /** cook: this entry undoes another one (amounts are negative). */
+  reversesId?: ID;
   /** count: what the system expected just before, so the difference can be shown. */
   expected?: number;
   reason?: string;

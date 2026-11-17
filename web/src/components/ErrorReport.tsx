@@ -61,7 +61,7 @@ export class ScreenGuard extends Component<{ children: ReactNode }, { err: strin
   render() {
     if (!this.state.err) return this.props.children;
     return (
-      <div className="error-bar" role="alert" style={{ position: 'static', margin: 24 }}>
+      <div className="error-bar" role="alert" style={{ position: 'static', transform: 'none', margin: 24 }}>
         <b>This screen could not open.</b> Take a photo of this and send it to TechPlug. Version {BUILD}
         <pre className="mono-sm" style={{ whiteSpace: 'pre-wrap' }}>{this.state.err}</pre>
         <button className="btn small" onClick={() => location.reload()}>

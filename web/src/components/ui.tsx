@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { BUILD } from '../version';
+import { cookingReminders } from '../domain/kitchen';
 import type { IconType } from 'react-icons';
 import {
   LuGlobe,
@@ -18,6 +19,7 @@ import {
   LuGraduationCap,
   LuHandCoins,
   LuLogOut,
+  LuChefHat,
   LuInfo,
   LuMenu,
   LuMonitor,
@@ -162,13 +164,19 @@ function useNavItems(): NavDef[] {
   const orders = useStore((s) => s.orders);
   const credit = useStore((s) => s.credit);
   const levels = useStockLevels();
+  const stockItems = useStore((s) => s.stockItems);
+  const stockMoves = useStore((s) => s.stockMoves);
+  const menu = useStore((s) => s.menu);
   const mode = useStore((s) => s.settings.serviceMode ?? 'counter');
   const web = useOnlineOrders();
   const sync = useSyncStatus();
   if (!user) return [];
   const busyTables = orders.filter((o) => o.table?.round === 1 && o.status !== 'cancelled' && o.table.status !== 'paid' && !o.example).length;
   // Stock badge: items running low or out (needs buying or counting).
-  const stockAlerts = [...levels.values()].filter((l) => l.status === 'low' || l.status === 'out').length;
+  const stockAlerts = [...levels.values()].filter((l) => !l.ready && (l.status === 'low' || l.status === 'out')).length;
+  // Today's cooking shows once the owner has set up ready portions; its badge = items not cooked yet today.
+  const cooks = stockItems.some((i) => i.madeFrom);
+  const cookDue = cooks ? cookingReminders({ stockItems, stockMoves, orders, menu }).length : 0;
   const openOrders = orders.filter((o) => !o.parentOrderId && !o.table && !o.example && (o.status === 'in_kitchen' || o.status === 'ready') && isCurrent(o)).length;
   const owed = [...balances(credit).values()].filter((b) => b > 0).length;
   const all: NavDef[] = [
@@ -180,6 +188,7 @@ function useNavItems(): NavDef[] {
     { to: '/kitchen', label: 'Kitchen', perm: 'kitchen', Icon: LuCookingPot },
     { to: '/change-owed', label: 'Change', perm: 'change_owed', Icon: LuHandCoins, badge: owed },
     { to: '/todays-menu', label: 'Sold out', perm: 'todays_menu', Icon: LuUtensilsCrossed },
+    ...(cooks ? [{ to: '/cooking', label: "Today's cooking", perm: 'stock' as Permission, Icon: LuChefHat, badge: cookDue }] : []),
     { to: '/stock', label: 'Stock', perm: 'stock', Icon: LuBoxes, badge: stockAlerts },
     { to: '/reports', label: 'Reports', perm: 'reports', Icon: LuChartColumn },
     { to: '/accounts', label: 'Books', perm: 'accounts', Icon: LuBookOpenText },

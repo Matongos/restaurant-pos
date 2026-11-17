@@ -25,13 +25,29 @@ export function comesWith(item: MenuItem | undefined, components: Component[]): 
 }
 
 /** What the kitchen needs to know about a line beyond its name: "+ Extra meat · No coslo · soft sadza". */
+/**
+ * Add-ons on a line, grouped: an add-on sold more than once on a plate is stored once per piece
+ * ([Extra beef piece, Extra beef piece]) and shown as "Extra beef piece × 2".
+ */
+export function groupExtras(extras?: LineExtra[]): (LineExtra & { n: number; label: string })[] {
+  const out: (LineExtra & { n: number; label: string })[] = [];
+  for (const x of extras ?? []) {
+    const g = out.find((y) => y.id === x.id);
+    if (g) {
+      g.n++;
+      g.label = `${g.name} × ${g.n}`;
+    } else out.push({ ...x, n: 1, label: x.name });
+  }
+  return out;
+}
+
 export function lineExtras(l: { note?: string; without?: string[]; extras?: LineExtra[] }): string {
-  return [...(l.extras ?? []).map((x) => `+ ${x.name}`), ...(l.without ?? []).map((w) => `No ${w.toLowerCase()}`), l.note].filter(Boolean).join(' · ');
+  return [...groupExtras(l.extras).map((x) => `+ ${x.label}`), ...(l.without ?? []).map((w) => `No ${w.toLowerCase()}`), l.note].filter(Boolean).join(' · ');
 }
 
 /** "Sadza & Beef + Extra meat": the line's name with its add-ons, for lists and the sales journal. */
 export function lineLabel(l: { name: string; extras?: LineExtra[] }): string {
-  return [l.name, ...(l.extras ?? []).map((x) => x.name)].join(' + ');
+  return [l.name, ...groupExtras(l.extras).map((x) => x.label)].join(' + ');
 }
 
 /** The add-ons a meal offers, in menu order (switched-off ones included, so the till can show them as finished). */

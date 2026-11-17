@@ -2,6 +2,7 @@ import { go, useRoute } from '../router';
 import { LuArrowLeft } from 'react-icons/lu';
 import { useStore } from '../store/store';
 import { fmt, fromBase } from '../domain/money';
+import { groupExtras } from '../domain/rules';
 
 /** View-only screen for the customer-facing monitor. Open with #/display?till=till-1 */
 function BackLink() {
@@ -54,9 +55,9 @@ export default function CustomerDisplay() {
             <div key={l.id}>
               <span>
                 {l.qty} × {l.name}
-                {l.extras?.map((x) => (
+                {groupExtras(l.extras).map((x) => (
                   <small key={x.id} className="cx-extra">
-                    + {x.name}
+                    + {x.label}
                     {x.price > 0 ? ` (${fmt(x.price, base)} each)` : ''}
                   </small>
                 ))}

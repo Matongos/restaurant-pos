@@ -68,9 +68,18 @@ export interface StockLevel {
   daysLeft?: number;
   /** onHand × cost per count unit (base currency). */
   value?: number;
+  /** A ready portion made in Today's cooking (Chicken portion), not bought. */
+  ready?: boolean;
+  /** Ready portion: cooked (made) today. Only then can it go Sold out — a forgotten entry never hides meals. */
+  cookedToday?: boolean;
+  /** Never counted: the amount starts from the first purchase / cooking (count once to be sure). */
+  estimated?: boolean;
 }
 
 type StockState = Pick<AppState, 'stockItems' | 'stockMoves' | 'orders' | 'purchases'>;
+
+/** A ready portion the kitchen counts (not rice-style "count from sales"). */
+export const isCountedReady = (i: StockItem) => !!i.madeFrom && i.countMade !== false;
 
 export function stockLevels(s: StockState, now = Date.now()): Map<ID, StockLevel> {
   const out = new Map<ID, StockLevel>();
@@ -82,14 +91,56 @@ export function stockLevels(s: StockState, now = Date.now()): Map<ID, StockLevel
   const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0);
   const today = startOfDay.toISOString();
   const weekAgo = new Date(now - 7 * 864e5).toISOString();
+  const cooks = s.stockMoves.filter((m) => m.kind === 'cook');
+  // Raw stock that the kitchen cooks from (Chicken → Chicken portion).
+  const cookedFrom = new Set(s.stockItems.filter((i) => i.madeFrom).map((i) => i.madeFrom!));
+  const before = (iso: string) => new Date(Date.parse(iso) - 1).toISOString();
 
   for (const item of s.stockItems) {
     const base: StockLevel = { item, status: 'untracked', onHand: 0, usedToday: 0, perDay: 0 };
-    if (!item.track) { out.set(item.id, base); continue; }
-    const c = lastCount.get(item.id);
+    const ready = !!item.madeFrom;
+    if (ready && item.countMade === false) { out.set(item.id, { ...base, ready }); continue; }
+    if (!item.track && !ready) { out.set(item.id, base); continue; }
+    let c = lastCount.get(item.id);
+    let estimated = false;
+    if (!c && (ready || cookedFrom.has(item.id))) {
+      // Never counted: ready portions start at 0 before their first cooking; raw stock the kitchen cooks
+      // from starts at 0 before its first purchase or cooking.
+      const times = [
+        ...cooks.filter((m) => m.stockItemId === item.id || m.rawId === item.id).map((m) => m.at),
+        ...(ready ? [] : s.purchases.filter((p) => !p.example && p.lines.some((l) => l.stockItemId === item.id)).map((p) => p.at)),
+      ].sort();
+      if (times.length) {
+        c = { at: before(times[0]), qty: 0 };
+        estimated = true;
+      }
+    }
     let onHand = c?.qty ?? 0;
     let usedToday = 0, usedWeek = 0;
-    for (const m of s.stockMoves) if (m.stockItemId === item.id && m.kind === 'waste' && c && m.at > c.at) onHand -= m.qty;
+    let cookedToday = false;
+    for (const m of s.stockMoves) {
+      if (!c || m.at <= c.at) {
+        if (m.kind === 'cook' && m.stockItemId === item.id && m.at >= today && m.qty > 0) cookedToday = true;
+        continue;
+      }
+      if (m.stockItemId === item.id && m.kind === 'waste') onHand -= m.qty;
+      if (m.kind === 'cook') {
+        if (m.stockItemId === item.id) {
+          onHand += m.qty;
+          if (m.at >= today && m.qty > 0) cookedToday = true;
+        }
+        if (m.rawId === item.id) {
+          onHand -= m.rawQty ?? 0;
+          if (m.at >= today) usedToday += m.rawQty ?? 0;
+          if (m.at >= weekAgo) usedWeek += m.rawQty ?? 0;
+        }
+      }
+    }
+    // A cooking entry that was undone the same day does not count as cooked.
+    if (cookedToday) {
+      const madeToday = cooks.filter((m) => m.stockItemId === item.id && m.at >= today).reduce((t, m) => t + m.qty, 0);
+      cookedToday = madeToday > 0;
+    }
     for (const p of s.purchases) {
       if (p.example || !c || p.at <= c.at) continue;
       for (const l of p.lines) if (l.stockItemId === item.id) onHand += l.stockQty ?? l.qty * perPack(item);
@@ -102,7 +153,7 @@ export function stockLevels(s: StockState, now = Date.now()): Map<ID, StockLevel
       if (o.createdAt >= weekAgo) usedWeek += q;
     }
     // Average over the days we actually have (a new item counted yesterday is not averaged over a week).
-    const firstSeen = c ? Math.max(Date.parse(weekAgo), Math.min(...s.stockMoves.filter((m) => m.stockItemId === item.id).map((m) => Date.parse(m.at)))) : Date.parse(weekAgo);
+    const firstSeen = c ? Math.max(Date.parse(weekAgo), Math.min(Date.parse(c.at), ...s.stockMoves.filter((m) => m.stockItemId === item.id).map((m) => Date.parse(m.at)))) : Date.parse(weekAgo);
     const days = Math.max(1, (now - firstSeen) / 864e5);
     const perDay = r3(usedWeek / days);
     onHand = r3(onHand);
@@ -112,20 +163,25 @@ export function stockLevels(s: StockState, now = Date.now()): Map<ID, StockLevel
       item,
       status,
       onHand,
-      lastCountAt: c?.at,
+      lastCountAt: estimated ? undefined : c?.at,
       usedToday: r3(usedToday),
       perDay,
       daysLeft: c && perDay > 0 && onHand > 0 ? onHand / perDay : undefined,
       value: c && unitCost !== undefined ? Math.round(Math.max(0, onHand) * unitCost * 100) / 100 : undefined,
+      ...(ready ? { ready, cookedToday } : {}),
+      ...(estimated ? { estimated } : {}),
     });
   }
   return out;
 }
 
-/** Stock items that are counted, set to hide their meals, and have run out. */
+/**
+ * Stock items that are counted, set to hide their meals, and have run out. A ready portion only counts
+ * once it was cooked today: if nobody entered Today's cooking yet, its meals stay on sale.
+ */
 export function outOfStockIds(levels: Map<ID, StockLevel>): Set<ID> {
   const ids = new Set<ID>();
-  for (const l of levels.values()) if (l.status === 'out' && l.item.hideWhenOut) ids.add(l.item.id);
+  for (const l of levels.values()) if (l.status === 'out' && l.item.hideWhenOut && (!l.ready || l.cookedToday)) ids.add(l.item.id);
   return ids;
 }
 

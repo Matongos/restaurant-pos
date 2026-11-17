@@ -5,8 +5,9 @@ import { openTab, tabRounds, tabTotal } from '../domain/tables';
 import { changeVoucherHTML, kitchenTicketHTML, printTickets } from '../print/tickets';
 import TableBill from '../components/TableBill';
 import CancelSaleDialog from '../components/CancelSaleDialog';
-import { outOfStockIds } from '../domain/stock';
-import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, sameExtras, suggestCard, tidyName, uid } from '../domain/rules';
+import { outOfStockIds, usageFor } from '../domain/stock';
+import { cookingReminders, platesLeft } from '../domain/kitchen';
+import { addOnsFor, comesWith, extrasPrice, groupExtras, isSellable, lineLabel, mealInitials, sameExtras, suggestCard, tidyName, uid } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
 import type { AddOn, DeliveryInfo, MenuItem, OrderLine } from '../domain/types';
 import { Dialog, MoreMenu, TopBar, toast, useNow } from '../components/ui';
@@ -97,6 +98,30 @@ export default function Till() {
   const addOnOut = (a: AddOn) => (a.recipe ?? []).some((r) => outStock.has(r.stockItemId));
   const sellable = useMemo(() => menu.filter((m) => isSellable(m, { components }, outStock)), [menu, components, outStock]);
   const hiddenCount = menu.length - sellable.length;
+  // Today's cooking: plates still possible from the portions cooked today (after what is in this order),
+  // and a reminder for portions the kitchen usually cooks but has not entered yet.
+  const stockItemsAll = useStore((s) => s.stockItems);
+  const stockMovesAll = useStore((s) => s.stockMoves);
+  const ordersAll = useStore((s) => s.orders);
+  const leftLevels = useMemo(() => {
+    const use = usageFor(lines, typeId, { menu, addOns, stockItems: stockItemsAll }) ?? {};
+    const m = new Map(levels);
+    for (const [id, q] of Object.entries(use)) {
+      const l = m.get(id);
+      if (l?.ready) m.set(id, { ...l, onHand: l.onHand - q });
+    }
+    return m;
+  }, [levels, lines, typeId, menu, addOns, stockItemsAll]);
+  const cookDue = useMemo(() => cookingReminders({ stockItems: stockItemsAll, stockMoves: stockMovesAll, orders: ordersAll, menu }), [stockItemsAll, stockMovesAll, ordersAll, menu]);
+  const leftTag = (m: MenuItem) => {
+    const n = platesLeft(m, leftLevels);
+    if (n === null) return null;
+    const low = (m.recipe ?? []).some((r) => {
+      const l = leftLevels.get(r.stockItemId);
+      return l?.ready && l.item.lowAt !== undefined && l.onHand <= l.item.lowAt;
+    });
+    return <span className={`left-tag ${low || n <= 3 ? 'low' : ''}`}>{n} left</span>;
+  };
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -174,6 +199,20 @@ export default function Till() {
     const list = has ? l.extras!.filter((x) => x.id !== a.id) : [...(l.extras ?? []), { id: a.id, name: a.name, price: a.price, ...(a.cost !== undefined ? { cost: a.cost } : {}) }];
     const extras = list.length ? list : undefined;
     return { without: l.without, extras, unitPrice: round2(l.unitPrice - extrasPrice(l.extras) + extrasPrice(extras)) };
+  };
+  /** An add-on sold more than once per plate (Extra beef piece × 2): set how many, for every plate on the line. */
+  const setExtraCount = (lineId: string, a: AddOn, n: number) => {
+    const line = lines.find((l) => l.id === lineId);
+    if (!line) return;
+    const max = a.maxQty && a.maxQty > 0 ? a.maxQty : 3;
+    const count = Math.max(0, Math.min(max, n));
+    applyChange(lineId, line.qty, (l) => {
+      const rest = (l.extras ?? []).filter((x) => x.id !== a.id);
+      const one = { id: a.id, name: a.name, price: a.price, ...(a.cost !== undefined ? { cost: a.cost } : {}) };
+      const list = [...rest, ...Array.from({ length: count }, () => one)];
+      const extras = list.length ? list : undefined;
+      return { without: l.without, extras, unitPrice: round2(l.unitPrice - extrasPrice(l.extras) + extrasPrice(extras)) };
+    });
   };
   const [extraFor, setExtraFor] = useState<string | null>(null);
   const [splitAsk, setSplitAsk] = useState<{ lineId: string; part?: string; addOn?: AddOn } | null>(null);
@@ -290,13 +329,29 @@ export default function Till() {
                   </button>
                 );
               })}
-              {(l.extras ?? []).map((x) => (
-                <button key={x.id} className="addon-chip on" onClick={() => toggleExtra(l.id, addOns.find((a) => a.id === x.id) ?? { ...x, available: true, sort: 0 })} aria-label={`${x.name} added, ${priceTag(x.price)} a plate. Tap to take it off`}>
-                  <LuCheck aria-hidden="true" />
-                  {x.name}
-                  <small>{priceTag(x.price)}</small>
-                </button>
-              ))}
+              {groupExtras(l.extras).map((x) => {
+                const a = addOns.find((y) => y.id === x.id) ?? { ...x, available: true, sort: 0 };
+                if (a.multi)
+                  return (
+                    <span key={x.id} className="addon-chip on addon-step">
+                      <button onClick={() => setExtraCount(l.id, a, x.n - 1)} aria-label={`One less ${x.name}`}>
+                        <LuMinus aria-hidden="true" />
+                      </button>
+                      <span className="as-name">{x.name}</span>
+                      <b className="as-n">× {x.n}</b>
+                      <button onClick={() => setExtraCount(l.id, a, x.n + 1)} disabled={x.n >= (a.maxQty && a.maxQty > 0 ? a.maxQty : 3) || addOnOut(a)} aria-label={`One more ${x.name}`}>
+                        <LuPlus aria-hidden="true" />
+                      </button>
+                    </span>
+                  );
+                return (
+                  <button key={x.id} className="addon-chip on" onClick={() => toggleExtra(l.id, a)} aria-label={`${x.name} added, ${priceTag(x.price)} a plate. Tap to take it off`}>
+                    <LuCheck aria-hidden="true" />
+                    {x.label}
+                    <small>{priceTag(x.price * x.n)}</small>
+                  </button>
+                );
+              })}
               {addOnsFor(m, addOns).some((a) => !l.extras?.some((x) => x.id === a.id)) && (
                 <button className="addon-chip" onClick={() => setExtraFor(l.id)} aria-label={`Add an extra to ${l.name}`}>
                   <LuPlus aria-hidden="true" />
@@ -460,6 +515,16 @@ export default function Till() {
             )}
             </div>
           </div>
+          {cookDue.length > 0 && (
+            <div className="cook-reminder" role="status">
+              <span>
+                🍳 <b>Record today's cooking for {cookDue.map((i) => i.name).join(', ')}</b> — until then those meals stay on sale and are not counted.
+              </span>
+              <button className="btn small" onClick={() => go('/cooking')}>
+                Open
+              </button>
+            </div>
+          )}
           <div className="items-head">
             <h2>
               {listTitle} <span className="n-paren">({shown.length})</span>
@@ -486,6 +551,7 @@ export default function Till() {
                     aria-label={`${m.name}, ${fmt(m.price, base)}${q ? `, ${q} in order` : ''}`}
                   >
                     <div className="item-pic">
+                      {leftTag(m)}
                       {m.photo ? (
                         <img src={m.photo} alt="" />
                       ) : (
@@ -518,6 +584,7 @@ export default function Till() {
                     <span className="mono" aria-hidden="true">
                       {mealInitials(m.name)}
                     </span>
+                    {leftTag(m)}
                     {m.photo && <img className="item-photo" src={m.photo} alt="" />}
                   </div>
                   {q > 0 && <span className="qty-badge">{q}</span>}
@@ -580,7 +647,7 @@ export default function Till() {
                       {l.qty > 1 && <span className="mini-qty">{l.qty}</span>}
                       {(!!l.without?.length || !!l.extras?.length) && (
                         <span className={`mini-no ${l.without?.length ? '' : 'plus'}`}>
-                          {[...(l.extras ?? []).map((x) => `+${x.name.toLowerCase()}`), ...(l.without ?? []).map((w) => `no ${w.toLowerCase()}`)].join(', ')}
+                          {[...groupExtras(l.extras).map((x) => `+${x.label.toLowerCase()}`), ...(l.without ?? []).map((w) => `no ${w.toLowerCase()}`)].join(', ')}
                         </span>
                       )}
                       <span className="mini-pr">{fmt(l.qty * l.unitPrice, base)}</span>

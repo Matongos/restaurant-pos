@@ -1379,6 +1379,68 @@ export function recordWaste(stockItemId: string, qty: number, reason: string, by
   return { ok: true };
 }
 
+/**
+ * Today's cooking: `rawQty` of the raw stock became `made` ready portions (6 chickens → 66 portions).
+ * `made` is left out for items the kitchen does not count (rice: only the bags used).
+ */
+export function recordCooking(input: { readyId: string; rawQty: number; made?: number }, by: string): { ok: true } | { ok: false; error: string } {
+  const item = state.stockItems.find((i) => i.id === input.readyId);
+  if (!item?.madeFrom) return { ok: false, error: 'Choose what was made.' };
+  if (!(input.rawQty > 0)) return { ok: false, error: 'Type how much was used.' };
+  const counts = item.countMade !== false;
+  if (counts && !(input.made !== undefined && input.made >= 0)) return { ok: false, error: 'Type how many were made.' };
+  const m: StockMove = {
+    id: uid('sm-'),
+    stockItemId: item.id,
+    kind: 'cook',
+    qty: counts ? Math.round(input.made! * 1000) / 1000 : 0,
+    rawId: item.madeFrom,
+    rawQty: Math.round(input.rawQty * 1000) / 1000,
+    at: new Date().toISOString(),
+    by,
+  };
+  set((st) => ({ ...st, stockMoves: [...st.stockMoves, m] }));
+  return { ok: true };
+}
+
+/** A cooking entry typed by mistake: an undo entry with negative amounts (nothing is deleted). */
+export function undoCooking(id: string, by: string): { ok: true } | { ok: false; error: string } {
+  const m = state.stockMoves.find((x) => x.id === id && x.kind === 'cook');
+  if (!m) return { ok: false, error: 'Entry not found.' };
+  if (state.stockMoves.some((x) => x.reversesId === id)) return { ok: false, error: 'Already undone.' };
+  const u: StockMove = { ...m, id: uid('sm-'), qty: -m.qty, rawQty: -(m.rawQty ?? 0), reversesId: id, at: new Date().toISOString(), by };
+  set((st) => ({ ...st, stockMoves: [...st.stockMoves, u] }));
+  return { ok: true };
+}
+
+/**
+ * Closing: what was really left (optional per item), then the owner's leftovers rule — ready portions set
+ * to "throw away" are taken off as waste (what was counted, or else what should be there).
+ */
+export function recordClosing(rows: { stockItemId: string; counted?: number }[], by: string): { ok: true; counted: number; thrown: number } {
+  const now = Date.now();
+  const at = new Date(now).toISOString();
+  const later = new Date(now + 1).toISOString();
+  const levels = stockLevels(state);
+  const moves: StockMove[] = [];
+  let thrown = 0;
+  for (const r of rows) {
+    const item = state.stockItems.find((i) => i.id === r.stockItemId);
+    const lv = levels.get(r.stockItemId);
+    if (!item || !lv) continue;
+    const counted = r.counted !== undefined && Number.isFinite(r.counted) && r.counted >= 0 ? Math.round(r.counted * 1000) / 1000 : undefined;
+    if (counted !== undefined)
+      moves.push({ id: uid('sm-'), stockItemId: item.id, kind: 'count', qty: counted, expected: lv.status !== 'uncounted' ? lv.onHand : undefined, reason: 'Closing count', at, by });
+    const left = counted ?? Math.max(0, lv.onHand);
+    if (item.madeFrom && item.leftovers === 'waste' && left > 0.0005) {
+      moves.push({ id: uid('sm-'), stockItemId: item.id, kind: 'waste', qty: left, reason: 'Leftovers thrown away at closing', at: later, by });
+      thrown++;
+    }
+  }
+  if (moves.length) set((st) => ({ ...st, stockMoves: [...st.stockMoves, ...moves] }));
+  return { ok: true, counted: rows.filter((r) => r.counted !== undefined).length, thrown };
+}
+
 /** Add or change a stock item (how it is counted, when to warn, whether it hides meals). */
 export function upsertStockItem(item: StockItem): { ok: true } | { ok: false; error: string } {
   const name = item.name.trim().replace(/\s+/g, ' ');

@@ -30,15 +30,17 @@ import {
 import { CREDIT_METHOD, type Currency } from '../domain/types';
 import { TopBar } from '../components/ui';
 import BarChart from '../components/BarChart';
+import KitchenReport from '../components/KitchenReport';
 import { Heatmap, Sparkline, TrendChart } from '../components/charts';
 
-type Tab = 'overview' | 'busy' | 'sells' | 'service' | 'money';
+type Tab = 'overview' | 'busy' | 'sells' | 'service' | 'money' | 'kitchen';
 const TABS: [Tab, string][] = [
   ['overview', 'Overview'],
   ['busy', 'Busy times & staff'],
   ['sells', 'What sells when'],
   ['service', 'Serving speed'],
   ['money', 'Money'],
+  ['kitchen', 'Kitchen'],
 ];
 const TYPE_COLORS = ['#9a3412', '#2563eb', '#6d28d9'];
 const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -123,7 +125,8 @@ export default function Analytics() {
               Sales before {new Date(historyFrom).toLocaleDateString()} are kept online, not on this device. The owner can load them under Settings → Online account.
             </div>
           )}
-          {data.customers.length === 0 && <div className="card empty">No orders in this period yet.</div>}
+          {tab === 'kitchen' && <KitchenReport start={data.r.start} end={data.r.end} />}
+          {tab !== 'kitchen' && data.customers.length === 0 && <div className="card empty">No orders in this period yet.</div>}
           {data.customers.length > 0 && tab === 'overview' && <Overview {...ctx} />}
           {data.customers.length > 0 && tab === 'busy' && <BusyTimes {...ctx} />}
           {data.customers.length > 0 && tab === 'sells' && <SellsWhen {...ctx} />}

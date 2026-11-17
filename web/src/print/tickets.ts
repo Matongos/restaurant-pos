@@ -1,7 +1,7 @@
 import type { AppState, CreditEntry, Customer, Order } from '../domain/types';
 import { CREDIT_METHOD } from '../domain/types';
 import { fmt } from '../domain/money';
-import { lineLabel } from '../domain/rules';
+import { groupExtras, lineLabel } from '../domain/rules';
 import { addWaiting, hasLinkedPrinter, printDirect } from './printer';
 
 /**
@@ -25,7 +25,7 @@ export function kitchenTicketHTML(order: Order, s: AppState): string {
     .map(
       (l) =>
         `<div class="line"><b>${l.qty} ×</b> ${esc(l.name)}</div>` +
-          (l.extras ?? []).map((x) => `<div class="extra">+ ${esc(x.name.toUpperCase())}</div>`).join('') +
+          groupExtras(l.extras).map((x) => `<div class="extra">+ ${esc(x.label.toUpperCase())}</div>`).join('') +
           (l.without ?? []).map((w) => `<div class="without">» NO ${esc(w.toUpperCase())}</div>`).join('') +
           (l.note ? `<div class="note">» ${esc(l.note)}</div>` : ''),
     )

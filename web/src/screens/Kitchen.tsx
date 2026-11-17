@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { setOrderStatus, useCurrentUser, useStore } from '../store/store';
-import { fmtDuration, isCurrent, lineLabel, timerState } from '../domain/rules';
+import { fmtDuration, groupExtras, isCurrent, lineLabel, timerState } from '../domain/rules';
 import { Dialog, TopBar, useNow } from '../components/ui';
 import { LuCheck, LuRotateCcw } from 'react-icons/lu';
 import { TIMER_CLASS } from './ActiveOrders';
@@ -72,8 +72,8 @@ export default function Kitchen() {
                   {o.lines.map((l) => (
                     <div key={l.id}>
                       <b>{l.qty} ×</b> {l.name}
-                      {l.extras?.map((x) => (
-                        <div key={x.id} className="k-extra">+ {x.name.toUpperCase()}</div>
+                      {groupExtras(l.extras).map((x) => (
+                        <div key={x.id} className="k-extra">+ {x.label.toUpperCase()}</div>
                       ))}
                       {l.without?.map((w) => (
                         <div key={w} className="k-without">» NO {w.toUpperCase()}</div>
