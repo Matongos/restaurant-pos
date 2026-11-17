@@ -6,7 +6,7 @@ import AppVersion from './AppVersion';
 import { useState } from 'react';
 import { LuCircleUserRound, LuEye, LuEyeOff, LuKeyRound, LuMail, LuStore } from 'react-icons/lu';
 import { Dialog, toast } from './ui';
-import { changeEmail, changePassword, getSession } from '../cloud/api';
+import { changeEmail, changePassword, confirmWithCode, getSession, needsCode, setNewPassword } from '../cloud/api';
 import { setLinkEmail, useSyncStatus } from '../cloud/sync';
 import { changeMyPin, updateStaff, useCurrentUser } from '../store/store';
 import { can, ROLE_LABEL } from '../domain/rules';
@@ -241,6 +241,8 @@ function PasswordForm({ onDone }: { onDone: () => void }) {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [code, setCode] = useState('');
+  const [askCode, setAskCode] = useState(false);
   const save = async () => {
     if (!current) return setError('Type your current password');
     if (next.length < 8) return setError('Choose a new password of at least 8 characters');
@@ -248,11 +250,17 @@ function PasswordForm({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError('');
     try {
-      await changePassword(current, next);
+      if (askCode) {
+        await confirmWithCode(code);
+        await setNewPassword(next);
+      } else await changePassword(current, next);
       toast('Password changed. Use the new one when you connect a device.');
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (needsCode(e)) {
+        setAskCode(true);
+        setError('This account has two-step login. Type the 6-digit code from your authenticator app, then press Change password again.');
+      } else setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -274,6 +282,12 @@ function PasswordForm({ onDone }: { onDone: () => void }) {
           <input type={type} autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} />
         </label>
       </div>
+      {askCode && (
+        <label className="field">
+          Code from your authenticator app
+          <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} placeholder="6 numbers" autoFocus />
+        </label>
+      )}
       {error && <div className="error">{error}</div>}
       <div className="row wrap">
         <button type="button" className="btn ghost" onClick={() => setShow((x) => !x)}>

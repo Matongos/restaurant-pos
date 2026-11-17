@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { LuCloud, LuCloudOff, LuRefreshCw, LuCircleCheck, LuTriangleAlert, LuStore } from 'react-icons/lu';
 import { useStore } from '../store/store';
 import { PUBLIC_SITE } from '../cloudConfig';
-import { createRestaurant, getSession, sendPasswordReset, setNewPassword, signIn, signOut, signUp, slugAvailable, slugFrom, type Membership } from '../cloud/api';
+import { confirmWithCode, createRestaurant, getSession, needsCode, sendPasswordReset, setNewPassword, signIn, signOut, signUp, slugAvailable, slugFrom, type Membership } from '../cloud/api';
 import { linkAndDownload, linkAndUpload, loadOlderHistory, myRestaurants, restaurantHasData, syncNow, unlink, useSyncStatus } from '../cloud/sync';
 import { Dialog, toast } from './ui';
 import { AccountSecurity } from './MyAccount';
@@ -535,6 +535,8 @@ export function LinkNotice() {
     }
   });
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [askCode, setAskCode] = useState(false);
   const [error, setError] = useState('');
   if (!type) return null;
   const close = () => {
@@ -556,11 +558,16 @@ export function LinkNotice() {
             e.preventDefault();
             if (password.length < 8) return setError('At least 8 characters.');
             try {
+              if (askCode) await confirmWithCode(code);
               await setNewPassword(password);
               toast('Password changed');
               close();
             } catch (err) {
-              setError(err instanceof Error ? err.message : String(err));
+              // Two-step login is on for this account: the authenticator code is needed too.
+              if (needsCode(err)) {
+                setAskCode(true);
+                setError('This account has two-step login. Type the 6-digit code from your authenticator app, then Save again.');
+              } else setError(err instanceof Error ? err.message : String(err));
             }
           }}
         >
@@ -568,6 +575,12 @@ export function LinkNotice() {
             New password
             <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
           </label>
+          {askCode && (
+            <label className="field">
+              Code from your authenticator app
+              <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} placeholder="6 numbers" autoFocus />
+            </label>
+          )}
           {error && <div className="error-text">{error}</div>}
           <button className="btn primary" type="submit">
             Save password

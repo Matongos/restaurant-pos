@@ -358,3 +358,17 @@ export async function verifyTotp(factorId: string, code: string): Promise<void> 
 export async function removeFactor(factorId: string): Promise<void> {
   await call(`/auth/v1/factors/${factorId}`, { method: 'DELETE' });
 }
+
+/** The service refused because this account has two-step login on and the code was not given yet. */
+export const needsCode = (e: unknown) => /aal2|mfa/i.test(e instanceof Error ? e.message : String(e));
+
+/** Give the authenticator code for this login (accounts with two-step login), so password and email can be changed. */
+export async function confirmWithCode(code: string): Promise<void> {
+  const f = (await myFactors()).find((x) => x.status === 'verified');
+  if (!f) throw new CloudError('No authenticator app is set up on this account.');
+  try {
+    await verifyTotp(f.id, code);
+  } catch {
+    throw new CloudError('That code is not right. Type the 6 numbers your authenticator app shows now.');
+  }
+}
