@@ -9,7 +9,8 @@ import { Dialog, TopBar, toast } from '../components/ui';
 
 type Tab = 'cook' | 'ready' | 'closing';
 
-const plural = (n: number, unit: string) => `${n.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}${Math.abs(n) === 1 || /s$/.test(unit) ? '' : 's'}`;
+// "66 portions", "2 kg" (short units such as kg, g, l, ml stay as they are).
+const plural = (n: number, unit: string) => `${n.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}${Math.abs(n) === 1 || /s$/.test(unit) || /^(kg|g|l|ml|lb|oz)$/i.test(unit) ? '' : 's'}`;
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 /**
@@ -275,7 +276,7 @@ function ReadyPortions({ canSetup }: { canSetup: boolean }) {
   return (
     <>
       <div className="row wrap" style={{ marginBottom: 10 }}>
-        <span className="muted">What your kitchen makes from what you buy. Meals use these (Menu → meal → What it is made of).</span>
+        <span className="muted">What your kitchen makes from what you buy. Meals use these: Menu → open a meal → Stock used per plate.</span>
         <span style={{ flex: 1 }} />
         {canSetup && (
           <button className="btn primary" onClick={() => setOpen({ id: uid('st-'), name: '', unit: 'portion', countUnit: 'portion', track: true, madeFrom: '', leftovers: 'keep', hideWhenOut: true })}>
