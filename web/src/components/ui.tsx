@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { BUILD } from '../version';
 import { cookingReminders } from '../domain/kitchen';
 import type { IconType } from 'react-icons';
@@ -233,8 +233,24 @@ function NavButton({ n, onGo }: { n: NavDef; onGo?: () => void }) {
  * - Desktop: navy sidebar with names. Tablets: the same, icons only (narrow).
  * - Phones: a bottom bar with the first screens, and the full sidebar as a drawer (☰).
  */
+/** Where the sidebar was scrolled to. Each screen draws its own sidebar, so it is kept here between screens. */
+let sideScroll = 0;
+
 function Navigation({ drawer, setDrawer }: { drawer: boolean; setDrawer: (v: boolean) => void }) {
   const user = useCurrentUser();
+  const sideRef = useRef<HTMLElement>(null);
+  // Opening a screen from low down the menu (e.g. Settings) keeps the menu where it was, with that item in view.
+  useLayoutEffect(() => {
+    const el = sideRef.current;
+    if (!el) return;
+    el.scrollTop = sideScroll;
+    const on = el.querySelector<HTMLElement>('.nav-item.on');
+    if (on) {
+      const r = on.getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      if (r.top < box.top || r.bottom > box.bottom) on.scrollIntoView({ block: 'nearest' });
+    }
+  }, []);
   const tagline = useStore((s) => s.settings.tagline);
   const training = useStore((s) => s.settings.trainingMode);
   const items = useNavItems();
@@ -293,7 +309,7 @@ function Navigation({ drawer, setDrawer }: { drawer: boolean; setDrawer: (v: boo
 
   return (
     <>
-      <nav className="side" aria-label="Main">
+      <nav className="side" aria-label="Main" ref={sideRef} onScroll={(e) => (sideScroll = e.currentTarget.scrollTop)}>
         {sideContent(false)}
       </nav>
       <nav className="bottom-nav" aria-label="Main (phone)">
