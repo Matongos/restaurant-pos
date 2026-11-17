@@ -470,6 +470,11 @@ export interface StockItem {
    * works out plates per bag from the sales instead. Default true.
    */
   countMade?: boolean;
+  /**
+   * Sold as an extra on any meal at this price (one piece / plate each, can be added several times):
+   * "Extra Chicken piece +$1.00". Not set = not offered as an extra.
+   */
+  extraPrice?: number;
 }
 
 /** How much of a stock item one plate (or one add-on) uses, in the item's count unit. */

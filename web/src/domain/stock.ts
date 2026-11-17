@@ -47,7 +47,11 @@ export function usageFor(
   for (const l of lines) {
     const m = s.menu.find((x) => x.id === l.itemId);
     for (const r of m?.recipe ?? []) add(r.stockItemId, r.qty * l.qty);
-    for (const x of l.extras ?? []) for (const r of s.addOns.find((a) => a.id === x.id)?.recipe ?? []) add(r.stockItemId, r.qty * l.qty);
+    for (const x of l.extras ?? []) {
+      // An extra portion straight from stock ("Extra Chicken piece") uses one of that item per plate.
+      if (x.id.startsWith('stx-')) add(x.id.slice(4), l.qty);
+      else for (const r of s.addOns.find((a) => a.id === x.id)?.recipe ?? []) add(r.stockItemId, r.qty * l.qty);
+    }
     if (packed && m && !m.isDrink) for (const p of packaging) add(p.id, p.perPackedPlate! * l.qty);
   }
   return Object.keys(used).length ? used : undefined;

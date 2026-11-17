@@ -1,5 +1,5 @@
 import { pinMatches } from './pinhash';
-import type { AddOn, AppState, Component, CreditEntry, Customer, LineExtra, MenuItem, Order, Role, Staff } from './types';
+import type { AddOn, AppState, Component, CreditEntry, Customer, LineExtra, MenuItem, Order, Role, Staff, StockItem } from './types';
 
 /** A meal can be sold only if it is switched on AND every component it uses is available. */
 export function isSellable(item: MenuItem, state: Pick<AppState, 'components'>, outOfStock?: Set<string>): boolean {
@@ -51,6 +51,21 @@ export function lineLabel(l: { name: string; extras?: LineExtra[] }): string {
 }
 
 /** The add-ons a meal offers, in menu order (switched-off ones included, so the till can show them as finished). */
+/** Extras that come straight from stock (a stock item or ready portion with an extra price). Their ids start with this. */
+export const STOCK_EXTRA = 'stx-';
+
+export function stockExtras(stockItems: StockItem[]): AddOn[] {
+  return stockItems
+    .filter((i) => i.extraPrice !== undefined && i.extraPrice >= 0)
+    .map((i, n) => ({ id: STOCK_EXTRA + i.id, name: `Extra ${i.madeFrom ? i.name : i.countUnit?.trim() || i.name}`, price: i.extraPrice!, available: true, sort: 1000 + n, multi: true, maxQty: 5, recipe: [{ stockItemId: i.id, qty: 1 }] }));
+}
+
+/** Everything the cashier can add to this meal: its own add-ons, then extra portions from stock (not on drinks). */
+export function extrasFor(item: MenuItem | undefined, addOns: AddOn[], stockItems: StockItem[]): AddOn[] {
+  const own = addOnsFor(item, addOns);
+  return item?.isDrink ? own : [...own, ...stockExtras(stockItems)];
+}
+
 export function addOnsFor(item: MenuItem | undefined, addOns: AddOn[]): AddOn[] {
   if (!item?.addOnIds?.length) return [];
   const ids = new Set(item.addOnIds);

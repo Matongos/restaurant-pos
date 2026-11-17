@@ -7,7 +7,7 @@ import TableBill from '../components/TableBill';
 import CancelSaleDialog from '../components/CancelSaleDialog';
 import { outOfStockIds, usageFor } from '../domain/stock';
 import { cookingReminders, platesLeft } from '../domain/kitchen';
-import { addOnsFor, comesWith, extrasPrice, groupExtras, isSellable, lineLabel, mealInitials, sameExtras, suggestCard, tidyName, uid } from '../domain/rules';
+import { comesWith, extrasFor, stockExtras, extrasPrice, groupExtras, isSellable, lineLabel, mealInitials, sameExtras, suggestCard, tidyName, uid } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
 import type { AddOn, DeliveryInfo, MenuItem, OrderLine } from '../domain/types';
 import { Dialog, MoreMenu, TopBar, toast, useNow } from '../components/ui';
@@ -330,7 +330,7 @@ export default function Till() {
                 );
               })}
               {groupExtras(l.extras).map((x) => {
-                const a = addOns.find((y) => y.id === x.id) ?? { ...x, available: true, sort: 0 };
+                const a = [...addOns, ...stockExtras(stockItemsAll)].find((y) => y.id === x.id) ?? { ...x, available: true, sort: 0 };
                 if (a.multi)
                   return (
                     <span key={x.id} className="addon-chip on addon-step">
@@ -352,7 +352,7 @@ export default function Till() {
                   </button>
                 );
               })}
-              {addOnsFor(m, addOns).some((a) => !l.extras?.some((x) => x.id === a.id)) && (
+              {extrasFor(m, addOns, stockItemsAll).some((a) => !l.extras?.some((x) => x.id === a.id)) && (
                 <button className="addon-chip" onClick={() => setExtraFor(l.id)} aria-label={`Add an extra to ${l.name}`}>
                   <LuPlus aria-hidden="true" />
                   Extra
@@ -903,7 +903,7 @@ export default function Till() {
                 Priced per plate{line.qty > 1 ? `; next you choose how many of the ${line.qty} plates` : ''}.
               </p>
               <div className="addon-pick">
-                {addOnsFor(m, addOns).map((a) => {
+                {extrasFor(m, addOns, stockItemsAll).map((a) => {
                   const on = !!line.extras?.some((x) => x.id === a.id);
                   return (
                     <button

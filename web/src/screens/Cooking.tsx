@@ -554,6 +554,11 @@ function ReadyDialog({ item, onClose }: { item: StockItem; onClose: () => void }
           Warn when down to
           <input type="number" min={0} inputMode="decimal" value={it.lowAt ?? ''} onChange={(e) => setIt({ ...it, lowAt: e.target.value === '' ? undefined : Number(e.target.value) })} placeholder="e.g. 5" />
         </label>
+        <label className="field">
+          Sell as an extra at (price)
+          <input type="number" min={0} step="0.05" inputMode="decimal" value={it.extraPrice ?? ''} onChange={(e) => setIt({ ...it, extraPrice: e.target.value === '' ? undefined : Math.max(0, Number(e.target.value)) })} placeholder="empty = not sold as an extra" />
+          <small className="muted">The cashier can add it to any meal, × 2, × 3…</small>
+        </label>
       </div>
       <div className="section-title">Leftovers at closing</div>
       <div className="seg">
