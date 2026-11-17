@@ -1383,18 +1383,22 @@ export function recordWaste(stockItemId: string, qty: number, reason: string, by
  * Today's cooking: `rawQty` of the raw stock became `made` ready portions (6 chickens → 66 portions).
  * `made` is left out for items the kitchen does not count (rice: only the bags used).
  */
-export function recordCooking(input: { readyId: string; rawQty: number; made?: number }, by: string): { ok: true } | { ok: false; error: string } {
+export function recordCooking(input: { readyId: string; rawQty: number; made?: number; fromId?: string }, by: string): { ok: true } | { ok: false; error: string } {
   const item = state.stockItems.find((i) => i.id === input.readyId);
   if (!item?.madeFrom) return { ok: false, error: 'Choose what was made.' };
   if (!(input.rawQty > 0)) return { ok: false, error: 'Type how much was used.' };
   const counts = item.countMade !== false;
   if (counts && !(input.made !== undefined && input.made >= 0)) return { ok: false, error: 'Type how many were made.' };
+  // Cutting leftovers: e.g. 2 Quarter chickens cut into 4 Chicken portions (the source is another ready portion).
+  const from = input.fromId && input.fromId !== item.madeFrom ? state.stockItems.find((i) => i.id === input.fromId) : undefined;
+  if (input.fromId && input.fromId !== item.madeFrom && !(from?.madeFrom && from.countMade !== false && from.id !== item.id))
+    return { ok: false, error: 'Choose what was cut up.' };
   const m: StockMove = {
     id: uid('sm-'),
     stockItemId: item.id,
     kind: 'cook',
     qty: counts ? Math.round(input.made! * 1000) / 1000 : 0,
-    rawId: item.madeFrom,
+    rawId: from ? from.id : item.madeFrom,
     rawQty: Math.round(input.rawQty * 1000) / 1000,
     at: new Date().toISOString(),
     by,

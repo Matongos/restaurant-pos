@@ -123,6 +123,7 @@ function TodaysCooking() {
 
   return (
     <>
+      <NowCard />
       <div className="card cook-form">
         <h3>Add what was prepared</h3>
         <div className="cook-grid">
@@ -192,6 +193,8 @@ function TodaysCooking() {
         )}
       </div>
 
+      <CutLeftovers />
+
       {rawLeft.length > 0 && (
         <div className="card cook-raw">
           <b>Raw stock still there</b>
@@ -224,7 +227,8 @@ function TodaysCooking() {
               {entries.map((m) => {
                 const it = st.stockItems.find((i) => i.id === m.stockItemId);
                 const rw = st.stockItems.find((i) => i.id === m.rawId);
-                const pr = m.qty > 0 && m.rawQty ? Math.round((m.qty / m.rawQty) * 100) / 100 : null;
+                const isCut = !!rw?.madeFrom;
+                const pr = !isCut && m.qty > 0 && m.rawQty ? Math.round((m.qty / m.rawQty) * 100) / 100 : null;
                 const u = it ? yieldOf(st, it, { excludeToday: true }).perRaw : null;
                 const d = pr !== null ? yieldDiff(pr, u) : null;
                 return (
@@ -236,7 +240,7 @@ function TodaysCooking() {
                       {it && it.countMade !== false && <span className="muted"> {it.name}</span>}
                     </td>
                     <td>
-                      {pr !== null ? pr.toLocaleString('en-US', { maximumFractionDigits: 1 }) : '—'}{' '}
+                      {isCut ? <span className="tag2 b">cut up</span> : pr !== null ? pr.toLocaleString('en-US', { maximumFractionDigits: 1 }) : '—'}{' '}
                       {d !== null && (Math.abs(d) <= UNUSUAL ? <span className="tag2 g">normal</span> : <span className={`tag2 ${d < 0 ? 'r' : 'y'}`}>{Math.round(Math.abs(d) * 100)}% {d < 0 ? 'below' : 'above'}</span>)}
                     </td>
                     <td>{staffName(m.by)}</td>
@@ -263,6 +267,152 @@ function TodaysCooking() {
         undone, not deleted, so the record stays honest.
       </p>
     </>
+  );
+}
+
+/** At a glance: what was bought, made, sold, cut up and what is left right now. */
+function NowCard() {
+  const st = useStore((s) => s);
+  const levels = useStockLevels();
+  const today = todayISO();
+  const ready = readyItems(st).filter((i) => i.countMade !== false);
+  const raws = st.stockItems.filter((i) => ready.some((r) => r.madeFrom === i.id));
+  const isToday = (iso: string) => todayISO(new Date(iso)) === today;
+  const entries = cookEntries(st).filter((m) => isToday(m.at));
+  const made = (id: string) => entries.filter((m) => m.stockItemId === id).reduce((t, m) => t + m.qty, 0);
+  const used = (id: string) => entries.filter((m) => m.rawId === id).reduce((t, m) => t + (m.rawQty ?? 0), 0);
+  const sold = (id: string) => st.orders.filter((o) => !o.example && o.status !== 'cancelled' && isToday(o.createdAt)).reduce((t, o) => t + (o.stockUsed?.[id] ?? 0), 0);
+  const bought = (id: string) => st.purchases.filter((p) => !p.example && isToday(p.at)).reduce((t, p) => t + p.lines.filter((l) => l.stockItemId === id).reduce((u, l) => u + (l.stockQty ?? l.qty), 0), 0);
+  const left = (id: string) => {
+    const l = levels.get(id);
+    return l && l.status !== 'uncounted' && l.status !== 'untracked' ? Math.max(0, l.onHand) : 0;
+  };
+  const n = (v: number) => v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  if (!ready.length) return null;
+  return (
+    <div className="card now-card">
+      <b>Right now</b>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="list">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th className="num">Bought / made today</th>
+              <th className="num">Sold today</th>
+              <th className="num">Used / cut up</th>
+              <th className="num">Left now</th>
+            </tr>
+          </thead>
+          <tbody>
+            {raws.map((r) => (
+              <tr key={r.id} className="raw-row">
+                <td>
+                  {r.name} <span className="muted small">raw</span>
+                </td>
+                <td className="num">{n(bought(r.id))}</td>
+                <td className="num muted">—</td>
+                <td className="num">{n(used(r.id))}</td>
+                <td className="num">
+                  <b>{plural(Math.round(left(r.id) * 100) / 100, countUnit(r))}</b>
+                </td>
+              </tr>
+            ))}
+            {ready.map((i) => (
+              <tr key={i.id}>
+                <td>
+                  <b>{i.name}</b>
+                </td>
+                <td className="num">{n(made(i.id))}</td>
+                <td className="num">{n(sold(i.id))}</td>
+                <td className="num">{used(i.id) ? n(used(i.id)) : <span className="muted">—</span>}</td>
+                <td className="num">
+                  <b className={left(i.id) <= (i.lowAt ?? 0) ? 'warn-t' : ''}>{plural(Math.round(left(i.id) * 100) / 100, countUnit(i))}</b>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/** Leftover portions of one kind cut into another: 2 Quarter chickens → 4 Chicken portions. */
+function CutLeftovers() {
+  const user = useCurrentUser()!;
+  const st = useStore((s) => s);
+  const levels = useStockLevels();
+  const ready = readyItems(st).filter((i) => i.countMade !== false);
+  const [open, setOpen] = useState(false);
+  const [fromId, setFromId] = useState(ready[1]?.id ?? ready[0]?.id ?? '');
+  const [toId, setToId] = useState(ready[0]?.id ?? '');
+  const [qty, setQty] = useState('');
+  const [made, setMade] = useState('');
+  if (ready.length < 2) return null;
+  const from = ready.find((i) => i.id === fromId);
+  const to = ready.find((i) => i.id === toId);
+  const leftFrom = from ? Math.max(0, levels.get(from.id)?.onHand ?? 0) : 0;
+  const save = () => {
+    if (!to || !from) return;
+    const r = recordCooking({ readyId: to.id, fromId: from.id, rawQty: Number(qty) || 0, made: Number(made) || 0 }, user.id);
+    if (!r.ok) return toast(r.error);
+    toast(`Saved: ${plural(Number(qty), countUnit(from))} cut into ${plural(Number(made), countUnit(to))}`);
+    setQty('');
+    setMade('');
+    setOpen(false);
+  };
+  if (!open)
+    return (
+      <button className="btn" style={{ marginBottom: 12 }} onClick={() => setOpen(true)}>
+        Cut leftover portions into another kind (e.g. quarters into pieces)
+      </button>
+    );
+  return (
+    <div className="card cook-form">
+      <h3>Cut leftovers into another kind</h3>
+      <div className="cook-grid">
+        <label className="field">
+          Cut up
+          <select value={fromId} onChange={(e) => setFromId(e.target.value)}>
+            {ready.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.name}
+              </option>
+            ))}
+          </select>
+          <small className="muted">{plural(Math.round(leftFrom * 100) / 100, from ? countUnit(from) : '')} left</small>
+        </label>
+        <label className="field">
+          How many
+          <input inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value.replace(/[^\d.]/g, ''))} placeholder="e.g. 2" />
+        </label>
+        <label className="field">
+          Into
+          <select value={toId} onChange={(e) => setToId(e.target.value)}>
+            {ready
+              .filter((i) => i.id !== fromId)
+              .map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="field">
+          How many made
+          <input inputMode="decimal" value={made} onChange={(e) => setMade(e.target.value.replace(/[^\d.]/g, ''))} placeholder="e.g. 4" />
+        </label>
+      </div>
+      <div className="cook-calc">
+        <span className="sp" />
+        <button className="btn" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+        <button className="btn primary" onClick={save} disabled={!(Number(qty) > 0) || !(Number(made) > 0) || !to || to.id === fromId}>
+          Save
+        </button>
+      </div>
+    </div>
   );
 }
 

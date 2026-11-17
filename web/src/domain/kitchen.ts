@@ -48,7 +48,7 @@ export function yieldOf(s: KState, item: StockItem, opts: { days?: number; exclu
   const days = opts.days ?? 28;
   const from = now - days * 864e5;
   const today = todayISO(new Date(now));
-  const list = cookEntries(s).filter((m) => m.stockItemId === item.id && Date.parse(m.at) >= from && Date.parse(m.at) < now && (!opts.excludeToday || dayOf(m.at) !== today));
+  const list = cookEntries(s).filter((m) => m.stockItemId === item.id && (!item.madeFrom || m.rawId === item.madeFrom) && Date.parse(m.at) >= from && Date.parse(m.at) < now && (!opts.excludeToday || dayOf(m.at) !== today));
   const raw = list.reduce((t, m) => t + (m.rawQty ?? 0), 0);
   if (!raw) return { perRaw: null, raw: 0, made: 0, entries: 0 };
   let made: number;
@@ -113,6 +113,8 @@ export interface KitchenDay {
   waste: number;
   /** From closing counts: what was missing compared with what should have been there. */
   missing: number;
+  /** Cut into another ready portion (2 quarters cut into pieces). */
+  cut: number;
 }
 
 /** Per day and ready portion: made, raw used, sold, waste and missing, for the Kitchen report. */
@@ -121,7 +123,7 @@ export function kitchenDays(s: KState, fromDay: string, toDay: string): KitchenD
   const rows = new Map<string, KitchenDay>();
   const row = (day: string, item: StockItem) => {
     const k = `${day}|${item.id}`;
-    if (!rows.has(k)) rows.set(k, { day, item, made: 0, rawUsed: 0, sold: 0, waste: 0, missing: 0 });
+    if (!rows.has(k)) rows.set(k, { day, item, made: 0, rawUsed: 0, sold: 0, waste: 0, missing: 0, cut: 0 });
     return rows.get(k)!;
   };
   const byId = new Map(items.map((i) => [i.id, i]));
@@ -132,7 +134,10 @@ export function kitchenDays(s: KState, fromDay: string, toDay: string): KitchenD
     if (!it || !inRange(d)) continue;
     const r = row(d, it);
     r.made += m.qty;
-    r.rawUsed += m.rawQty ?? 0;
+    if (m.rawId === it.madeFrom) r.rawUsed += m.rawQty ?? 0;
+    // Made from another ready portion: that one was cut up.
+    const src = m.rawId ? byId.get(m.rawId) : undefined;
+    if (src) row(d, src).cut += m.rawQty ?? 0;
   }
   for (const m of s.stockMoves) {
     const it = byId.get(m.stockItemId);
@@ -151,7 +156,7 @@ export function kitchenDays(s: KState, fromDay: string, toDay: string): KitchenD
     }
   }
   return [...rows.values()]
-    .map((r) => ({ ...r, made: r2(r.made), rawUsed: r2(r.rawUsed), sold: r2(r.sold), waste: r2(r.waste), missing: r2(r.missing) }))
+    .map((r) => ({ ...r, made: r2(r.made), rawUsed: r2(r.rawUsed), sold: r2(r.sold), waste: r2(r.waste), missing: r2(r.missing), cut: r2(r.cut) }))
     .sort((a, b) => a.day.localeCompare(b.day) || a.item.name.localeCompare(b.item.name));
 }
 

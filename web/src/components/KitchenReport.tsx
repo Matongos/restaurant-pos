@@ -34,7 +34,8 @@ export default function KitchenReport({ start, end }: { start: Date; end: Date }
       </div>
     );
 
-  const total = (id: string, key: 'made' | 'sold' | 'waste' | 'missing' | 'rawUsed') => rows.filter((r) => r.item.id === id).reduce((t, r) => t + r[key], 0);
+  const anyCut = rows.some((r) => r.cut > 0);
+  const total = (id: string, key: 'made' | 'sold' | 'waste' | 'missing' | 'rawUsed' | 'cut') => rows.filter((r) => r.item.id === id).reduce((t, r) => t + r[key], 0);
   const now = Date.now();
   const weekAgo = now - 7 * 864e5;
   const item = ready.find((i) => i.id === pick) ?? ready[0];
@@ -42,10 +43,10 @@ export default function KitchenReport({ start, end }: { start: Date; end: Date }
   const byDay = (key: 'made' | 'sold') => days.map((d) => rows.find((r) => r.day === d && r.item.id === item.id)?.[key] ?? 0);
 
   const download = () => {
-    const out: (string | number)[][] = [['Date', 'Ready portion', 'Raw used', 'Raw unit', 'Made', 'Sold', 'Waste', 'Missing']];
+    const out: (string | number)[][] = [['Date', 'Ready portion', 'Raw used', 'Raw unit', 'Made', 'Sold', 'Cut up', 'Waste', 'Missing']];
     for (const r of rows) {
       const raw = st.stockItems.find((x) => x.id === r.item.madeFrom);
-      out.push([r.day, r.item.name, r.rawUsed, raw ? countUnit(raw) : '', r.item.countMade === false ? '' : r.made, r.sold, r.waste, r.missing]);
+      out.push([r.day, r.item.name, r.rawUsed, raw ? countUnit(raw) : '', r.item.countMade === false ? '' : r.made, r.sold, r.cut, r.waste, r.missing]);
     }
     downloadCsv(`kitchen_${fromDay === toDay ? fromDay : `${fromDay}_to_${toDay}`}.csv`, out);
   };
@@ -88,6 +89,7 @@ export default function KitchenReport({ start, end }: { start: Date; end: Date }
               <th className="num">Raw used</th>
               <th className="num">Made</th>
               <th className="num">Sold</th>
+              {anyCut && <th className="num">Cut up</th>}
               <th className="num">Waste</th>
               <th className="num">Missing</th>
               <th>Yield (learnt, 4 weeks)</th>
@@ -112,6 +114,7 @@ export default function KitchenReport({ start, end }: { start: Date; end: Date }
                   </td>
                   <td className="num">{i.countMade === false ? '—' : num(total(i.id, 'made'))}</td>
                   <td className="num">{num(total(i.id, 'sold'))}</td>
+                  {anyCut && <td className="num">{total(i.id, 'cut') ? num(total(i.id, 'cut')) : '—'}</td>}
                   <td className="num">{i.countMade === false ? '—' : num(total(i.id, 'waste'))}</td>
                   <td className={`num ${total(i.id, 'missing') > 0 ? 'bad' : ''}`}>{i.countMade === false ? '—' : num(total(i.id, 'missing'))}</td>
                   <td>{yieldText(i, raw, y.perRaw)}</td>
@@ -132,6 +135,7 @@ export default function KitchenReport({ start, end }: { start: Date; end: Date }
               <th>Ready portion</th>
               <th className="num">Made</th>
               <th className="num">Sold</th>
+              {anyCut && <th className="num">Cut up</th>}
               <th className="num">Waste</th>
               <th className="num">Missing</th>
             </tr>
@@ -153,6 +157,7 @@ export default function KitchenReport({ start, end }: { start: Date; end: Date }
                   <td>{r.item.name}</td>
                   <td className="num">{r.item.countMade === false ? `${num(r.rawUsed)} used` : num(r.made)}</td>
                   <td className="num">{num(r.sold)}</td>
+                  {anyCut && <td className="num">{r.cut ? num(r.cut) : '—'}</td>}
                   <td className="num">{num(r.waste)}</td>
                   <td className={`num ${r.missing > 0 ? 'bad' : ''}`}>{num(r.missing)}</td>
                 </tr>
