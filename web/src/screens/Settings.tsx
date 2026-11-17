@@ -221,7 +221,7 @@ function Numbers() {
   const s = useStore((st) => st.settings);
   const modes: [NumberMode, string, string][] = [
     ['card', 'Physical cards', 'Cashier hands over a numbered card. The system tracks which cards are out.'],
-    ['slip', 'Printed slip', 'A slip with a big number prints for the customer. Numbers restart daily.'],
+    ['slip', 'Printed slip', 'A slip with a big number prints for the customer.'],
     ['both', 'Both', 'Card handed over and a slip printed with the same number.'],
     ['receipt', 'No numbers — normal receipt', 'Customers are not given a number. A normal receipt with the meals, prices, total and change prints for the customer.'],
   ];
@@ -247,6 +247,23 @@ function Numbers() {
           </button>
         ))}
       </div>
+      {s.numberMode !== 'card' && (
+        <div className="switch-row" style={{ marginTop: 8 }}>
+          <div className="grow">
+            <b>Start numbers again from 1 every day</b>
+            <div className="muted">Off = numbers keep going up (1, 2, 3 … 1000 …) and never restart. They never stop either way.</div>
+          </div>
+          <button className={`switch ${s.slipResetDaily ? 'on' : ''}`} onClick={() => updateSettings({ slipResetDaily: !s.slipResetDaily })} aria-label="Restart numbers daily" aria-pressed={s.slipResetDaily}>
+            <span />
+          </button>
+        </div>
+      )}
+      {cards && (
+        <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
+          Selling never stops when every card is out: the card of the oldest order not marked served is used again, and that order is closed.
+          Orders from earlier days no longer hold a card.
+        </p>
+      )}
       {cards && <div className="form-grid" style={{ marginTop: 8 }}>
         <label className="field">
           First card number
@@ -858,6 +875,7 @@ function StartFresh() {
   const user = useCurrentUser()!;
   const [open, setOpen] = useState(false);
   const [keepMenu, setKeepMenu] = useState(true);
+  const [keepStaff, setKeepStaff] = useState(true);
   const [pin, setPin] = useState('');
   const [current, setCurrent] = useState('');
   const [typed, setTyped] = useState('');
@@ -870,8 +888,8 @@ function StartFresh() {
     <div className="fresh-card">
       <b>Start fresh with your real restaurant</b>
       <p className="muted">
-        Removes the practice staff, customers and their change, stock, sales and books. Payment methods, currencies and categories stay. You
-        stay as the owner with a new PIN; add your real staff afterwards in Staff. On a till connected online, the practice data is removed
+        Removes the practice sales, customers and their change, stock and books (and the staff, if you choose). Payment methods, currencies and
+        categories stay. You stay as the owner with a new PIN. On a till connected online, the practice data is removed
         online and on your other devices too. It asks for the owner PIN and, on a till connected online, the online account's password, and saves a
         backup of the old data in Downloads first.
       </p>
@@ -887,6 +905,15 @@ function StartFresh() {
               <span className="sub">Off = start with an empty menu and add your own meals.</span>
             </span>
             <button className={`switch ${keepMenu ? 'on' : ''}`} role="switch" aria-checked={keepMenu} aria-label="Keep the sample menu" onClick={() => setKeepMenu(!keepMenu)}>
+              <span />
+            </button>
+          </div>
+          <div className="toggle">
+            <span>
+              Keep the staff and their PINs
+              <span className="sub">Cashiers, managers and kitchen stay. Off = only you (the owner) remain; add staff again in Staff.</span>
+            </span>
+            <button className={`switch ${keepStaff ? 'on' : ''}`} role="switch" aria-checked={keepStaff} aria-label="Keep the staff" onClick={() => setKeepStaff(!keepStaff)}>
               <span />
             </button>
           </div>
@@ -941,7 +968,7 @@ function StartFresh() {
                 a.download = name.replace(/\.json$/, '') + '-before-start-fresh.json';
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 2000);
-                const r = startFresh({ ownerPin: pin, keepMenu, byId: user.id });
+                const r = startFresh({ ownerPin: pin, keepMenu, keepStaff, byId: user.id });
                 if (!r.ok) return setError(r.error);
                 setOpen(false);
                 setPassword('');

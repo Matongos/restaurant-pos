@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { setOrderStatus, useCurrentUser, useStore } from '../store/store';
-import { fmtDuration, lineLabel, timerState } from '../domain/rules';
+import { fmtDuration, isCurrent, lineLabel, timerState } from '../domain/rules';
 import { Dialog, TopBar, useNow } from '../components/ui';
 import { LuCheck, LuRotateCcw } from 'react-icons/lu';
 import { TIMER_CLASS } from './ActiveOrders';
@@ -25,12 +25,12 @@ export default function Kitchen() {
   const [recallOpen, setRecallOpen] = useState(false);
 
   const waiting = useMemo(
-    () => orders.filter((o) => o.status === 'in_kitchen').sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    () => orders.filter((o) => o.status === 'in_kitchen' && isCurrent(o)).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     [orders],
   );
   const recent = useMemo(() => {
     // Only orders not yet served can be brought back.
-    const ready = orders.filter((o) => o.status === 'ready');
+    const ready = orders.filter((o) => o.status === 'ready' && isCurrent(o));
     const doneAt = (o: (typeof orders)[number]) => [...o.history].reverse().find((h) => h.status === 'ready')?.at ?? '';
     return ready
       .filter((o) => doneAt(o))

@@ -35,7 +35,7 @@ import MyAccount from './MyAccount';
 import AboutDialog from './AboutDialog';
 import { useOnlineOrders } from '../cloud/online';
 import { logout, updateSettings, useCurrentUser, useStockLevels, useStore } from '../store/store';
-import { balances, can, ROLE_LABEL, type Permission } from '../domain/rules';
+import { balances, can, isCurrent, ROLE_LABEL, type Permission } from '../domain/rules';
 import type { Role, ServiceMode } from '../domain/types';
 
 export function BrandMark({ withName = true }: { withName?: boolean }) {
@@ -169,7 +169,7 @@ function useNavItems(): NavDef[] {
   const busyTables = orders.filter((o) => o.table?.round === 1 && o.status !== 'cancelled' && o.table.status !== 'paid' && !o.example).length;
   // Stock badge: items running low or out (needs buying or counting).
   const stockAlerts = [...levels.values()].filter((l) => l.status === 'low' || l.status === 'out').length;
-  const openOrders = orders.filter((o) => !o.parentOrderId && !o.table && !o.example && (o.status === 'in_kitchen' || o.status === 'ready')).length;
+  const openOrders = orders.filter((o) => !o.parentOrderId && !o.table && !o.example && (o.status === 'in_kitchen' || o.status === 'ready') && isCurrent(o)).length;
   const owed = [...balances(credit).values()].filter((b) => b > 0).length;
   const all: NavDef[] = [
     ...(mode !== 'counter' ? [{ to: '/tables', label: 'Tables', perm: 'tables' as Permission, Icon: LuLayoutGrid, badge: busyTables }] : []),

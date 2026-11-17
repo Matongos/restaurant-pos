@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { payTabShare, placeOrder, setLiveCart, useStore, type CustomerRef, type PlaceOrderSuccess } from '../store/store';
 import { fmt, fromBase, round2, toBase } from '../domain/money';
-import { cardsInUse, customerBalance, nextFreeCard, tidyName } from '../domain/rules';
+import { cardsInUse, customerBalance, suggestCard, tidyName } from '../domain/rules';
 import { CREDIT_METHOD, type DeliveryInfo, type OrderLine, type Payment } from '../domain/types';
 import { Dialog, toast } from '../components/ui';
 import CustomerPicker, { selectionReady, type CustomerSelection } from '../components/CustomerPicker';
@@ -61,7 +61,7 @@ export default function PayDialog({ tillId, total, orderTypeId, lines, parentOrd
 
   // ---- order number
   const needsCard = !parentOrderId && !tabPay && (settings.numberMode === 'card' || settings.numberMode === 'both');
-  const suggested = useMemo(() => nextFreeCard(orders, settings.cardFrom, settings.cardTo), [orders, settings.cardFrom, settings.cardTo]);
+  const suggested = useMemo(() => suggestCard(orders, settings.cardFrom, settings.cardTo), [orders, settings.cardFrom, settings.cardTo]);
   const [cardStr, setCardStr] = useState(suggested ? String(suggested) : '');
   const inUse = useMemo(() => cardsInUse(orders), [orders]);
   const card = Number(cardStr);

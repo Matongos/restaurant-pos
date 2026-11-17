@@ -46,14 +46,25 @@ export const extrasPrice = (extras?: LineExtra[]) => Math.round((extras ?? []).r
 /** Same set of add-ons, in any order. */
 export const sameExtras = (a?: LineExtra[], b?: LineExtra[]) => (a ?? []).map((x) => x.id).sort().join('|') === (b ?? []).map((x) => x.id).sort().join('|');
 
-/** Cards currently held by customers (orders not yet served). */
+/** Not served yet (waiting in the kitchen or ready to collect). */
+export const isOpen = (o: Order) => o.status === 'in_kitchen' || o.status === 'ready';
+
+/**
+ * Still part of today's work: made today, or in the last 6 hours (a late-night order after midnight).
+ * An order nobody marked served does not follow the restaurant into the next day: it leaves the
+ * kitchen screen, the Orders badge and the cards in use by itself.
+ */
+export function isCurrent(o: Order, now = Date.now()): boolean {
+  const t = Date.parse(o.createdAt);
+  return todayISO(new Date(t)) === todayISO(new Date(now)) || now - t < 6 * 3600_000;
+}
+
+/** Cards currently held by customers (today's orders not yet served). */
 export function cardsInUse(orders: Order[]): Set<number> {
   const used = new Set<number>();
   for (const o of orders) {
     if (o.parentOrderId) continue;
-    if ((o.numberMode === 'card' || o.numberMode === 'both') && (o.status === 'in_kitchen' || o.status === 'ready')) {
-      used.add(o.number);
-    }
+    if ((o.numberMode === 'card' || o.numberMode === 'both') && isOpen(o) && isCurrent(o)) used.add(o.number);
   }
   return used;
 }
@@ -62,6 +73,19 @@ export function nextFreeCard(orders: Order[], from: number, to: number): number 
   const used = cardsInUse(orders);
   for (let n = from; n <= to; n++) if (!used.has(n)) return n;
   return null;
+}
+
+/**
+ * The card to hand over next. Selling never stops because cards ran out: when every card is out
+ * (nobody pressed Served), the card of the oldest open order is used again — it is evidently back.
+ */
+export function suggestCard(orders: Order[], from: number, to: number): number | null {
+  const free = nextFreeCard(orders, from, to);
+  if (free != null) return free;
+  const oldest = orders
+    .filter((o) => !o.parentOrderId && (o.numberMode === 'card' || o.numberMode === 'both') && isOpen(o) && isCurrent(o) && o.number >= from && o.number <= to)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+  return oldest ? oldest.number : from <= to ? from : null;
 }
 
 export function customerBalance(credit: CreditEntry[], customerId: string): number {

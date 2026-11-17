@@ -38,7 +38,7 @@ import type {
 } from '../domain/types';
 import { DEFAULT_TABLES, DEFAULT_ADD_ONS, DEFAULT_ADDON_RECIPES, DEFAULT_DELIVERY_AREAS, DEFAULT_MEAL_ADD_ONS, DEFAULT_RECIPES, demoOpeningMoves, STOCK_SETUP, DEFAULT_MEAL_PERIODS, seedState, STOCK_ITEMS } from '../data/seed';
 import { exampleBooks, exampleCancellations, exampleHistory } from '../data/exampleHistory';
-import { nextFreeCard, cardsInUse, customerBalance, pinProblem, ROLE_LABEL, staffRights, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
+import { suggestCard, customerBalance, pinProblem, ROLE_LABEL, staffRights, tidyName, todayISO, uid, voucherCode } from '../domain/rules';
 import { CREDIT_METHOD } from '../domain/types';
 import { round2 } from '../domain/money';
 import { purchaseToStock, stockLevels, usageFor, type StockLevel } from '../domain/stock';
@@ -615,8 +615,8 @@ export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
     number = next.number;
     dayCounter = next.dayCounter;
   } else {
-    const chosen = input.cardNumber ?? nextFreeCard(s.orders, s.settings.cardFrom, s.settings.cardTo);
-    if (chosen == null) return { ok: false, error: 'All cards are in use. Mark served orders first.' };
+    const chosen = input.cardNumber ?? suggestCard(s.orders, s.settings.cardFrom, s.settings.cardTo);
+    if (chosen == null) return { ok: false, error: 'Set the card numbers in Settings → Numbers & printing.' };
     if (chosen < s.settings.cardFrom || chosen > s.settings.cardTo)
       return { ok: false, error: `Card must be between ${s.settings.cardFrom} and ${s.settings.cardTo}.` };
     number = chosen;
@@ -660,9 +660,11 @@ export function placeOrder(input: PlaceOrderInput): PlaceOrderResult {
 
   const custId = customer?.id;
   // A card handed over again is evidently back: close the order still holding it.
-  const reusedCard = !input.parentOrderId && mode !== 'slip' && cardsInUse(s.orders).has(number);
+  // (Also an order from an earlier day still holding the same card.)
   const open = (o: Order) => o.status === 'in_kitchen' || o.status === 'ready';
-  const oldIds = new Set(reusedCard ? s.orders.filter((o) => !o.parentOrderId && o.number === number && open(o)).map((o) => o.id) : []);
+  const usesCards = (m: Order['numberMode']) => m === 'card' || m === 'both';
+  const reusedCard = !input.parentOrderId && usesCards(mode);
+  const oldIds = new Set(reusedCard ? s.orders.filter((o) => !o.parentOrderId && usesCards(o.numberMode) && o.number === number && open(o)).map((o) => o.id) : []);
   const closeOld = (o: Order): Order =>
     (oldIds.has(o.id) || (o.parentOrderId && oldIds.has(o.parentOrderId))) && open(o)
       ? { ...o, status: 'served', history: [...o.history, { status: 'served', at: now, by: input.cashierId, auto: true }] }
@@ -1158,7 +1160,7 @@ export function resetDemo() {
  * (unless kept) the sample menu. Keeps payment methods, currencies, order types and categories.
  * The owner stays, with a new PIN. Goes to the online account like any other change.
  */
-export function startFresh(opts: { ownerPin: string; keepMenu: boolean; byId?: string; ownerName?: string; restaurantName?: string; town?: string }): { ok: true } | { ok: false; error: string } {
+export function startFresh(opts: { ownerPin: string; keepMenu: boolean; keepStaff?: boolean; byId?: string; ownerName?: string; restaurantName?: string; town?: string }): { ok: true } | { ok: false; error: string } {
   const pin = opts.ownerPin.trim();
   if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'Owner PIN must be 4 digits.' };
   if (/^(\d)\1{3}$/.test(pin) || pin === '1234') return { ok: false, error: 'Choose a PIN that is harder to guess.' };
@@ -1180,7 +1182,8 @@ export function startFresh(opts: { ownerPin: string; keepMenu: boolean; byId?: s
         address: opts.town?.trim() ? opts.town.trim() : st.settings.address === demoSettings.address ? '' : st.settings.address,
         phone: st.settings.phone === demoSettings.phone ? '' : st.settings.phone,
       },
-      staff: [owner],
+      // Keep the staff (cashiers, managers, kitchen) with their PINs if asked; the owner gets the new PIN either way.
+      staff: opts.keepStaff ? [owner, ...st.staff.filter((x) => x.id !== owner.id)] : [owner],
       menu: opts.keepMenu ? st.menu.map((m) => ({ ...m, available: true })) : [],
       addOns: opts.keepMenu ? st.addOns : [],
       components: opts.keepMenu ? st.components.map((c) => ({ ...c, available: true })) : [],

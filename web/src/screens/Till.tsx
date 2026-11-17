@@ -6,7 +6,7 @@ import { changeVoucherHTML, kitchenTicketHTML, printTickets } from '../print/tic
 import TableBill from '../components/TableBill';
 import CancelSaleDialog from '../components/CancelSaleDialog';
 import { outOfStockIds } from '../domain/stock';
-import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, nextFreeCard, sameExtras, tidyName, uid } from '../domain/rules';
+import { addOnsFor, comesWith, extrasPrice, isSellable, lineLabel, mealInitials, sameExtras, suggestCard, tidyName, uid } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
 import type { AddOn, DeliveryInfo, MenuItem, OrderLine } from '../domain/types';
 import { Dialog, MoreMenu, TopBar, toast, useNow } from '../components/ui';
@@ -227,7 +227,7 @@ export default function Till() {
     ? parent.number
     : settings.numberMode === 'slip' || settings.numberMode === 'receipt'
       ? nextSlip({ ...getState(), dayCounter }, getTillNo()).number
-      : nextFreeCard(orders, settings.cardFrom, settings.cardTo);
+      : suggestCard(orders, settings.cardFrom, settings.cardTo);
   const altCurrencies = currencies.filter((c) => c.enabled && c.code !== baseCode);
   const listTitle = search ? `Results` : cat === ALL ? 'All meals' : cat === FAV ? 'Favourites' : categories.find((c) => c.id === cat)?.name ?? '';
   const [sheet, setSheet] = useState(false);
