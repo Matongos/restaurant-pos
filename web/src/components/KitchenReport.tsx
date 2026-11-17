@@ -71,37 +71,13 @@ export default function KitchenReport({ start, end }: { start: Date; end: Date }
                 <div className="muted lbl">{i.name} sold</div>
                 <div className="val">{num(total(i.id, 'sold'))}</div>
                 <div className="muted sub">
-                  {yieldText(i, raw, thisW.perRaw)}
+                  {thisW.perRaw === null ? 'yield: shown after the first cooking entry' : yieldText(i, raw, thisW.perRaw)}
                   {d !== null && d !== 0 && <span className={d < 0 ? 'warn-t' : 'good-t'}> · {d > 0 ? '▲' : '▼'} {Math.abs(d)} vs last week</span>}
                 </div>
               </div>
             );
           })}
       </div>
-
-      {ready.length > 1 && (
-        <div className="seg small" style={{ margin: '12px 0 4px' }}>
-          {ready.map((i) => (
-            <button key={i.id} className={item.id === i.id ? 'on' : ''} onClick={() => setPick(i.id)}>
-              {i.name}
-            </button>
-          ))}
-        </div>
-      )}
-      <BarChart
-        grouped
-        caption={`${item.name} per day — ${item.countMade === false ? 'plates sold' : 'made and sold'}`}
-        labels={chartLabels}
-        series={
-          item.countMade === false
-            ? [{ name: 'Sold', color: '#116a57', values: byDay('sold') }]
-            : [
-                { name: 'Made', color: '#f47b20', values: byDay('made') },
-                { name: 'Sold', color: '#116a57', values: byDay('sold') },
-              ]
-        }
-        format={(v) => num(v)}
-      />
 
       <div className="section-title">Summary for the period</div>
       <div style={{ overflowX: 'auto' }}>
@@ -184,6 +160,31 @@ export default function KitchenReport({ start, end }: { start: Date; end: Date }
           </tbody>
         </table>
       </div>
+      <div className="section-title">Chart</div>
+      {ready.length > 1 && (
+        <div className="seg small" style={{ margin: '12px 0 4px' }}>
+          {ready.map((i) => (
+            <button key={i.id} className={item.id === i.id ? 'on' : ''} onClick={() => setPick(i.id)}>
+              {i.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <BarChart
+        grouped
+        caption={`${item.name} per day — ${item.countMade === false ? 'plates sold' : 'made and sold'}`}
+        labels={chartLabels}
+        series={
+          item.countMade === false
+            ? [{ name: 'Sold', color: '#116a57', values: byDay('sold') }]
+            : [
+                { name: 'Made', color: '#f47b20', values: byDay('made') },
+                { name: 'Sold', color: '#116a57', values: byDay('sold') },
+              ]
+        }
+        format={(v) => num(v)}
+      />
+
       <p className="muted small">
         Sold = what the sales used (a plate with 2 pieces counts 2). Missing = shortfall found in closing counts. Yield = what one raw unit gave, learnt from Today's
         cooking (for rice-style items: plates sold per unit used).
