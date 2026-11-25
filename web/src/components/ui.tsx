@@ -56,19 +56,21 @@ export function BrandMark({ withName = true }: { withName?: boolean }) {
   );
 }
 
-/** Product name shown in the sidebar (the restaurant's own name and logo go on receipts and the customer screen). */
+/** Product name, used where the restaurant has not set its own name yet and in "Powered by". */
 export const PRODUCT_NAME = 'TechPlug';
 
+/** Top of the sidebar: the restaurant's own logo and name, so the till feels like theirs. */
 function SideBrand() {
   const logo = useStore((s) => s.settings.logo);
+  const name = useStore((s) => s.settings.restaurantName).trim();
   return (
     <div className="side-brand">
       <span className="side-logo" aria-hidden="true">
         {logo ? <img src={logo} alt="" /> : <LuUtensils />}
       </span>
       <span className="side-name">
-        <b>{PRODUCT_NAME}</b>
-        <small>RESTAURANT POS</small>
+        <b title={name || PRODUCT_NAME}>{name || PRODUCT_NAME}</b>
+        {!name && <small>RESTAURANT POS</small>}
       </span>
     </div>
   );
@@ -252,6 +254,7 @@ function Navigation({ drawer, setDrawer }: { drawer: boolean; setDrawer: (v: boo
     }
   }, []);
   const tagline = useStore((s) => s.settings.tagline);
+  const [about, setAbout] = useState(false);
   const training = useStore((s) => s.settings.trainingMode);
   const items = useNavItems();
   useEffect(() => {
@@ -304,6 +307,9 @@ function Navigation({ drawer, setDrawer }: { drawer: boolean; setDrawer: (v: boo
       )}
       <div className="side-spacer" />
       {tagline && <div className="side-tagline">{tagline}</div>}
+      <button className="side-powered" onClick={() => { if (inDrawer) close(); setAbout(true); }}>
+        Powered by <b>{PRODUCT_NAME}</b>
+      </button>
     </>
   );
 
@@ -331,6 +337,7 @@ function Navigation({ drawer, setDrawer }: { drawer: boolean; setDrawer: (v: boo
           </nav>
         </>
       )}
+      {about && <AboutDialog onClose={() => setAbout(false)} />}
     </>
   );
 }
