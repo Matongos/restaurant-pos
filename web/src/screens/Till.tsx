@@ -7,7 +7,7 @@ import TableBill from '../components/TableBill';
 import CancelSaleDialog from '../components/CancelSaleDialog';
 import { outOfStockIds, usageFor } from '../domain/stock';
 import { cookingReminders, platesLeft } from '../domain/kitchen';
-import { comesWith, extrasFor, stockExtras, extrasPrice, groupExtras, isSellable, lineLabel, mealInitials, sameExtras, suggestCard, tidyName, uid } from '../domain/rules';
+import { can, comesWith, extrasFor, stockExtras, extrasPrice, groupExtras, isSellable, lineLabel, mealInitials, sameExtras, suggestCard, tidyName, uid } from '../domain/rules';
 import { fmt, fromBase, round2 } from '../domain/money';
 import type { AddOn, DeliveryInfo, MenuItem, OrderLine } from '../domain/types';
 import { Dialog, MoreMenu, TopBar, toast, useNow } from '../components/ui';
@@ -515,7 +515,7 @@ export default function Till() {
             )}
             </div>
           </div>
-          {cookDue.length > 0 && (
+          {cookDue.length > 0 && can(user.role, 'stock') && (
             <div className="cook-reminder" role="status">
               <span>
                 🍳 <b>Record today's cooking for {cookDue.map((i) => i.name).join(', ')}</b> — until then those meals stay on sale and are not counted.
